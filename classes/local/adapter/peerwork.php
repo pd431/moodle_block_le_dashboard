@@ -50,21 +50,8 @@ class peerwork extends base {
         ];
     }
 
-    /**
-     * The peerwork instance.
-     *
-     * @param \cm_info $cm
-     * @return \stdClass
-     */
-    protected function instance(\cm_info $cm): \stdClass {
-        global $DB;
-        return $DB->get_record(
-            'peerwork',
-            ['id' => $cm->instance],
-            'id, course, fromdate, duedate, allowlatesubmissions, pwgroupingid',
-            MUST_EXIST
-        );
-    }
+    /** Only the columns this adapter reads. */
+    const INSTANCE_FIELDS = 'id, course, fromdate, duedate, allowlatesubmissions, pwgroupingid';
 
     #[\Override]
     public function cm_row(\cm_info $cm): ?cm_row {

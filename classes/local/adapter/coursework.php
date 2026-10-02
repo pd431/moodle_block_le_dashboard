@@ -47,6 +47,15 @@ use block_my_assessments\local\index\student_row;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class coursework extends base {
+    /** Coursework's identifier for the first marker's stage. */
+    const STAGE_FIRST = 'assessor_1';
+
+    /** Coursework's identifier for the agreed grade stage. */
+    const STAGE_AGREED = 'final_agreed_1';
+
+    /** Coursework's identifier for the moderation stage. */
+    const STAGE_MODERATOR = 'moderator';
+
     /** @var array Column-name cache per table. */
     protected static array $columns = [];
 
@@ -98,17 +107,6 @@ class coursework extends base {
     }
 
     /**
-     * The coursework instance.
-     *
-     * @param \cm_info $cm
-     * @return \stdClass
-     */
-    protected function instance(\cm_info $cm): \stdClass {
-        global $DB;
-        return $DB->get_record('coursework', ['id' => $cm->instance], '*', MUST_EXIST);
-    }
-
-    /**
      * Coursework's marking stage identifiers mapped to the block's stage keys, in order.
      *
      * @param \stdClass $cw
@@ -118,15 +116,15 @@ class coursework extends base {
         $markers = max(1, (int)$cw->numberofmarkers);
         $map = [];
         if ($markers === 1) {
-            $map['marked'] = 'assessor_1';
+            $map['marked'] = self::STAGE_FIRST;
         } else {
             for ($i = 1; $i <= $markers; $i++) {
                 $map['marker' . $i] = 'assessor_' . $i;
             }
-            $map['agreed'] = 'final_agreed_1';
+            $map['agreed'] = self::STAGE_AGREED;
         }
         if (!empty($cw->moderationagreementenabled) || !empty($cw->moderationenabled)) {
-            $map['moderated'] = 'moderator';
+            $map['moderated'] = self::STAGE_MODERATOR;
         }
         return $map;
     }
@@ -276,7 +274,10 @@ class coursework extends base {
                 if (!empty($s->lastpublished)) {
                     $row->timereleased = (int)($s->firstpublished ?: $s->lastpublished);
                     if (isset($finalgrades[$s->id]) && (float)$cw->grade > 0) {
-                        $row->gradedisplay = format_float($finalgrades[$s->id], 0) . ' / ' . format_float($cw->grade, 0);
+                        $row->gradedisplay = get_string('gradeoutof', 'block_my_assessments', [
+                            'grade' => format_float($finalgrades[$s->id], 0),
+                            'max' => format_float($cw->grade, 0),
+                        ]);
                     }
                 }
             }
@@ -302,7 +303,7 @@ class coursework extends base {
         if (!$stagecol) {
             return [];
         }
-        $final = (int)$cw->numberofmarkers > 1 ? 'final_agreed_1' : 'assessor_1';
+        $final = (int)$cw->numberofmarkers > 1 ? self::STAGE_AGREED : self::STAGE_FIRST;
         return $DB->get_records_sql_menu(
             "SELECT f.submissionid, f.grade
                                             FROM {coursework_feedbacks} f
@@ -339,7 +340,8 @@ class coursework extends base {
                                             JOIN {coursework_submissions} s ON s.id = f.submissionid
                                            WHERE s.courseworkid = :cwid", ['cwid' => $cw->id]);
             foreach ($rs as $f) {
-                $stage = !empty($f->ismoderation) || str_starts_with((string)$f->stage, 'moderator') ? 'moderator' : $f->stage;
+                $moderation = !empty($f->ismoderation) || str_starts_with((string)$f->stage, self::STAGE_MODERATOR);
+                $stage = $moderation ? self::STAGE_MODERATOR : $f->stage;
                 $feedback[(int)$f->submissionid][$stage] = $f;
             }
             $rs->close();
@@ -376,21 +378,21 @@ class coursework extends base {
             foreach ($map as $stagekey => $identifier) {
                 $f = $feedback[(int)$s->id][$identifier] ?? null;
                 $marked = $f !== null && $f->grade !== null;
-                if ($identifier === 'moderator' && !$marked && isset($agreed[(int)$s->id])) {
+                if ($identifier === self::STAGE_MODERATOR && !$marked && isset($agreed[(int)$s->id])) {
                     $marked = true;
                 }
                 // Readiness: agreement after every assessor, moderation after the final grade.
-                if ($identifier === 'final_agreed_1') {
+                if ($identifier === self::STAGE_AGREED) {
                     $ready = !in_array(false, $done, true);
-                } else if ($identifier === 'moderator') {
+                } else if ($identifier === self::STAGE_MODERATOR) {
                     $ready = (bool)end($done);
                 } else {
                     $ready = true;
                 }
                 $allocated = $pairs[$key][$identifier] ?? null;
-                if ($allocated === null && $identifier === 'final_agreed_1') {
+                if ($allocated === null && $identifier === self::STAGE_AGREED) {
                     // Agreement is done by the first marker.
-                    $allocated = $pairs[$key]['assessor_1'] ?? null;
+                    $allocated = $pairs[$key][self::STAGE_FIRST] ?? null;
                 }
                 $rows[] = new marking_row(
                     unitid: (int)$id,

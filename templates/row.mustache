@@ -50,7 +50,7 @@
         <a class="ma-row-name" href="{{url}}">{{name}}</a>
         <div class="ma-row-meta">
             <span class="ma-row-course">{{course}}</span>
-            <span class="ma-row-type">{{modlabel}} · {{typelabel}}</span>
+            <span class="ma-row-type">{{typeline}}</span>
             {{#hidden}}<span class="badge ma-pill ma-pill--hidden">{{#str}}hiddenfromstudents, block_my_assessments{{/str}}</span>{{/hidden}}
         </div>
     </div>
@@ -68,7 +68,7 @@
         {{#tomarklabel}}<span class="ma-tomark" data-tomark="{{tomark}}">{{tomarklabel}}</span>{{/tomarklabel}}
         {{#hasstages}}
         <ul class="list-unstyled ma-stages">
-            {{#stages}}<li>{{label}}: <strong>{{count}}</strong></li>{{/stages}}
+            {{#stages}}<li>{{label}} <strong>{{count}}</strong></li>{{/stages}}
         </ul>
         {{/hasstages}}
         {{#bars}}{{> block_my_assessments/progress }}{{/bars}}
@@ -78,8 +78,8 @@
         {{#mitigation}}
         <div class="dropdown ma-mitigate">
             <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
-                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">{{#str}}action_mitigate, block_my_assessments{{/str}}</button>
-            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="{{id}}">
+                    data-toggle="dropdown" data-display="static" aria-haspopup="true" aria-expanded="false">{{#str}}action_mitigate, block_my_assessments{{/str}}</button>
+            <div class="dropdown-menu dropdown-menu-sm-right" aria-labelledby="{{id}}">
                 {{#links}}<div class="dropdown-item ma-mitigate-item">{{{html}}}</div>{{/links}}
             </div>
         </div>

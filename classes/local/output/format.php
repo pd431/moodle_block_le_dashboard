@@ -156,6 +156,10 @@ class format {
             'icon' => $OUTPUT->image_url('monologo', $cm->modname)->out(false),
             'assesstype' => $cm->assesstype,
             'typelabel' => get_string($cm->assesstype, 'block_my_assessments'),
+            'typeline' => get_string('rowtype', 'block_my_assessments', [
+                'mod' => $modname,
+                'type' => get_string($cm->assesstype, 'block_my_assessments'),
+            ]),
             'hidden' => !empty($cm->hiddenfromstudents),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),
         ];

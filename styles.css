@@ -143,6 +143,10 @@
   font-weight: 700;
   line-height: 1.2;
 }
+.block_my_assessments_dashboard .ma-box-note {
+  font-size: 0.8203rem;
+  color: var(--ma-text-muted);
+}
 .block_my_assessments_dashboard .ma-box-select {
   width: 100%;
   margin-top: 0.25rem;
@@ -579,7 +583,8 @@
 }
 .block_my_assessments_dashboard .ma-bar-track {
   height: 0.5rem;
-  background-color: var(--ma-grey-fill);
+  background-color: var(--ma-surface);
+  box-shadow: inset 0 0 0 1px var(--ma-rule);
 }
 .block_my_assessments_dashboard .ma-bar-text {
   white-space: nowrap;

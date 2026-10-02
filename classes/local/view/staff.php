@@ -172,7 +172,10 @@ class staff extends base {
                 $row['stages'] = [];
                 foreach ($stages as $key => $s) {
                     if ((int)$s->tomark > 0) {
-                        $row['stages'][] = ['label' => format::stage($key), 'count' => (int)$s->tomark];
+                        $row['stages'][] = [
+                            'label' => get_string('labelled', 'block_my_assessments', format::stage($key)),
+                            'count' => (int)$s->tomark,
+                        ];
                     }
                 }
                 $row['hasstages'] = !empty($row['stages']);

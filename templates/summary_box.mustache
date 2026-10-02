@@ -37,6 +37,7 @@
         <div class="ma-box-label" id="ma-box-{{view}}-{{key}}">{{label}}</div>
         {{^note}}<div class="ma-box-value" data-region="ma-box-value" aria-describedby="ma-box-{{view}}-{{key}}">{{value}}</div>{{/note}}
         {{#note}}<div class="ma-box-value">{{note}}</div>{{/note}}
+        {{#subnote}}<div class="ma-box-note">{{subnote}}</div>{{/subnote}}
         {{#hasoptions}}
         <label class="sr-only" for="ma-box-{{view}}-{{key}}-select">{{label}}</label>
         <select id="ma-box-{{view}}-{{key}}-select" class="custom-select custom-select-sm ma-box-select" data-action="box-option">

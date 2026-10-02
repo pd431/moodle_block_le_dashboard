@@ -70,16 +70,8 @@ class quiz extends base {
         ];
     }
 
-    /**
-     * The quiz instance.
-     *
-     * @param \cm_info $cm
-     * @return \stdClass
-     */
-    protected function instance(\cm_info $cm): \stdClass {
-        global $DB;
-        return $DB->get_record('quiz', ['id' => $cm->instance], 'id, course, timeopen, timeclose, grademethod', MUST_EXIST);
-    }
+    /** Only the columns this adapter reads. */
+    const INSTANCE_FIELDS = 'id, course, timeopen, timeclose, grademethod';
 
     #[\Override]
     public function cm_row(\cm_info $cm): ?cm_row {

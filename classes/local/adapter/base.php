@@ -30,6 +30,9 @@ abstract class base implements adapter {
     /** Size of IN (...) lists. */
     const CHUNK = 1000;
 
+    /** Columns of the activity's own table that the adapter reads. */
+    const INSTANCE_FIELDS = '*';
+
     #[\Override]
     public function support(): string {
         return self::SUPPORT_FULL;
@@ -38,6 +41,17 @@ abstract class base implements adapter {
     #[\Override]
     public static function events(): array {
         return [];
+    }
+
+    /**
+     * The activity's own record. Not cached: events can change it mid-request.
+     *
+     * @param \cm_info $cm
+     * @return \stdClass
+     */
+    protected function instance(\cm_info $cm): \stdClass {
+        global $DB;
+        return $DB->get_record($this->modname(), ['id' => $cm->instance], static::INSTANCE_FIELDS, MUST_EXIST);
     }
 
     /**

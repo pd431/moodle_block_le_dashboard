@@ -197,6 +197,7 @@ abstract class base {
             'sections' => $sections,
             'hasrows' => $hasrows,
             'empty' => get_string('empty_' . $this->key(), 'block_my_assessments'),
+            'searchplaceholder' => get_string('searchplaceholder_' . $this->key(), 'block_my_assessments'),
             'freshness' => $this->freshness($oldest),
             'hasyears' => false,
             'years' => [],

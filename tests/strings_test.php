@@ -60,6 +60,7 @@ final class strings_test extends \advanced_testcase {
         foreach (self::SECTIONS as $view => $sections) {
             $keys[] = 'view_' . $view;
             $keys[] = 'empty_' . $view;
+            $keys[] = 'searchplaceholder_' . $view;
             foreach ($sections as $section) {
                 $keys[] = 'section_' . $view . '_' . $section;
             }

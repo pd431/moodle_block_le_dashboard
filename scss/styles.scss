@@ -292,6 +292,11 @@ $ma-dark-ink-on-solid: ("attention");
     line-height: 1.2;
   }
 
+  .ma-box-note {
+    font-size: $ma-font-small;
+    color: var(--ma-text-muted);
+  }
+
   .ma-box-select {
     width: 100%;
     margin-top: 0.25rem;
@@ -628,9 +633,11 @@ $ma-dark-ink-on-solid: ("attention");
     max-width: 26rem;
   }
 
+  // A white track with a rule border keeps the bar distinct from it.
   .ma-bar-track {
     height: 0.5rem;
-    background-color: var(--ma-grey-fill);
+    background-color: var(--ma-surface);
+    box-shadow: inset 0 0 0 1px var(--ma-rule);
   }
 
   .ma-bar-text {

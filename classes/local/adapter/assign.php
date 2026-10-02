@@ -61,17 +61,6 @@ class assign extends base {
         ];
     }
 
-    /**
-     * The assign instance.
-     *
-     * @param \cm_info $cm
-     * @return \stdClass
-     */
-    protected function instance(\cm_info $cm): \stdClass {
-        global $DB;
-        return $DB->get_record('assign', ['id' => $cm->instance], '*', MUST_EXIST);
-    }
-
     #[\Override]
     public function cm_row(\cm_info $cm): ?cm_row {
         $a = $this->instance($cm);

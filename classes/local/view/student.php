@@ -148,14 +148,20 @@ class student extends base {
             $this->box('submitted', $counts['submitted']),
         ];
         if ($selfcert = mitigation::selfcert($this->userid)) {
-            $max = $selfcert['max'] ?? get_string('unlimited', 'block_my_assessments');
-            $summary[] = $this->box(
-                'selfcert',
-                format::zero_counts(),
-                null,
-                null,
-                get_string('selfcertused', 'block_my_assessments', ['used' => $selfcert['used'], 'max' => $max])
-            );
+            if ($selfcert['max'] === null) {
+                // No limit: the count is the value, with a note under it.
+                $box = $this->box('selfcert', ['both' => $selfcert['used']] + format::zero_counts());
+                $box['subnote'] = get_string('selfcertnolimit', 'block_my_assessments');
+            } else {
+                $box = $this->box(
+                    'selfcert',
+                    format::zero_counts(),
+                    null,
+                    null,
+                    get_string('selfcertused', 'block_my_assessments', ['used' => $selfcert['used'], 'max' => $selfcert['max']])
+                );
+            }
+            $summary[] = $box;
         }
 
         return $this->context($summary, [
