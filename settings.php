@@ -89,6 +89,22 @@ if ($ADMIN->fulltree) {
             PARAM_INT
         ));
     }
+
+    $settings->add(new admin_setting_heading(
+        'block_my_assessments/selfcertheading',
+        new lang_string('selfcertheading', 'block_my_assessments'),
+        new lang_string('selfcertheading_desc', 'block_my_assessments')
+    ));
+    foreach (\block_my_assessments\local\mitigation::SELFCERT_SETTINGS as $name => $default) {
+        $settings->add(new admin_setting_configtext(
+            'block_my_assessments/' . $name,
+            new lang_string($name, 'block_my_assessments'),
+            new lang_string($name . '_desc', 'block_my_assessments'),
+            $default,
+            PARAM_TEXT
+        ));
+    }
+
     $years = [0 => new lang_string('defaultacademicyear_current', 'block_my_assessments')];
     if (during_initial_install() === false && $DB->get_manager()->table_exists('block_my_assessments_year')) {
         foreach (\block_my_assessments\local\years::all() as $year) {

@@ -30,20 +30,20 @@
 }}
 <div id="{{uniqid}}" class="block_my_assessments_dashboard" data-region="ma-dashboard" data-view="{{activeview}}">
     {{#hastabs}}
-    <ul class="nav nav-tabs ma-tabs" role="tablist">
+    <ul class="nav nav-tabs ma-tabs">
         {{#tabs}}
-        <li class="nav-item" role="presentation">
-            <button type="button" class="nav-link{{#active}} active{{/active}}" role="tab"
-                    aria-selected="{{#active}}true{{/active}}{{^active}}false{{/active}}"
+        <li class="nav-item">
+            <button type="button" class="nav-link{{#active}} active{{/active}}"{{#active}} aria-current="page"{{/active}}
                     data-action="switch-view" data-view="{{key}}">{{label}}</button>
         </li>
         {{/tabs}}
     </ul>
     {{/hastabs}}
-    <div class="ma-loading alert alert-info" data-region="ma-loading" role="status" hidden>
+    <div class="ma-loading alert alert-info" data-region="ma-loading" hidden>
         <span class="spinner-border spinner-border-sm mr-2" aria-hidden="true"></span>{{#str}}loading, block_my_assessments{{/str}}
     </div>
-    <div data-region="ma-view" aria-live="polite">
+    <div class="sr-only" data-region="ma-status" role="status"></div>
+    <div data-region="ma-view">
         {{#view}}{{> block_my_assessments/view }}{{/view}}
     </div>
 </div>

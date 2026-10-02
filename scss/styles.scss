@@ -5,6 +5,9 @@
 @use "sass:map";
 @use "sass:math";
 
+// Small text (pills, meta, labels): 13.125px, the size the APCA targets were checked at.
+$ma-font-small: 0.8203rem;
+
 // Tone palette. Each base colour is written once, here. Fill, hover,
 // border and ink are derived from it in OKLCH at fixed lightness with its
 // chroma scaled down, so every tone reads at the same weight whatever its
@@ -27,7 +30,7 @@ $ma-steps: (
   "fill": (0.93, 0.35),
   "hover": (0.9, 0.45),
   "border": (0.76, 0.8),
-  "ink": (0.36, 0.75),
+  "ink": (0.33, 0.75),
 );
 
 // Per-tone exceptions to a step. Orange text turns brown, so attention's
@@ -74,6 +77,71 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
   --ma-solid: var(--ma-#{$name}-solid);
 }
 
+// States to tones: the one place that says which state gets which colour.
+// PHP emits only state keys (section, status, bar key, overlay state); a new
+// state needs one line here. Anything not listed takes the component's
+// default tone, given first. Orange means "you can act on this now".
+$ma-state-tones: (
+  // Section headers, per view: (view: (section: tone)).
+  "section": (
+    "default": "grey",
+    "student": ("overdue": "attention", "upcoming": "primary"),
+    "staff": ("tomark": "primary", "upcoming": "info"),
+    "convenor": ("upcoming": "primary", "inprogress": "primary"),
+  ),
+  // Student status pills.
+  "pill": (
+    "default": "grey",
+    "pending": "attention",
+    "submitted": "success",
+    "inmarking": "info",
+    "released": "info",
+  ),
+  // The small badge on a row's activity icon. "overdue" is the Overdue
+  // section's, whatever the status.
+  "overlay": (
+    "default": "grey",
+    "pending": "attention",
+    "submitted": "success",
+    "inmarking": "success",
+    "released": "success",
+    "overdue": "danger",
+  ),
+  // Progress bars, by bar key (marking stages included).
+  "bar": (
+    "default": "success",
+    "submitted": "primary",
+    "unallocated": "attention",
+    "moderated": "info",
+    "released": "info",
+  ),
+);
+
+// Tones too light for white text on their solid step; they keep their ink.
+$ma-dark-ink-on-solid: ("attention");
+
+// The tone rules for one component: the default on $base, each state on
+// $base--state.
+@mixin ma-state-tones($component, $base) {
+  $states: map.get($ma-state-tones, $component);
+
+  #{$base} {
+    @include ma-tone(map.get($states, "default"));
+  }
+
+  @each $state, $tone in $states {
+    @if $state != "default" {
+      #{$base}--#{$state} {
+        @include ma-tone($tone);
+
+        @if list.index($ma-dark-ink-on-solid, $tone) {
+          --ma-on-solid: var(--ma-ink);
+        }
+      }
+    }
+  }
+}
+
 .block_my_assessments_dashboard {
   box-sizing: border-box;
 
@@ -103,10 +171,7 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
     }
   }
 
-  // Boost small controls (summary box dropdowns, filter buttons, search):
-  // border, height and focus ring.
-  --ma-control-border: #8f959e;
-  --ma-control-height: calc(1.5em + 0.5rem + 2px);
+  // Focus ring for the block's own tabs and buttons (Boost styles the rest).
   --ma-focus-ring: 0 0 0 0.2rem color-mix(in srgb, var(--ma-primary-solid) 75%, transparent);
   // Width of the actions column in every row grid, so the date and status
   // columns line up whatever buttons a row has. Fits two small buttons
@@ -116,7 +181,7 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
   color: var(--ma-text);
   // APCA sizes: .8203rem (13px) for body text, .9375rem (15px) for names
   // and section titles.
-  font-size: 0.8203rem;
+  font-size: $ma-font-small;
 
   // The same palette as hex, from the brand colours, for browsers without
   // relative colours (Chrome < 119, Firefox < 128, Safari < 18).
@@ -156,7 +221,30 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
     color: var(--ma-text-muted);
   }
 
-  // Tabs, toolbar and filters.
+  // Tabs, toolbar and filters. View tabs stay on one line and scroll
+  // sideways on phones rather than wrapping under a broken tab border.
+  .ma-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+
+    .nav-link {
+      white-space: nowrap;
+    }
+  }
+
+  .ma-tabs .nav-link,
+  .ma-btn,
+  .ma-filter-btn {
+    &:focus {
+      outline: 0;
+    }
+
+    &:focus-visible {
+      box-shadow: var(--ma-focus-ring);
+    }
+  }
+
   .ma-tabs,
   .ma-toolbar,
   .ma-summary,
@@ -255,42 +343,27 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
     }
   }
 
-  .ma-grades-hide,
-  .ma-view--showgrades .ma-grades-show {
-    display: none;
-  }
-
-  .ma-view--showgrades .ma-grades-hide {
-    display: inline;
-  }
-
   .ma-bottom {
     display: flex;
     justify-content: flex-end;
     margin-top: 0.5rem;
   }
 
-  // Section cards. The header takes the section's tone; grey by default
-  // (Past, Completed).
+  // Section cards. The header takes the section's tone ($ma-state-tones).
   .ma-section {
-    @include ma-tone("grey");
+    @include ma-tone(map.get($ma-state-tones, "section", "default"));
 
     margin-bottom: 0.75rem;
   }
 
-  .ma-view--student .ma-section--overdue {
-    @include ma-tone("attention");
-  }
-
-  .ma-view--student .ma-section--upcoming,
-  .ma-view--staff .ma-section--tomark,
-  .ma-view--convenor .ma-section--upcoming,
-  .ma-view--convenor .ma-section--inprogress {
-    @include ma-tone("primary");
-  }
-
-  .ma-view--staff .ma-section--upcoming {
-    @include ma-tone("info");
+  @each $view, $sections in map.get($ma-state-tones, "section") {
+    @if $view != "default" {
+      @each $key, $tone in $sections {
+        .ma-view--#{$view} .ma-section--#{$key} {
+          @include ma-tone($tone);
+        }
+      }
+    }
   }
 
   .ma-section-header {
@@ -313,7 +386,7 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
   .ma-section-count {
     background-color: var(--ma-surface);
     color: var(--ma-ink);
-    font-size: 0.8203rem;
+    font-size: $ma-font-small;
     font-weight: 600;
   }
 
@@ -339,15 +412,6 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
     .ma-section-toggle .fa {
       transform: rotate(-90deg);
     }
-
-    .ma-section-empty {
-      display: none;
-    }
-  }
-
-  .ma-section-empty {
-    margin: 0;
-    padding: 0.5rem 0.75rem;
   }
 
   .ma-section-footer {
@@ -454,19 +518,7 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
     font-size: 0.5rem;
   }
 
-  .ma-row-overlay--success {
-    @include ma-tone("success");
-  }
-
-  .ma-row-overlay--warning {
-    @include ma-tone("attention");
-
-    color: var(--ma-ink);
-  }
-
-  .ma-row-overlay--danger {
-    @include ma-tone("danger");
-  }
+  @include ma-state-tones("overlay", ".ma-row-overlay");
 
   // Row text.
   .ma-row-info {
@@ -551,36 +603,23 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
 
   // Pills: tone fill with tone ink, at body size so APCA holds. Late or
   // not submitted stays grey, never red.
-  .ma-pill {
-    @include ma-tone("grey");
+  @include ma-state-tones("pill", ".ma-pill");
 
+  .ma-pill {
     padding: 0.2em 0.5em;
     background-color: var(--ma-fill);
     color: var(--ma-ink);
-    font-size: 0.8203rem;
+    font-size: $ma-font-small;
     font-weight: 600;
     text-align: left;
     white-space: normal;
   }
 
-  .ma-pill--pending,
-  .ma-pill--inmarking {
-    @include ma-tone("attention");
-  }
-
-  .ma-pill--submitted {
-    @include ma-tone("success");
-  }
-
-  .ma-pill--released {
-    @include ma-tone("info");
-  }
-
   // Progress bars: the pastel -border step on a grey track, the count
   // always beside the bar.
-  .ma-bar {
-    @include ma-tone("success");
+  @include ma-state-tones("bar", ".ma-bar");
 
+  .ma-bar {
     display: grid;
     grid-template-columns: 5.5rem minmax(2.5rem, 1fr) minmax(3.5rem, auto);
     align-items: center;
@@ -589,27 +628,12 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
     max-width: 26rem;
   }
 
-  .ma-bar--submitted {
-    @include ma-tone("primary");
-  }
-
-  .ma-bar--unallocated {
-    @include ma-tone("attention");
-  }
-
-  .ma-bar--moderated,
-  .ma-bar--released {
-    @include ma-tone("info");
-  }
-
   .ma-bar-track {
-    order: 1;
     height: 0.5rem;
     background-color: var(--ma-grey-fill);
   }
 
   .ma-bar-text {
-    order: 2;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
   }

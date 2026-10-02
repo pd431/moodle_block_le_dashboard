@@ -34,7 +34,7 @@
         "hidden": false,
         "search": "essay 1 m1 assignment",
         "overflow": false,
-        "overlay": {"tone": "warning", "icon": "fa-clock"},
+        "overlay": {"state": "pending", "icon": "fa-clock"},
         "status": {"key": "pending", "label": "Not submitted yet"},
         "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00", "note": null}],
         "actions": [{"key": "submit", "label": "Submit", "url": "https://example.com/mod/assign/view.php?id=12"}]
@@ -44,7 +44,7 @@
     data-search="{{search}}"{{#overflow}} data-overflow="1" hidden{{/overflow}}>
     <div class="ma-row-icon" aria-hidden="true">
         <img class="ma-row-modicon" src="{{icon}}" alt="">
-        {{#overlay}}<span class="ma-row-overlay{{#tone}} ma-row-overlay--{{tone}}{{/tone}}"><i class="fa {{icon}}"></i></span>{{/overlay}}
+        {{#overlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa {{icon}}"></i></span>{{/overlay}}
     </div>
     <div class="ma-row-info">
         <a class="ma-row-name" href="{{url}}">{{name}}</a>

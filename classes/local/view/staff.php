@@ -189,13 +189,15 @@ class staff extends base {
         foreach (self::WINDOWS as $days) {
             $windowcounts[$days] = format::zero_counts();
         }
+        // Upcoming leaves out what is already listed to mark.
+        $tomarkcmids = array_flip(array_column($sections[classifier::TOMARK], 'cmid'));
         foreach ($upcoming as $cmid => $cm) {
             foreach (self::WINDOWS as $days) {
                 if ((int)$cm->due <= $this->now + $days * DAYSECS) {
                     format::count($windowcounts[$days], $cm->assesstype);
                 }
             }
-            if (isset($bycm[$cmid]) && in_array($cmid, array_column($sections[classifier::TOMARK], 'cmid'))) {
+            if (isset($tomarkcmids[$cmid])) {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
@@ -220,7 +222,8 @@ class staff extends base {
         $window = in_array($window, self::WINDOWS) ? $window : self::DEFAULT_WINDOW;
         $windowoptions = [];
         foreach (self::WINDOWS as $days) {
-            $windowoptions[$days] = get_string('withindays', 'block_my_assessments', $days);
+            $windowoptions[$days] = $days === 1 ? get_string('withinday', 'block_my_assessments')
+                : get_string('withindays', 'block_my_assessments', $days);
         }
         $range = get_user_preferences('block_my_assessments_range', self::DEFAULT_RANGE, $this->userid);
         $range = isset(self::RANGES[$range]) ? $range : self::DEFAULT_RANGE;

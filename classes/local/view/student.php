@@ -32,16 +32,19 @@ use block_my_assessments\local\scope;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class student extends base {
-    /** Status => [pill tone class, overlay tone, overlay icon]. */
-    const STATUS_DISPLAY = [
-        classifier::STATUS_PENDING => ['warning', 'fa-clock'],
-        classifier::STATUS_SUBMITTED => ['success', 'fa-check'],
-        classifier::STATUS_INMARKING => ['success', 'fa-check'],
-        classifier::STATUS_RELEASED => ['success', 'fa-check'],
-        classifier::STATUS_NOTSUBMITTED => ['', 'fa-minus'],
-        classifier::STATUS_DUE => ['', 'fa-clock'],
-        classifier::STATUS_CLOSED => ['', 'fa-minus'],
+    /** Status => overlay icon. Tones come from the state map in scss/styles.scss. */
+    const STATUS_ICONS = [
+        classifier::STATUS_PENDING => 'fa-clock',
+        classifier::STATUS_SUBMITTED => 'fa-check',
+        classifier::STATUS_INMARKING => 'fa-check',
+        classifier::STATUS_RELEASED => 'fa-check',
+        classifier::STATUS_NOTSUBMITTED => 'fa-minus',
+        classifier::STATUS_DUE => 'fa-clock',
+        classifier::STATUS_CLOSED => 'fa-minus',
     ];
+
+    /** Overlay state of a row in the Overdue section, whatever its status. */
+    const OVERLAY_OVERDUE = 'overdue';
 
     /** @var array|null Rows, once loaded. */
     protected ?array $rows = null;
@@ -175,13 +178,11 @@ class student extends base {
      */
     protected function row(\stdClass $r, string $section, string $status): array {
         $row = format::row($r, $r->courseshortname, $this->key());
-        [$tone, $icon] = self::STATUS_DISPLAY[$status];
-        if ($section === classifier::OVERDUE) {
-            // The red overlay is rc6's and only appears in the actionable Overdue section.
-            [$tone, $icon] = ['danger', 'fa-exclamation'];
-        }
         $row['status'] = ['key' => $status, 'label' => get_string('status_' . $status, 'block_my_assessments')];
-        $row['overlay'] = ['tone' => $tone, 'icon' => $icon];
+        // The red overlay is rc6's and only appears in the actionable Overdue section.
+        $row['overlay'] = $section === classifier::OVERDUE
+            ? ['state' => self::OVERLAY_OVERDUE, 'icon' => 'fa-exclamation']
+            : ['state' => $status, 'icon' => self::STATUS_ICONS[$status]];
 
         $dates = [];
         if ($r->due) {

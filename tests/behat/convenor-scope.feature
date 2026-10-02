@@ -67,9 +67,12 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
   Scenario: Moderation and agreement bars appear only where the activity has those stages
     Given a summative "coursework" "A1" in "M1" with 2 markers and moderation was due "3 days ago"
     And a summative "assign" "A2" in "M1" was due "3 days ago"
+    # Marking bars appear once something is submitted (beta1 review M7).
+    And "student1" has submitted "A1"
+    And "student1" has submitted "A2"
     When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show progress bars "Submitted, Marker 1, Marker 2, Agreed, Moderated"
-    And "A2" should show progress bars "Submitted, Marked"
+    Then "A1" should show progress bars "Submitted, Marker 1, Marker 2, Agreed, Moderated, Released"
+    And "A2" should show progress bars "Submitted, Marked, Released"
 
   # R4: computed when indexed; freshness.feature covers refresh.
   Scenario: Submission totals count only students who can access the assessment

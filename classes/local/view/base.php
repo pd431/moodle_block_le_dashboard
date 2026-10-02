@@ -81,10 +81,9 @@ abstract class base {
      *
      * @param string $key Section purpose, used for the CSS modifier and data-section.
      * @param array $rows
-     * @param string|null $tone Override of the tone the section's purpose implies.
      * @return array
      */
-    protected function section(string $key, array $rows, ?string $tone = null): array {
+    protected function section(string $key, array $rows): array {
         $visible = config::visible_rows();
         foreach (array_values($rows) as $i => $row) {
             $rows[$i]['overflow'] = $i >= $visible;
@@ -93,7 +92,6 @@ abstract class base {
             'key' => $key,
             'view' => $this->key(),
             'title' => get_string('section_' . $this->key() . '_' . $key, 'block_my_assessments'),
-            'empty' => get_string('section_' . $this->key() . '_' . $key . '_empty', 'block_my_assessments'),
             'count' => count($rows),
             'rows' => array_values($rows),
             'hasrows' => !empty($rows),

@@ -142,21 +142,22 @@ class convenor extends base {
                     (int)($s->total ?? 0)
                 );
             }
-            if ($cm->hasallocation) {
-                $bars[] = format::bar(
-                    'unallocated',
-                    get_string('bar_unallocated', 'block_my_assessments'),
-                    $first ? (int)$first->unallocated : 0,
-                    $units
-                );
-            }
+            // Marking bars only once there is something to mark: "0 of 0" says nothing.
             $outstanding = 0;
-            foreach ($stages as $stage) {
-                $marked = isset($m[$stage]) ? (int)$m[$stage]->marked : 0;
-                $bars[] = format::bar($stage, format::stage($stage), $marked, $units);
-                $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
-            }
             if ($units > 0) {
+                if ($cm->hasallocation) {
+                    $bars[] = format::bar(
+                        'unallocated',
+                        get_string('bar_unallocated', 'block_my_assessments'),
+                        $first ? (int)$first->unallocated : 0,
+                        $units
+                    );
+                }
+                foreach ($stages as $stage) {
+                    $marked = isset($m[$stage]) ? (int)$m[$stage]->marked : 0;
+                    $bars[] = format::bar($stage, format::stage($stage), $marked, $units);
+                    $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
+                }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_my_assessments'), $released, $units);
                 $outstanding += $units - $released;
             }
@@ -179,7 +180,8 @@ class convenor extends base {
                 $row['markers'][] = ['name' => $name, 'bars' => $markerbars];
                 $row['search'] .= ' ' . \core_text::strtolower($name);
             }
-            usort($row['markers'], fn($a, $b) => strcmp($a['name'], $b['name']));
+            \core_collator::asort_array_of_arrays_by_key($row['markers'], 'name');
+            $row['markers'] = array_values($row['markers']);
             $row['hasmarkers'] = !empty($row['markers']);
             $row['markersid'] = $row['id'] . '-markers';
             $row['actions'] = [format::view_action($row['url'])];

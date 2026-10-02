@@ -24,9 +24,9 @@
 }}
 <div class="ma-bar ma-bar--{{key}}" data-bar="{{key}}" data-value="{{value}}" data-max="{{max}}">
     <span class="ma-bar-label">{{label}}</span>
-    <span class="ma-bar-text">{{text}}</span>
     <div class="progress ma-bar-track" role="progressbar" aria-label="{{label}}" aria-valuemin="0" aria-valuemax="{{max}}"
          aria-valuenow="{{value}}" aria-valuetext="{{text}}">
         <div class="progress-bar ma-bar-fill" style="width: {{percent}}%"></div>
     </div>
+    <span class="ma-bar-text" aria-hidden="true">{{text}}</span>
 </div>

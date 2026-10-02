@@ -31,8 +31,26 @@ admin_externalpage_setup('block_my_assessments_years');
 
 $id = optional_param('id', 0, PARAM_INT);
 $delete = optional_param('delete', 0, PARAM_INT);
+$confirm = optional_param('confirm', 0, PARAM_BOOL);
 
-if ($delete && confirm_sesskey()) {
+if ($delete && !$confirm) {
+    // Ask first: deleting a year can also reset the default year.
+    $year = $DB->get_record(years::TABLE, ['id' => $delete], '*', MUST_EXIST);
+    echo $OUTPUT->header();
+    echo $OUTPUT->confirm(
+        get_string('confirmdeleteyear', 'block_my_assessments', format_string($year->label)),
+        new single_button(
+            new moodle_url($PAGE->url, ['delete' => $delete, 'confirm' => 1]),
+            get_string('delete'),
+            'post',
+            single_button::BUTTON_DANGER
+        ),
+        $PAGE->url
+    );
+    echo $OUTPUT->footer();
+    die();
+}
+if ($delete && $confirm && data_submitted() && confirm_sesskey()) {
     $DB->delete_records(years::TABLE, ['id' => $delete]);
     if ((int)get_config('block_my_assessments', 'defaultacademicyear') === $delete) {
         set_config('defaultacademicyear', 0, 'block_my_assessments');
@@ -66,7 +84,7 @@ foreach (years::all() as $year) {
         'start' => userdate($year->timestart, get_string('strftimedate', 'langconfig')),
         'end' => userdate($year->timeend - 1, get_string('strftimedate', 'langconfig')),
         'editurl' => (new moodle_url($PAGE->url, ['id' => $year->id]))->out(false),
-        'deleteurl' => (new moodle_url($PAGE->url, ['delete' => $year->id, 'sesskey' => sesskey()]))->out(false),
+        'deleteurl' => (new moodle_url($PAGE->url, ['delete' => $year->id]))->out(false),
     ];
 }
 

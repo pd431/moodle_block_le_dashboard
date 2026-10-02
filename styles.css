@@ -1,5 +1,4 @@
 /* block_my_assessments styles. Compiled from scss/styles.scss with Dart Sass; edit that file, not this one. */
-/* block_my_assessments styles. Compiled from scss/styles.scss with Dart Sass; edit that file, not this one. */
 .block_my_assessments_dashboard {
   box-sizing: border-box;
   --ma-text: #1d2125;
@@ -11,12 +10,12 @@
   --ma-primary-fill: oklch(from var(--ma-primary-solid) 0.93 calc(c * 0.35) h);
   --ma-primary-hover: oklch(from var(--ma-primary-solid) 0.9 calc(c * 0.45) h);
   --ma-primary-border: oklch(from var(--ma-primary-solid) 0.76 calc(c * 0.8) h);
-  --ma-primary-ink: oklch(from var(--ma-primary-solid) 0.36 calc(c * 0.75) h);
+  --ma-primary-ink: oklch(from var(--ma-primary-solid) 0.33 calc(c * 0.75) h);
   --ma-info-solid: var(--info, #008196);
   --ma-info-fill: oklch(from var(--ma-info-solid) 0.93 calc(c * 0.35) h);
   --ma-info-hover: oklch(from var(--ma-info-solid) 0.9 calc(c * 0.45) h);
   --ma-info-border: oklch(from var(--ma-info-solid) 0.76 calc(c * 0.8) h);
-  --ma-info-ink: oklch(from var(--ma-info-solid) 0.36 calc(c * 0.75) h);
+  --ma-info-ink: oklch(from var(--ma-info-solid) 0.33 calc(c * 0.75) h);
   --ma-attention-solid: #f2a42a;
   --ma-attention-fill: oklch(from var(--ma-attention-solid) 0.93 calc(c * 0.35) h);
   --ma-attention-hover: oklch(from var(--ma-attention-solid) 0.9 calc(c * 0.45) h);
@@ -26,19 +25,17 @@
   --ma-grey-fill: oklch(from var(--ma-grey-solid) 0.93 calc(c * 0.35) h);
   --ma-grey-hover: oklch(from var(--ma-grey-solid) 0.9 calc(c * 0.45) h);
   --ma-grey-border: oklch(from var(--ma-grey-solid) 0.76 calc(c * 0.8) h);
-  --ma-grey-ink: oklch(from var(--ma-grey-solid) 0.36 calc(c * 0.75) h);
+  --ma-grey-ink: oklch(from var(--ma-grey-solid) 0.33 calc(c * 0.75) h);
   --ma-success-solid: var(--success, #357a32);
   --ma-success-fill: oklch(from var(--ma-success-solid) 0.93 calc(c * 0.35) h);
   --ma-success-hover: oklch(from var(--ma-success-solid) 0.9 calc(c * 0.45) h);
   --ma-success-border: oklch(from var(--ma-success-solid) 0.76 calc(c * 0.8) h);
-  --ma-success-ink: oklch(from var(--ma-success-solid) 0.36 calc(c * 0.75) h);
+  --ma-success-ink: oklch(from var(--ma-success-solid) 0.33 calc(c * 0.75) h);
   --ma-danger-solid: var(--danger, #ca3120);
   --ma-danger-fill: oklch(from var(--ma-danger-solid) 0.93 calc(c * 0.35) h);
   --ma-danger-hover: oklch(from var(--ma-danger-solid) 0.9 calc(c * 0.45) h);
   --ma-danger-border: oklch(from var(--ma-danger-solid) 0.76 calc(c * 0.8) h);
-  --ma-danger-ink: oklch(from var(--ma-danger-solid) 0.36 calc(c * 0.75) h);
-  --ma-control-border: #8f959e;
-  --ma-control-height: calc(1.5em + 0.5rem + 2px);
+  --ma-danger-ink: oklch(from var(--ma-danger-solid) 0.33 calc(c * 0.75) h);
   --ma-focus-ring: 0 0 0 0.2rem color-mix(in srgb, var(--ma-primary-solid) 75%, transparent);
   --ma-actions-width: 10rem;
   color: var(--ma-text);
@@ -49,11 +46,11 @@
     --ma-primary-fill: rgb(218, 236, 236);
     --ma-primary-hover: rgb(204, 228, 227);
     --ma-primary-border: rgb(145, 186, 186);
-    --ma-primary-ink: rgb(32, 68, 68);
+    --ma-primary-ink: rgb(24, 60, 60);
     --ma-info-fill: rgb(207, 238, 246);
     --ma-info-hover: rgb(190, 230, 240);
     --ma-info-border: rgb(116, 190, 208);
-    --ma-info-ink: rgb(0, 70, 85);
+    --ma-info-ink: rgb(0, 62, 76);
     --ma-attention-fill: rgb(255, 227, 193);
     --ma-attention-hover: rgb(251, 215, 172);
     --ma-attention-border: rgb(225, 163, 80);
@@ -61,15 +58,15 @@
     --ma-grey-fill: rgb(229, 232, 235);
     --ma-grey-hover: rgb(218, 223, 227);
     --ma-grey-border: rgb(170, 178, 185);
-    --ma-grey-ink: rgb(56, 62, 67);
+    --ma-grey-ink: rgb(48, 54, 59);
     --ma-success-fill: rgb(215, 240, 213);
     --ma-success-hover: rgb(201, 232, 198);
     --ma-success-border: rgb(139, 194, 134);
-    --ma-success-ink: rgb(24, 73, 23);
+    --ma-success-ink: rgb(15, 65, 14);
     --ma-danger-fill: rgb(255, 218, 209);
     --ma-danger-hover: rgb(255, 204, 193);
     --ma-danger-border: rgb(255, 136, 116);
-    --ma-danger-ink: rgb(119, 5, 0);
+    --ma-danger-ink: rgb(109, 0, 0);
   }
 }
 .block_my_assessments_dashboard * {
@@ -89,6 +86,24 @@
 .block_my_assessments_dashboard .ma-row-date-note,
 .block_my_assessments_dashboard .ma-bar-label {
   color: var(--ma-text-muted);
+}
+.block_my_assessments_dashboard .ma-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.block_my_assessments_dashboard .ma-tabs .nav-link {
+  white-space: nowrap;
+}
+.block_my_assessments_dashboard .ma-tabs .nav-link:focus,
+.block_my_assessments_dashboard .ma-btn:focus,
+.block_my_assessments_dashboard .ma-filter-btn:focus {
+  outline: 0;
+}
+.block_my_assessments_dashboard .ma-tabs .nav-link:focus-visible,
+.block_my_assessments_dashboard .ma-btn:focus-visible,
+.block_my_assessments_dashboard .ma-filter-btn:focus-visible {
+  box-shadow: var(--ma-focus-ring);
 }
 .block_my_assessments_dashboard .ma-tabs,
 .block_my_assessments_dashboard .ma-toolbar,
@@ -185,13 +200,6 @@
   box-shadow: inset 0 0 0 2px var(--ma-border);
   color: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-grades-hide,
-.block_my_assessments_dashboard .ma-view--showgrades .ma-grades-show {
-  display: none;
-}
-.block_my_assessments_dashboard .ma-view--showgrades .ma-grades-hide {
-  display: inline;
-}
 .block_my_assessments_dashboard .ma-bottom {
   display: flex;
   justify-content: flex-end;
@@ -212,10 +220,14 @@
   --ma-ink: var(--ma-attention-ink);
   --ma-solid: var(--ma-attention-solid);
 }
-.block_my_assessments_dashboard .ma-view--student .ma-section--upcoming,
-.block_my_assessments_dashboard .ma-view--staff .ma-section--tomark,
-.block_my_assessments_dashboard .ma-view--convenor .ma-section--upcoming,
-.block_my_assessments_dashboard .ma-view--convenor .ma-section--inprogress {
+.block_my_assessments_dashboard .ma-view--student .ma-section--upcoming {
+  --ma-fill: var(--ma-primary-fill);
+  --ma-hover: var(--ma-primary-hover);
+  --ma-border: var(--ma-primary-border);
+  --ma-ink: var(--ma-primary-ink);
+  --ma-solid: var(--ma-primary-solid);
+}
+.block_my_assessments_dashboard .ma-view--staff .ma-section--tomark {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
@@ -228,6 +240,20 @@
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
+}
+.block_my_assessments_dashboard .ma-view--convenor .ma-section--upcoming {
+  --ma-fill: var(--ma-primary-fill);
+  --ma-hover: var(--ma-primary-hover);
+  --ma-border: var(--ma-primary-border);
+  --ma-ink: var(--ma-primary-ink);
+  --ma-solid: var(--ma-primary-solid);
+}
+.block_my_assessments_dashboard .ma-view--convenor .ma-section--inprogress {
+  --ma-fill: var(--ma-primary-fill);
+  --ma-hover: var(--ma-primary-hover);
+  --ma-border: var(--ma-primary-border);
+  --ma-ink: var(--ma-primary-ink);
+  --ma-solid: var(--ma-primary-solid);
 }
 .block_my_assessments_dashboard .ma-section-header {
   display: flex;
@@ -266,13 +292,6 @@
 }
 .block_my_assessments_dashboard .ma-section--collapsed .ma-section-toggle .fa {
   transform: rotate(-90deg);
-}
-.block_my_assessments_dashboard .ma-section--collapsed .ma-section-empty {
-  display: none;
-}
-.block_my_assessments_dashboard .ma-section-empty {
-  margin: 0;
-  padding: 0.5rem 0.75rem;
 }
 .block_my_assessments_dashboard .ma-section-footer {
   padding: 0.25rem 0.75rem;
@@ -360,22 +379,43 @@
   color: var(--ma-on-solid);
   font-size: 0.5rem;
 }
-.block_my_assessments_dashboard .ma-row-overlay--success {
+.block_my_assessments_dashboard .ma-row-overlay {
+  --ma-fill: var(--ma-grey-fill);
+  --ma-hover: var(--ma-grey-hover);
+  --ma-border: var(--ma-grey-border);
+  --ma-ink: var(--ma-grey-ink);
+  --ma-solid: var(--ma-grey-solid);
+}
+.block_my_assessments_dashboard .ma-row-overlay--pending {
+  --ma-fill: var(--ma-attention-fill);
+  --ma-hover: var(--ma-attention-hover);
+  --ma-border: var(--ma-attention-border);
+  --ma-ink: var(--ma-attention-ink);
+  --ma-solid: var(--ma-attention-solid);
+  --ma-on-solid: var(--ma-ink);
+}
+.block_my_assessments_dashboard .ma-row-overlay--submitted {
   --ma-fill: var(--ma-success-fill);
   --ma-hover: var(--ma-success-hover);
   --ma-border: var(--ma-success-border);
   --ma-ink: var(--ma-success-ink);
   --ma-solid: var(--ma-success-solid);
 }
-.block_my_assessments_dashboard .ma-row-overlay--warning {
-  --ma-fill: var(--ma-attention-fill);
-  --ma-hover: var(--ma-attention-hover);
-  --ma-border: var(--ma-attention-border);
-  --ma-ink: var(--ma-attention-ink);
-  --ma-solid: var(--ma-attention-solid);
-  color: var(--ma-ink);
+.block_my_assessments_dashboard .ma-row-overlay--inmarking {
+  --ma-fill: var(--ma-success-fill);
+  --ma-hover: var(--ma-success-hover);
+  --ma-border: var(--ma-success-border);
+  --ma-ink: var(--ma-success-ink);
+  --ma-solid: var(--ma-success-solid);
 }
-.block_my_assessments_dashboard .ma-row-overlay--danger {
+.block_my_assessments_dashboard .ma-row-overlay--released {
+  --ma-fill: var(--ma-success-fill);
+  --ma-hover: var(--ma-success-hover);
+  --ma-border: var(--ma-success-border);
+  --ma-ink: var(--ma-success-ink);
+  --ma-solid: var(--ma-success-solid);
+}
+.block_my_assessments_dashboard .ma-row-overlay--overdue {
   --ma-fill: var(--ma-danger-fill);
   --ma-hover: var(--ma-danger-hover);
   --ma-border: var(--ma-danger-border);
@@ -454,21 +494,14 @@
   --ma-border: var(--ma-grey-border);
   --ma-ink: var(--ma-grey-ink);
   --ma-solid: var(--ma-grey-solid);
-  padding: 0.2em 0.5em;
-  background-color: var(--ma-fill);
-  color: var(--ma-ink);
-  font-size: 0.8203rem;
-  font-weight: 600;
-  text-align: left;
-  white-space: normal;
 }
-.block_my_assessments_dashboard .ma-pill--pending,
-.block_my_assessments_dashboard .ma-pill--inmarking {
+.block_my_assessments_dashboard .ma-pill--pending {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
   --ma-ink: var(--ma-attention-ink);
   --ma-solid: var(--ma-attention-solid);
+  --ma-on-solid: var(--ma-ink);
 }
 .block_my_assessments_dashboard .ma-pill--submitted {
   --ma-fill: var(--ma-success-fill);
@@ -477,6 +510,13 @@
   --ma-ink: var(--ma-success-ink);
   --ma-solid: var(--ma-success-solid);
 }
+.block_my_assessments_dashboard .ma-pill--inmarking {
+  --ma-fill: var(--ma-info-fill);
+  --ma-hover: var(--ma-info-hover);
+  --ma-border: var(--ma-info-border);
+  --ma-ink: var(--ma-info-ink);
+  --ma-solid: var(--ma-info-solid);
+}
 .block_my_assessments_dashboard .ma-pill--released {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
@@ -484,18 +524,21 @@
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
+.block_my_assessments_dashboard .ma-pill {
+  padding: 0.2em 0.5em;
+  background-color: var(--ma-fill);
+  color: var(--ma-ink);
+  font-size: 0.8203rem;
+  font-weight: 600;
+  text-align: left;
+  white-space: normal;
+}
 .block_my_assessments_dashboard .ma-bar {
   --ma-fill: var(--ma-success-fill);
   --ma-hover: var(--ma-success-hover);
   --ma-border: var(--ma-success-border);
   --ma-ink: var(--ma-success-ink);
   --ma-solid: var(--ma-success-solid);
-  display: grid;
-  grid-template-columns: 5.5rem minmax(2.5rem, 1fr) minmax(3.5rem, auto);
-  align-items: center;
-  gap: 0 0.5rem;
-  align-self: stretch;
-  max-width: 26rem;
 }
 .block_my_assessments_dashboard .ma-bar--submitted {
   --ma-fill: var(--ma-primary-fill);
@@ -510,8 +553,15 @@
   --ma-border: var(--ma-attention-border);
   --ma-ink: var(--ma-attention-ink);
   --ma-solid: var(--ma-attention-solid);
+  --ma-on-solid: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-bar--moderated,
+.block_my_assessments_dashboard .ma-bar--moderated {
+  --ma-fill: var(--ma-info-fill);
+  --ma-hover: var(--ma-info-hover);
+  --ma-border: var(--ma-info-border);
+  --ma-ink: var(--ma-info-ink);
+  --ma-solid: var(--ma-info-solid);
+}
 .block_my_assessments_dashboard .ma-bar--released {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
@@ -519,13 +569,19 @@
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
+.block_my_assessments_dashboard .ma-bar {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(2.5rem, 1fr) minmax(3.5rem, auto);
+  align-items: center;
+  gap: 0 0.5rem;
+  align-self: stretch;
+  max-width: 26rem;
+}
 .block_my_assessments_dashboard .ma-bar-track {
-  order: 1;
   height: 0.5rem;
   background-color: var(--ma-grey-fill);
 }
 .block_my_assessments_dashboard .ma-bar-text {
-  order: 2;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }

@@ -87,3 +87,12 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     Then I should not be able to open the "Convenor view"
 
   # D4: released means the agreed or final grade has been published to the student.
+
+  # beta1 review M7: no "Marked 0 of 0" before anything is submitted.
+  Scenario: Marking bars appear only once something is submitted
+    Given a summative "assign" "A1" in "M1" was due "3 days ago"
+    And a summative "assign" "A2" in "M1" was due "3 days ago"
+    And "student1" has submitted "A2"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should show progress bars "Submitted"
+    And "A2" should show progress bars "Submitted, Marked, Released"

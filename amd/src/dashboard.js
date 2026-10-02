@@ -28,12 +28,14 @@
 
 import Ajax from 'core/ajax';
 import Notification from 'core/notification';
+import {getString} from 'core/str';
 import {setUserPreference} from 'core_user/repository';
 
 const SELECTORS = {
     view: '[data-region="ma-view"]',
     viewRoot: '[data-region="ma-view-root"]',
     loading: '[data-region="ma-loading"]',
+    status: '[data-region="ma-status"]',
     section: '[data-region="ma-section"]',
     row: '[data-region="ma-row"]',
     more: '[data-region="ma-more"]',
@@ -178,7 +180,12 @@ class Dashboard {
      */
     async load(methodname, view, yearid = -1) {
         const loading = this.root.querySelector(SELECTORS.loading);
+        const status = this.root.querySelector(SELECTORS.status);
         const container = this.root.querySelector(SELECTORS.view);
+        // The control that started this, to give focus back to once the view is replaced.
+        const focused = document.activeElement;
+        const action = focused && this.root.contains(focused) ? focused.dataset.action : null;
+        status.textContent = '';
         loading.hidden = false;
         container.setAttribute('aria-busy', 'true');
         try {
@@ -186,10 +193,16 @@ class Dashboard {
             const response = await result;
             container.innerHTML = response.html;
             this.root.dataset.view = view;
+            let label = '';
             this.root.querySelectorAll('[data-action="switch-view"]').forEach(tab => {
                 const active = tab.dataset.view === view;
                 tab.classList.toggle('active', active);
-                tab.setAttribute('aria-selected', active ? 'true' : 'false');
+                if (active) {
+                    tab.setAttribute('aria-current', 'page');
+                    label = tab.textContent.trim();
+                } else {
+                    tab.removeAttribute('aria-current');
+                }
             });
             this.expanded.clear();
             this.collapsed.clear();
@@ -198,11 +211,34 @@ class Dashboard {
                 search.value = this.search;
             }
             this.apply();
+            if (!focused || !focused.isConnected) {
+                this.restoreFocus(action);
+            }
+            // A short message for screen readers, not the whole view.
+            status.textContent = methodname === 'block_my_assessments_refresh'
+                ? await getString('statusrefreshed', 'block_my_assessments')
+                : await getString('statusloaded', 'block_my_assessments', label || this.viewKey);
         } catch (error) {
             Notification.exception(error);
         } finally {
             loading.hidden = true;
             container.removeAttribute('aria-busy');
+        }
+    }
+
+    /**
+     * Puts focus on the control with the same action in the new view, or on the view
+     * itself, when the control that had focus was replaced.
+     *
+     * @param {string|null} action
+     */
+    restoreFocus(action) {
+        if (!action) {
+            return;
+        }
+        const target = this.root.querySelector(`[data-action="${action}"]:not([hidden])`) || this.viewRoot;
+        if (target && document.activeElement !== target) {
+            target.focus();
         }
     }
 

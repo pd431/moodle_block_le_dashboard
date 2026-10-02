@@ -29,11 +29,10 @@
         "hasrows": true,
         "hasmore": false,
         "visiblerows": 5,
-        "empty": "Nothing overdue.",
         "rows": []
     }
 }}
-<section class="card ma-section ma-section--{{key}}" data-region="ma-section" data-section="{{key}}" data-visible-rows="{{visiblerows}}">
+<section class="card ma-section ma-section--{{key}}" data-region="ma-section" data-section="{{key}}" data-visible-rows="{{visiblerows}}"{{^hasrows}} hidden{{/hasrows}}>
     <div class="card-header ma-section-header">
         <h3 class="ma-section-title" id="ma-{{view}}-{{key}}-title">{{title}}</h3>
         <span class="badge ma-section-count" data-region="ma-section-count">{{count}}</span>
@@ -46,7 +45,6 @@
     <ul class="list-group list-group-flush ma-rows" id="ma-{{view}}-{{key}}-list" aria-labelledby="ma-{{view}}-{{key}}-title">
         {{#rows}}{{> block_my_assessments/row }}{{/rows}}
     </ul>
-    {{^hasrows}}<p class="ma-section-empty text-muted">{{empty}}</p>{{/hasrows}}
     <div class="card-footer ma-section-footer" data-region="ma-more" {{^hasmore}}hidden{{/hasmore}}>
         <button type="button" class="btn btn-link btn-sm ma-more" data-action="show-more" aria-expanded="false">
             <span class="ma-more-label">{{#str}}showmore, block_my_assessments{{/str}}</span>

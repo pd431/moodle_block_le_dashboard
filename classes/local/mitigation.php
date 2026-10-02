@@ -95,8 +95,9 @@ class mitigation {
      * Self-certified extensions used and allowed, for the student summary box.
      *
      * Needs block_rhb's selfcertmax and coursework's mitigations table. Counts
-     * self-certified extensions since the student's enrol_date profile field;
-     * students whose exte profile field is EXTE have no limit.
+     * self-certified extensions since the date in the student's "count from"
+     * profile field; students whose exemption field holds the exemption value
+     * have no limit. The field names and value are settings (SELFCERT_SETTINGS).
      *
      * @param int $userid
      * @return array|null used and max (max null means unlimited), or null when not applicable
@@ -107,21 +108,42 @@ class mitigation {
         if (!$max || !$DB->get_manager()->table_exists('coursework_mitigations')) {
             return null;
         }
+        $sincefield = self::setting('selfcertsincefield');
+        $exemptfield = self::setting('selfcertexemptfield');
         $fields = $DB->get_records_sql_menu(
             "SELECT f.shortname, d.data
-                                               FROM {user_info_field} f
-                                               JOIN {user_info_data} d ON d.fieldid = f.id
-                                              WHERE d.userid = :userid AND f.shortname IN ('enrol_date', 'exte')",
-            ['userid' => $userid]
+               FROM {user_info_field} f
+               JOIN {user_info_data} d ON d.fieldid = f.id
+              WHERE d.userid = :userid AND f.shortname IN (:since, :exempt)",
+            ['userid' => $userid, 'since' => $sincefield, 'exempt' => $exemptfield]
         );
-        $since = !empty($fields['enrol_date']) ? (int)strtotime($fields['enrol_date']) : 0;
+        $since = !empty($fields[$sincefield]) ? (int)strtotime($fields[$sincefield]) : 0;
         $used = $DB->count_records_sql(
             "SELECT COUNT(1)
-                                          FROM {coursework_mitigations}
-                                         WHERE type = 'extension' AND selfcert = 1 AND allocatabletype = 'user'
-                                           AND allocatableid = :userid AND timecreated > :since",
+               FROM {coursework_mitigations}
+              WHERE type = 'extension' AND selfcert = 1 AND allocatabletype = 'user'
+                AND allocatableid = :userid AND timecreated > :since",
             ['userid' => $userid, 'since' => $since]
         );
-        return ['used' => $used, 'max' => (($fields['exte'] ?? '') === 'EXTE') ? null : $max];
+        $exempt = ($fields[$exemptfield] ?? '') === self::setting('selfcertexemptvalue');
+        return ['used' => $used, 'max' => $exempt ? null : $max];
+    }
+
+    /** Self-certification settings and their defaults (the values rc6 hardcoded). */
+    const SELFCERT_SETTINGS = [
+        'selfcertsincefield' => 'enrol_date',
+        'selfcertexemptfield' => 'exte',
+        'selfcertexemptvalue' => 'EXTE',
+    ];
+
+    /**
+     * A self-certification setting, or its default.
+     *
+     * @param string $name A key of SELFCERT_SETTINGS.
+     * @return string
+     */
+    public static function setting(string $name): string {
+        $value = get_config('block_my_assessments', $name);
+        return $value === false || $value === '' ? self::SELFCERT_SETTINGS[$name] : (string)$value;
     }
 }

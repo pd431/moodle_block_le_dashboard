@@ -35,7 +35,7 @@
         "empty": "You have no assessments to show."
     }
 }}
-<div class="ma-view ma-view--{{key}}{{#showgrades}} ma-view--showgrades{{/showgrades}}" data-region="ma-view-root" data-view="{{key}}">
+<div class="ma-view ma-view--{{key}}{{#showgrades}} ma-view--showgrades{{/showgrades}}" data-region="ma-view-root" data-view="{{key}}" tabindex="-1">
     {{#freshness.preparing}}
     <div class="alert alert-info ma-preparing" role="status">{{#str}}preparing, block_my_assessments{{/str}}</div>
     {{/freshness.preparing}}
@@ -97,8 +97,7 @@
     <div class="ma-bottom">
         <button type="button" class="btn btn-sm ma-btn ma-btn--grades" data-action="toggle-grades"
                 aria-pressed="{{#showgrades}}true{{/showgrades}}{{^showgrades}}false{{/showgrades}}">
-            <span class="ma-grades-show">{{#str}}showgrades, block_my_assessments{{/str}}</span>
-            <span class="ma-grades-hide">{{#str}}hidegrades, block_my_assessments{{/str}}</span>
+            {{#str}}showgrades, block_my_assessments{{/str}}
         </button>
     </div>
     {{/hasgradestoggle}}
