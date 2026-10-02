@@ -1,0 +1,114 @@
+<?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+namespace block_my_assessments\local;
+
+/**
+ * The block's settings, read in one place.
+ *
+ * @package    block_my_assessments
+ * @copyright  2026 onwards block_my_assessments contributors
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class config {
+    /** Default days after which an unsubmitted assessment moves from Overdue to Past. */
+    const DEFAULT_THRESHOLD = 90;
+
+    /**
+     * A comma-separated setting as a clean list.
+     *
+     * @param string $name
+     * @param bool $lowercase
+     * @return string[]
+     */
+    protected static function csv(string $name, bool $lowercase = false): array {
+        $value = (string)get_config('block_my_assessments', $name);
+        $items = array_filter(array_map('trim', explode(',', $value)), fn($v) => $v !== '' && $v !== '0');
+        if ($lowercase) {
+            $items = array_map(fn($v) => \core_text::strtolower($v), $items);
+        }
+        return array_values(array_unique($items));
+    }
+
+    /**
+     * Tag names that mark an activity as summative.
+     *
+     * @return string[]
+     */
+    public static function summative_tags(): array {
+        return self::csv('certaintags', true);
+    }
+
+    /**
+     * Tag names that mark an activity as formative.
+     *
+     * @return string[]
+     */
+    public static function formative_tags(): array {
+        return self::csv('formativetags', true);
+    }
+
+    /**
+     * Role ids for one of the role settings, falling back to archetypes when unset.
+     *
+     * @param string $setting studentrole, staffrole or moduleconvenorrole
+     * @return int[]
+     */
+    public static function role_ids(string $setting): array {
+        global $DB;
+        $shortnames = self::csv($setting);
+        if (!$shortnames) {
+            $archetypes = ['studentrole' => ['student'], 'staffrole' => ['editingteacher', 'teacher'],
+                'moduleconvenorrole' => []][$setting] ?? [];
+            if (!$archetypes) {
+                return [];
+            }
+            [$insql, $params] = $DB->get_in_or_equal($archetypes, SQL_PARAMS_NAMED);
+            return array_map('intval', $DB->get_fieldset_select('role', 'id', "archetype $insql", $params));
+        }
+        [$insql, $params] = $DB->get_in_or_equal($shortnames, SQL_PARAMS_NAMED);
+        return array_map('intval', $DB->get_fieldset_select('role', 'id', "shortname $insql", $params));
+    }
+
+    /**
+     * Days after the deadline when an unsubmitted assessment moves from Overdue to Past.
+     *
+     * @return int
+     */
+    public static function overdue_threshold_days(): int {
+        $value = get_config('block_my_assessments', 'overduetopastthreshold');
+        return $value === false || $value === '' ? self::DEFAULT_THRESHOLD : max(0, (int)$value);
+    }
+
+    /**
+     * Rows shown in a section before "Show more".
+     *
+     * @return int
+     */
+    public static function visible_rows(): int {
+        return 5;
+    }
+
+    /**
+     * Assessments a Refresh re-indexes inline before it queues the rest instead.
+     *
+     * @return int
+     */
+    public static function inline_refresh_limit(): int {
+        $value = (int)get_config('block_my_assessments', 'inlinerefreshlimit');
+        return $value > 0 ? $value : 30;
+    }
+}

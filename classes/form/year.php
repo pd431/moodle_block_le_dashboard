@@ -1,0 +1,54 @@
+<?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+namespace block_my_assessments\form;
+
+defined('MOODLE_INTERNAL') || die();
+
+require_once($CFG->libdir . '/formslib.php');
+
+/**
+ * Add or edit an academic year.
+ *
+ * @package    block_my_assessments
+ * @copyright  2026 onwards block_my_assessments contributors
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+class year extends \moodleform {
+    #[\Override]
+    protected function definition() {
+        $mform = $this->_form;
+        $mform->addElement('hidden', 'id', 0);
+        $mform->setType('id', PARAM_INT);
+        $mform->addElement('text', 'label', get_string('yearlabel', 'block_my_assessments'), ['size' => 20]);
+        $mform->setType('label', PARAM_TEXT);
+        $mform->addRule('label', null, 'required', null, 'client');
+        $mform->addElement('date_selector', 'timestart', get_string('yearstart', 'block_my_assessments'));
+        $mform->addHelpButton('timestart', 'yearstart', 'block_my_assessments');
+        $mform->addElement('date_selector', 'timeend', get_string('yearend', 'block_my_assessments'));
+        $mform->addHelpButton('timeend', 'yearend', 'block_my_assessments');
+        $this->add_action_buttons();
+    }
+
+    #[\Override]
+    public function validation($data, $files) {
+        $errors = parent::validation($data, $files);
+        if ($data['timeend'] <= $data['timestart']) {
+            $errors['timeend'] = get_string('yearendbeforestart', 'block_my_assessments');
+        }
+        return $errors;
+    }
+}

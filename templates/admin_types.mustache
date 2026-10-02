@@ -1,0 +1,57 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_my_assessments/admin_types
+
+    Activity types admin page.
+
+    Example context (json):
+    {
+        "action": "https://example.com/blocks/my_assessments/admin/types.php",
+        "sesskey": "abc",
+        "rows": [{"modname": "assign", "name": "Assignment", "support": "Full", "supportdesc": "Submissions, marking and release", "enabled": true, "error": null}]
+    }
+}}
+<p>{{#str}}activitytypes_desc, block_my_assessments{{/str}}</p>
+<form method="post" action="{{action}}">
+    <input type="hidden" name="sesskey" value="{{sesskey}}">
+    <table class="table table-sm generaltable" data-region="ma-types">
+        <thead>
+            <tr>
+                <th scope="col">{{#str}}activity, block_my_assessments{{/str}}</th>
+                <th scope="col">{{#str}}support, block_my_assessments{{/str}}</th>
+                <th scope="col">{{#str}}enabled, block_my_assessments{{/str}}</th>
+                <th scope="col">{{#str}}lastindexingerror, block_my_assessments{{/str}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#rows}}
+            <tr data-modname="{{modname}}">
+                <th scope="row">{{name}}</th>
+                <td>{{support}}<div class="small text-muted">{{supportdesc}}</div></td>
+                <td>
+                    <input type="checkbox" class="form-check-input position-static" name="enabled[{{modname}}]" value="1"
+                           id="ma-type-{{modname}}" {{#enabled}}checked{{/enabled}}
+                           aria-label="{{#str}}enabletype, block_my_assessments, {{name}}{{/str}}">
+                </td>
+                <td>{{#error}}<span class="text-danger">{{error}}</span>{{/error}}</td>
+            </tr>
+            {{/rows}}
+        </tbody>
+    </table>
+    <button type="submit" class="btn btn-primary">{{#str}}savechanges{{/str}}</button>
+</form>

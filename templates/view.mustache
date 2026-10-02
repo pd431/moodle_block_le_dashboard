@@ -1,0 +1,105 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_my_assessments/view
+
+    One view (student, staff or convenor). Every view has the same shape.
+
+    Example context (json):
+    {
+        "key": "student",
+        "uniqid": "ma1",
+        "freshness": {"text": "Updated 12 min ago", "refreshing": false, "preparing": false},
+        "hasyears": false,
+        "years": [],
+        "hassummary": true,
+        "summary": [{"key": "overdue", "view": "student", "label": "Overdue", "value": 1, "counts": "{\"both\":1,\"summative\":1,\"formative\":0}", "hasoptions": false}],
+        "hasrows": true,
+        "sections": [],
+        "hasgradestoggle": false,
+        "showgrades": false,
+        "empty": "You have no assessments to show."
+    }
+}}
+<div class="ma-view ma-view--{{key}}{{#showgrades}} ma-view--showgrades{{/showgrades}}" data-region="ma-view-root" data-view="{{key}}">
+    {{#freshness.preparing}}
+    <div class="alert alert-info ma-preparing" role="status">{{#str}}preparing, block_my_assessments{{/str}}</div>
+    {{/freshness.preparing}}
+    <div class="ma-toolbar">
+        {{#hasyears}}
+        <div class="ma-year">
+            <label class="sr-only" for="{{uniqid}}-year">{{#str}}academicyear, block_my_assessments{{/str}}</label>
+            <select id="{{uniqid}}-year" class="custom-select custom-select-sm" data-action="year">
+                {{#years}}<option value="{{id}}"{{#selected}} selected{{/selected}}>{{label}}</option>{{/years}}
+            </select>
+        </div>
+        {{/hasyears}}
+        <div class="ma-freshness" data-region="ma-freshness">
+            {{#freshness.refreshing}}
+            <span class="ma-freshness-text">
+                <span class="spinner-border spinner-border-sm mr-1" aria-hidden="true"></span>{{#str}}refreshing, block_my_assessments{{/str}}
+            </span>
+            {{/freshness.refreshing}}
+            {{^freshness.refreshing}}
+            <span class="ma-freshness-text">{{freshness.text}}</span>
+            <button type="button" class="btn btn-sm ma-btn ma-btn--refresh" data-action="refresh">
+                <i class="fa fa-rotate-right mr-1" aria-hidden="true"></i>{{#str}}refresh, block_my_assessments{{/str}}
+            </button>
+            {{/freshness.refreshing}}
+        </div>
+    </div>
+
+    {{#hassummary}}
+    <div class="ma-summary" data-region="ma-summary">
+        {{#summary}}{{> block_my_assessments/summary_box }}{{/summary}}
+    </div>
+    {{/hassummary}}
+
+    <div class="ma-filters">
+        <div class="btn-group btn-group-sm ma-type-filter" role="group" aria-label="{{#str}}filtertype, block_my_assessments{{/str}}">
+            <button type="button" class="btn ma-filter-btn active" aria-pressed="true" data-action="filter-type" data-type="both">{{#str}}both, block_my_assessments{{/str}}</button>
+            <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="summative">{{#str}}summative, block_my_assessments{{/str}}</button>
+            <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="formative">{{#str}}formative, block_my_assessments{{/str}}</button>
+        </div>
+        <div class="input-group input-group-sm ma-search">
+            <div class="input-group-prepend">
+                <span class="input-group-text" aria-hidden="true"><i class="fa fa-search"></i></span>
+            </div>
+            <label class="sr-only" for="{{uniqid}}-search">{{#str}}search, block_my_assessments{{/str}}</label>
+            <input type="search" id="{{uniqid}}-search" class="form-control" data-action="search"
+                   placeholder="{{#str}}searchplaceholder, block_my_assessments{{/str}}">
+        </div>
+    </div>
+
+    {{#hasrows}}
+    {{#sections}}{{> block_my_assessments/section }}{{/sections}}
+    <p class="ma-filter-empty text-muted" data-region="ma-filter-empty" hidden>{{#str}}nomatches, block_my_assessments{{/str}}</p>
+    {{/hasrows}}
+    {{^hasrows}}
+    <div class="ma-empty text-muted">{{empty}}</div>
+    {{/hasrows}}
+
+    {{#hasgradestoggle}}
+    <div class="ma-bottom">
+        <button type="button" class="btn btn-sm ma-btn ma-btn--grades" data-action="toggle-grades"
+                aria-pressed="{{#showgrades}}true{{/showgrades}}{{^showgrades}}false{{/showgrades}}">
+            <span class="ma-grades-show">{{#str}}showgrades, block_my_assessments{{/str}}</span>
+            <span class="ma-grades-hide">{{#str}}hidegrades, block_my_assessments{{/str}}</span>
+        </button>
+    </div>
+    {{/hasgradestoggle}}
+</div>

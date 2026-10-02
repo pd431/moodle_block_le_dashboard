@@ -1,0 +1,102 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_my_assessments/row
+
+    One assessment row, the same partial in every view. The parts a view doesn't send are left out.
+
+    Example context (json):
+    {
+        "id": "ma-student-12",
+        "cmid": 12,
+        "view": "student",
+        "name": "Essay 1",
+        "url": "https://example.com/mod/assign/view.php?id=12",
+        "course": "M1",
+        "modlabel": "Assignment",
+        "icon": "https://example.com/theme/image.php/boost/assign/1/monologo",
+        "assesstype": "summative",
+        "typelabel": "Summative",
+        "hidden": false,
+        "search": "essay 1 m1 assignment",
+        "overflow": false,
+        "overlay": {"tone": "warning", "icon": "fa-clock"},
+        "status": {"key": "pending", "label": "Not submitted yet"},
+        "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00", "note": null}],
+        "actions": [{"key": "submit", "label": "Submit", "url": "https://example.com/mod/assign/view.php?id=12"}]
+    }
+}}
+<li class="list-group-item ma-row" id="{{id}}" data-region="ma-row" data-cmid="{{cmid}}" data-assesstype="{{assesstype}}"
+    data-search="{{search}}"{{#overflow}} data-overflow="1" hidden{{/overflow}}>
+    <div class="ma-row-icon" aria-hidden="true">
+        <img class="ma-row-modicon" src="{{icon}}" alt="">
+        {{#overlay}}<span class="ma-row-overlay{{#tone}} ma-row-overlay--{{tone}}{{/tone}}"><i class="fa {{icon}}"></i></span>{{/overlay}}
+    </div>
+    <div class="ma-row-info">
+        <a class="ma-row-name" href="{{url}}">{{name}}</a>
+        <div class="ma-row-meta">
+            <span class="ma-row-course">{{course}}</span>
+            <span class="ma-row-type">{{modlabel}} · {{typelabel}}</span>
+            {{#hidden}}<span class="badge ma-pill ma-pill--hidden">{{#str}}hiddenfromstudents, block_my_assessments{{/str}}</span>{{/hidden}}
+        </div>
+    </div>
+    <div class="ma-row-dates">
+        {{#dates}}
+        <div class="ma-row-date ma-row-date--{{key}}" data-date="{{key}}">
+            <span class="ma-row-date-label">{{label}}</span> <time datetime="{{iso}}">{{text}}</time>
+            {{#note}}<span class="ma-row-date-note">{{note}}</span>{{/note}}
+        </div>
+        {{/dates}}
+    </div>
+    <div class="ma-row-status">
+        {{#status}}<span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{/status}}
+        {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_my_assessments{{/str}} <strong>{{text}}</strong></span>{{/grade}}
+        {{#tomarklabel}}<span class="ma-tomark" data-tomark="{{tomark}}">{{tomarklabel}}</span>{{/tomarklabel}}
+        {{#hasstages}}
+        <ul class="list-unstyled ma-stages">
+            {{#stages}}<li>{{label}}: <strong>{{count}}</strong></li>{{/stages}}
+        </ul>
+        {{/hasstages}}
+        {{#bars}}{{> block_my_assessments/progress }}{{/bars}}
+    </div>
+    <div class="ma-row-actions">
+        {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}">{{label}}<span class="sr-only">: {{name}}</span></a>{{/actions}}
+        {{#mitigation}}
+        <div class="dropdown ma-mitigate">
+            <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
+                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">{{#str}}action_mitigate, block_my_assessments{{/str}}</button>
+            <div class="dropdown-menu dropdown-menu-right" aria-labelledby="{{id}}">
+                {{#links}}<div class="dropdown-item ma-mitigate-item">{{{html}}}</div>{{/links}}
+            </div>
+        </div>
+        {{/mitigation}}
+        {{#hasmarkers}}
+        <button type="button" class="btn btn-sm ma-btn ma-btn--markers" data-toggle="collapse" data-target="#{{markersid}}"
+                aria-expanded="false" aria-controls="{{markersid}}">{{#str}}action_markers, block_my_assessments{{/str}}</button>
+        {{/hasmarkers}}
+    </div>
+    {{#hasmarkers}}
+    <ul class="list-unstyled collapse ma-markers" id="{{markersid}}" data-region="ma-markers">
+        {{#markers}}
+        <li class="ma-marker">
+            <span class="ma-marker-name">{{name}}</span>
+            <div class="ma-marker-bars">{{#bars}}{{> block_my_assessments/progress }}{{/bars}}</div>
+        </li>
+        {{/markers}}
+    </ul>
+    {{/hasmarkers}}
+</li>
