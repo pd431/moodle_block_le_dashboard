@@ -36,6 +36,7 @@ class backfill extends \core\task\adhoc_task {
     public function execute() {
         (new indexer())->reconcile(fn($line) => mtrace($line));
         unset_config('backfillpending', 'block_my_assessments');
+        set_config('backfilldone', time(), 'block_my_assessments');
     }
 
     /**

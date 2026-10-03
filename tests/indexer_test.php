@@ -184,4 +184,31 @@ final class indexer_test extends \advanced_testcase {
         delete_course($course, false);
         $this->assertFalse($DB->record_exists('block_my_assessments_cm', ['cmid' => $a->cmid]));
     }
+
+    /**
+     * G9: a group's work is ready at its latest member deadline, so one extended member
+     * holds the group back.
+     */
+    public function test_group_unitdue(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $group = $gen->create_group(['courseid' => $course->id]);
+        $gen->create_group_member(['groupid' => $group->id, 'userid' => $s1->id]);
+        $gen->create_group_member(['groupid' => $group->id, 'userid' => $s2->id]);
+        $due = time() - DAYSECS;
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => $due, 'submissiondrafts' => 0,
+            'assignsubmission_onlinetext_enabled' => 1, 'teamsubmission' => 1, 'requireallteammemberssubmit' => 0]);
+        $extension = time() + 3 * DAYSECS;
+        $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid,
+            'onlinetext' => 'Ours']);
+        $DB->insert_record('assign_user_flags', ['assignment' => $a->id, 'userid' => $s2->id, 'locked' => 0,
+            'mailed' => 0, 'extensionduedate' => $extension, 'workflowstate' => '', 'allocatedmarker' => 0]);
+        $this->ma->tag($a->cmid);
+        $unit = $DB->get_record('block_my_assessments_mark', ['cmid' => $a->cmid, 'unittype' => 'group']);
+        $this->assertEquals($group->id, $unit->unitid);
+        $this->assertEquals($extension, $unit->unitdue);
+    }
 }

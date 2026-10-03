@@ -96,6 +96,29 @@ if ($ADMIN->fulltree) {
         '',
         PARAM_URL
     ));
+    foreach (\block_my_assessments\local\config::NUMBERS as $name => $default) {
+        $settings->add(new admin_setting_configtext(
+            'block_my_assessments/' . $name,
+            new lang_string($name, 'block_my_assessments'),
+            new lang_string($name . '_desc', 'block_my_assessments'),
+            $default,
+            PARAM_INT
+        ));
+    }
+    $settings->add(new admin_setting_configtext(
+        'block_my_assessments/feedbackcontact',
+        new lang_string('feedbackcontact', 'block_my_assessments'),
+        new lang_string('feedbackcontact_desc', 'block_my_assessments'),
+        '',
+        PARAM_TEXT
+    ));
+    $settings->add(new admin_setting_configtext(
+        'block_my_assessments/feedbackcontacturl',
+        new lang_string('feedbackcontacturl', 'block_my_assessments'),
+        new lang_string('feedbackcontacturl_desc', 'block_my_assessments'),
+        '',
+        PARAM_URL
+    ));
     $settings->add(new admin_setting_configtext(
         'block_my_assessments/latenote',
         new lang_string('latenote', 'block_my_assessments'),

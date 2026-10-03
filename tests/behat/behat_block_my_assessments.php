@@ -56,6 +56,19 @@ class behat_block_my_assessments extends behat_base {
         }
     }
 
+    /**
+     * Scenarios tagged @block_rhb need its Mitigate links: without block_rhb, a stand-in
+     * gives one (tests/fixtures/rhb_stub.php).
+     *
+     * @BeforeScenario @block_rhb
+     */
+    public function stand_in_for_block_rhb(): void {
+        global $CFG;
+        if (!file_exists($CFG->dirroot . '/blocks/rhb/lib.php')) {
+            set_config('behatrhbstub', 1, 'block_my_assessments');
+        }
+    }
+
     // Helpers.
 
     /**
@@ -1183,14 +1196,31 @@ class behat_block_my_assessments extends behat_base {
     public function minutes_pass(int $minutes): void {
         global $DB;
         $shift = $minutes * MINSECS;
-        foreach (['block_my_assessments_cm', 'block_my_assessments_stu'] as $table) {
-            foreach (['due', 'cutoff'] as $field) {
-                $DB->execute("UPDATE {{$table}} SET $field = $field - :s WHERE $field IS NOT NULL", ['s' => $shift]);
+        // The index and the activities' own times move together, so a re-index agrees.
+        $fields = [
+            'block_my_assessments_cm' => ['due', 'cutoff', 'markingdue', 'timeindexed'],
+            'block_my_assessments_stu' => ['due', 'cutoff', 'timesubmitted', 'timereleased'],
+            'block_my_assessments_mark' => ['timeready', 'unitdue', 'timemarked'],
+            'quiz' => ['timeclose'],
+            'assign' => ['duedate', 'cutoffdate', 'gradingduedate', 'allowsubmissionsfromdate'],
+            'assign_overrides' => ['duedate', 'cutoffdate'],
+            'assign_user_flags' => ['extensionduedate'],
+            'assign_submission' => ['timecreated', 'timemodified'],
+            'assign_grades' => ['timecreated', 'timemodified'],
+            'assign_mark' => ['timecreated', 'timemodified'],
+            'grade_grades' => ['timecreated', 'timemodified'],
+        ];
+        $dbman = $DB->get_manager();
+        foreach ($fields as $table => $columns) {
+            if (!$dbman->table_exists($table)) {
+                continue;
+            }
+            foreach ($columns as $field) {
+                if ($dbman->field_exists($table, $field)) {
+                    $DB->execute("UPDATE {{$table}} SET $field = $field - :s WHERE $field > 0", ['s' => $shift]);
+                }
             }
         }
-        $DB->execute("UPDATE {block_my_assessments_cm} SET timeindexed = timeindexed - :s", ['s' => $shift]);
-        $DB->execute("UPDATE {quiz} SET timeclose = timeclose - :s WHERE timeclose > 0", ['s' => $shift]);
-        $DB->execute("UPDATE {assign} SET duedate = duedate - :s WHERE duedate > 0", ['s' => $shift]);
     }
 
     /**
@@ -1462,13 +1492,54 @@ class behat_block_my_assessments extends behat_base {
         set_config('briefguidanceurl', $url, 'block_my_assessments');
     }
 
+    /**
+     * Sets the Mitigate window.
+     *
+     * @Given /^the My assessments Mitigate window opens "(?P<days>\d+)" days before and closes "(?P<hours>\d+)" hours after the deadline$/
+     * @param int $days
+     * @param int $hours
+     */
+    public function the_mitigate_window_is(int $days, int $hours): void {
+        set_config('mitigationopens', $days, 'block_my_assessments');
+        set_config('mitigationcloses', $hours, 'block_my_assessments');
+    }
+
+    /**
+     * Sets the feedback contact.
+     *
+     * @Given /^the My assessments feedback contact is "(?P<text>[^"]*)" linking to "(?P<url>[^"]*)"$/
+     * @param string $text
+     * @param string $url
+     */
+    public function the_feedback_contact_is(string $text, string $url): void {
+        set_config('feedbackcontact', $text, 'block_my_assessments');
+        set_config('feedbackcontacturl', $url, 'block_my_assessments');
+    }
+
+    /**
+     * A link in the block, by its text and address.
+     *
+     * @Then /^I should see "(?P<text>[^"]*)" linking to "(?P<url>[^"]*)"$/
+     * @param string $text
+     * @param string $url
+     */
+    public function i_should_see_linking_to(string $text, string $url): void {
+        foreach ($this->find_all('css', self::BLOCK . ' a') as $link) {
+            if ($link->isVisible() && trim($link->getText()) === $text && $link->getAttribute('href') === $url) {
+                return;
+            }
+        }
+        throw new ExpectationException("No visible '$text' link to '$url' in the block", $this->getSession());
+    }
+
     /** Hint names in steps, to the hint keys rows carry. */
-    const HINTS = ['brief' => 'brief', 'unallocated' => 'unallocated', 'returned work' => 'returned'];
+    const HINTS = ['brief' => 'brief', 'unallocated' => 'unallocated', 'returned work' => 'returned',
+        'feedback contact' => 'feedbackcontact', 'extension' => 'extensions'];
 
     /**
      * Clicks a row's hint.
      *
-     * @When /^I click on the (?P<hint>brief|unallocated|returned work) hint of "(?P<name>[^"]*)"$/
+     * @When /^I click on the (?P<hint>brief|unallocated|returned work|feedback contact|extension) hint of "(?P<name>[^"]*)"$/
      * @param string $hint
      * @param string $name
      */
@@ -1481,7 +1552,7 @@ class behat_block_my_assessments extends behat_base {
     /**
      * Whether a row has a hint.
      *
-     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>brief|unallocated|returned work) hint$/
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>brief|unallocated|returned work|feedback contact|extension) hint$/
      * @param string $name
      * @param string $not
      * @param string $hint

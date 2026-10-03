@@ -138,11 +138,12 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
   # G6
   Scenario: Returned work moves the assessment back to In progress with a hint for the convenor
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student2" has an extension on "A1" to "in 3 days"
+    And "student2" has an extension on "A1" to "in 2 minutes"
     And "student1" has submitted "A1"
     And "marker1" marks the submission of "student1" for "A1"
     And the grade of "student1" for "A1" is released
     And "student2" has submitted "A1"
+    And 3 minutes pass
     When I log in as "convenor" and view the "Convenor view"
     Then "A1" should appear in the "In progress" section
     And "A1" should have a returned work hint
@@ -169,3 +170,12 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     Then "A1" should show "Submission deadline"
     And "A1" should show "Marking deadline"
     And "A1" should not show "Due"
+
+  # G9: extensions still to come, for every student on the assessment.
+  Scenario: The convenor sees extensions still to come on the assessment
+    Given a summative "assign" "A1" in "M1" was due "5 days ago"
+    And "student1" has submitted "A1"
+    And "student2" has an extension on "A1" to "in 3 days"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "In progress" section
+    And "A1" should show "1 student has an extension"

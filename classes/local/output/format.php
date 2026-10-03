@@ -161,16 +161,17 @@ class format {
      * One component for every hint (no brief, unallocated work, returned work).
      *
      * @param string $rowid
-     * @param string $key brief, unallocated or returned; the button says the hint_{key} string.
+     * @param string $key brief, unallocated, returned, feedbackcontact or extensions.
      * @param string $text The tip.
      * @param string|null $link HTML link sentence after the tip, if any.
+     * @param string|null $label The button's text, when it isn't the hint_{key} string (a count, say).
      * @return array
      */
-    public static function hint(string $rowid, string $key, string $text, ?string $link = null): array {
+    public static function hint(string $rowid, string $key, string $text, ?string $link = null, ?string $label = null): array {
         return [
             'id' => $rowid . '-hint-' . $key,
             'key' => $key,
-            'label' => get_string('hint_' . $key, 'block_my_assessments'),
+            'label' => $label ?? get_string('hint_' . $key, 'block_my_assessments'),
             'text' => $text,
             'link' => $link,
         ];

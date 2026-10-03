@@ -110,15 +110,22 @@ class classifier {
     /**
      * Where an assessment goes in a marker's view.
      *
+     * Past the deadline with nothing to mark and extensions still to come, an assessment
+     * stays in Upcoming deadlines (G9).
+     *
      * @param int $tomark My units ready and not marked.
      * @param int $mine My units in total.
      * @param int|null $due
      * @param int $now
+     * @param bool $pending Students whose marking is mine have extensions still to come.
      * @return string|null Section, or null when it isn't shown in the marking sections.
      */
-    public static function staff(int $tomark, int $mine, ?int $due, int $now): ?string {
+    public static function staff(int $tomark, int $mine, ?int $due, int $now, bool $pending = false): ?string {
         if ($tomark > 0) {
             return self::TOMARK;
+        }
+        if ($pending && $due !== null && $due < $now) {
+            return self::STAFF_UPCOMING;
         }
         if ($mine > 0 && ($due === null || $due < $now)) {
             return self::COMPLETED;

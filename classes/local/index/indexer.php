@@ -148,8 +148,11 @@ class indexer {
             'timeindexed' => $now,
         ];
         $stu = [];
+        $dues = [];
         foreach ($students as $userid => $canaccess) {
             $row = $sturows[$userid] ?? new student_row($userid, $cmrow->due, $cmrow->cutoff);
+            $dues[$userid] = $row->due ?? $cmrow->due;
+            $allocated = array_unique(array_filter(array_map('intval', $row->allocatedto)));
             $stu[] = (object)[
                 'cmid' => $cmid,
                 'userid' => $userid,
@@ -158,6 +161,7 @@ class indexer {
                 'individual' => $row->individual ? 1 : 0,
                 'mitigation' => $row->mitigation,
                 'reopened' => $row->reopened ? 1 : 0,
+                'allocatedto' => $allocated ? ',' . implode(',', $allocated) . ',' : null,
                 'canaccess' => $canaccess ? 1 : 0,
                 'submitted' => $row->submitted === null ? null : ($row->submitted ? 1 : 0),
                 'timesubmitted' => $row->timesubmitted,
@@ -167,12 +171,17 @@ class indexer {
         }
         $mark = [];
         $seen = [];
+        $groupdues = $this->group_dues($markrows, $dues, $cmrow->due);
         foreach ($markrows as $row) {
             $key = $row->unittype . ':' . $row->unitid . ':' . $row->stage;
             if (isset($seen[$key])) {
                 continue;
             }
             $seen[$key] = true;
+            // Work is ready to mark once the unit's own deadline has passed (G9).
+            $unitdue = $row->unitdue ?? ($row->unittype === marking_row::UNIT_GROUP
+                ? ($groupdues[$row->unitid] ?? $cmrow->due) : ($dues[$row->unitid] ?? $cmrow->due));
+            $timeready = $row->timeready === null ? null : max($row->timeready, (int)$unitdue);
             $mark[] = (object)[
                 'cmid' => $cmid,
                 'unitid' => $row->unitid,
@@ -180,7 +189,8 @@ class indexer {
                 'stage' => $row->stage,
                 'allocatedto' => $row->allocatedto,
                 'submitted' => $row->submitted ? 1 : 0,
-                'timeready' => $row->timeready,
+                'timeready' => $timeready,
+                'unitdue' => $unitdue,
                 'marked' => $row->marked ? 1 : 0,
                 'markedby' => $row->markedby,
                 'timemarked' => $row->timemarked,
@@ -200,6 +210,38 @@ class indexer {
         $transaction->allow_commit();
         registry::clear_error($cm->modname);
         return true;
+    }
+
+    /**
+     * Each group unit's deadline: the latest effective deadline among its indexed members,
+     * so a group with one extended member is not ready before that member's deadline.
+     *
+     * @param marking_row[] $markrows
+     * @param array $dues userid => effective deadline
+     * @param int|null $default The activity's deadline, for groups with no indexed member.
+     * @return array groupid => deadline
+     */
+    protected function group_dues(array $markrows, array $dues, ?int $default): array {
+        global $DB;
+        $groupids = [];
+        foreach ($markrows as $row) {
+            if ($row->unittype === marking_row::UNIT_GROUP) {
+                $groupids[$row->unitid] = true;
+            }
+        }
+        if (!$groupids) {
+            return [];
+        }
+        $out = [];
+        [$insql, $params] = $DB->get_in_or_equal(array_keys($groupids), SQL_PARAMS_NAMED);
+        $rs = $DB->get_recordset_select('groups_members', "groupid $insql", $params, '', 'id, groupid, userid');
+        foreach ($rs as $m) {
+            if (array_key_exists((int)$m->userid, $dues) && $dues[(int)$m->userid] !== null) {
+                $out[(int)$m->groupid] = max($out[(int)$m->groupid] ?? 0, (int)$dues[(int)$m->userid]);
+            }
+        }
+        $rs->close();
+        return $out + array_fill_keys(array_keys($groupids), $default);
     }
 
     /** File areas that hold an activity's brief, besides its intro. */

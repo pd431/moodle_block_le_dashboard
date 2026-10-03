@@ -203,8 +203,11 @@ class assign extends base {
         }
         $groups = $groupoverrides ? self::user_groups($cm->course, array_keys($rows)) : [];
         $flags = $this->flags($a->id, array_keys($rows));
+        // Allocated markers, so extensions still to come reach their markers (G9).
+        $allocations = $cmrow->hasallocation ? $this->allocations($a, array_keys($rows), $flags) : [];
 
         foreach ($rows as $userid => $row) {
+            $row->allocatedto = $allocations[$userid] ?? [];
             $override = $useroverrides[$userid] ?? null;
             if (!$override && !empty($groups[$userid])) {
                 foreach ($groupoverrides as $o) {

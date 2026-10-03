@@ -112,5 +112,25 @@ function xmldb_block_my_assessments_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100400, 'my_assessments');
     }
 
+    if ($oldversion < 2026100500) {
+        // Marking arrives at each student's own deadline, and extensions still to come (G9).
+        $table = new xmldb_table('block_my_assessments_stu');
+        $field = new xmldb_field('allocatedto', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'reopened');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table = new xmldb_table('block_my_assessments_mark');
+        $field = new xmldb_field('unitdue', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'timeready');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_my_assessments\task\backfill::queue();
+        // An index that already has rows has been filled before: no "Preparing" banner over it.
+        if ($DB->record_exists('block_my_assessments_cm', [])) {
+            set_config('backfilldone', time(), 'block_my_assessments');
+        }
+        upgrade_block_savepoint(true, 2026100500, 'my_assessments');
+    }
+
     return true;
 }

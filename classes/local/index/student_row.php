@@ -46,6 +46,7 @@ final class student_row {
      * @param string|null $gradedisplay The grade as the student should see it.
      * @param string|null $mitigation MITIGATION_EXTENSION or MITIGATION_SELFCERT when one applies.
      * @param bool $reopened Whether a new attempt is open and not yet submitted.
+     * @param int[] $allocatedto Markers allocated to the student, on activities with allocation.
      */
     public function __construct(
         /** @var int The student. */
@@ -68,6 +69,8 @@ final class student_row {
         public ?string $mitigation = null,
         /** @var bool A new attempt is open. */
         public bool $reopened = false,
+        /** @var int[] Allocated markers. */
+        public array $allocatedto = [],
     ) {
     }
 }

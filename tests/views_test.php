@@ -131,11 +131,69 @@ final class views_test extends \advanced_testcase {
         $this->assertSame(1, $tomark['Overdue essay']['tomark']);
         $this->assertSame(['marked'], array_column($tomark['Overdue essay']['bars'], 'key'), 'one bar per kind of work');
         $this->assertSame(['tomark', 'upcoming', 'completed'], array_column($marker['sections'], 'key'));
-        $this->assertArrayHasKey('Upcoming report', $tomark, 'no allocation: every staff member may mark');
+        $this->assertArrayNotHasKey('Upcoming report', $tomark, 'an early submission waits for the deadline (G9)');
+        $this->assertArrayHasKey('Upcoming report', self::rows($marker, 'upcoming'));
 
         $other = (new staff($this->u['other']->id))->export();
         $this->assertArrayNotHasKey('Overdue essay', self::rows($other, 'tomark'));
         $this->assertArrayNotHasKey('Overdue essay', self::rows($other, 'completed'));
+    }
+
+    /**
+     * G9: work counts at each student's own deadline, and extensions still to come are flagged
+     * for the students whose marking is mine, and for the convenor.
+     */
+    public function test_extensions(): void {
+        global $DB;
+        $ma = $this->getDataGenerator()->get_plugin_generator('block_my_assessments');
+        $cmid = $this->a['overdue']->cmid;
+        $ma->allocate_assign($cmid, $this->u['s1']->id, $this->u['marker']->id);
+        $extension = time() + 2 * DAYSECS;
+        $DB->set_field(
+            'assign_user_flags',
+            'extensionduedate',
+            $extension,
+            ['assignment' => $this->a['overdue']->id, 'userid' => $this->u['s1']->id]
+        );
+        $this->getDataGenerator()->get_plugin_generator('mod_assign')->create_submission(['userid' => $this->u['s1']->id,
+            'cmid' => $cmid, 'onlinetext' => 'early']);
+        (new local\index\indexer())->index_cm($cmid);
+
+        $unit = $DB->get_record('block_my_assessments_mark', ['cmid' => $cmid, 'unitid' => $this->u['s1']->id]);
+        $this->assertEquals($extension, $unit->unitdue);
+        $this->assertGreaterThanOrEqual($extension, (int)$unit->timeready, 'ready no earlier than the deadline');
+        $this->assertSame(',' . $this->u['marker']->id . ',', $DB->get_field(
+            'block_my_assessments_stu',
+            'allocatedto',
+            ['cmid' => $cmid, 'userid' => $this->u['s1']->id]
+        ));
+
+        $row = self::rows((new staff($this->u['marker']->id))->export(), 'tomark')['Overdue essay'];
+        $this->assertSame(1, $row['tomark'], 's1 waits for their extended deadline');
+        $hints = array_column($row['hints'], null, 'key');
+        $this->assertSame('1 student has an extension', $hints['extensions']['label']);
+
+        $other = (new staff($this->u['other']->id))->export();
+        $this->assertStringNotContainsString('has an extension', json_encode($other), 'not allocated to them');
+
+        $row = self::rows((new convenor($this->u['convenor']->id))->export(), 'inprogress')['Overdue essay'];
+        $this->assertContains('extensions', array_column($row['hints'], 'key'));
+    }
+
+    /**
+     * "Preparing your assessments" shows only while the index has never been filled, or has
+     * nothing for this view yet, not merely because a re-index is queued after an upgrade.
+     */
+    public function test_preparing(): void {
+        set_config('backfillpending', time(), 'block_my_assessments');
+        unset_config('backfilldone', 'block_my_assessments');
+        $this->assertTrue((new student($this->u['s1']->id))->export()['freshness']['preparing']);
+        set_config('backfilldone', time(), 'block_my_assessments');
+        $this->assertFalse((new student($this->u['s1']->id))->export()['freshness']['preparing']);
+        $nobody = $this->getDataGenerator()->create_user();
+        $this->assertTrue((new student($nobody->id))->export()['freshness']['preparing'], 'nothing indexed for them yet');
+        unset_config('backfillpending', 'block_my_assessments');
+        $this->assertFalse((new student($nobody->id))->export()['freshness']['preparing']);
     }
 
     /**

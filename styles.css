@@ -102,6 +102,7 @@
 .block_my_assessments_dashboard .ma-filter-btn:focus,
 .block_my_assessments_dashboard .ma-row-iconbtn:focus {
   outline: 0;
+  box-shadow: none;
 }
 .block_my_assessments_dashboard .ma-tabs .nav-link:focus-visible,
 .block_my_assessments_dashboard .ma-btn:focus-visible,
@@ -368,6 +369,10 @@
 .block_my_assessments_dashboard .ma-view--convenor .ma-row {
   --ma-row-columns: 2rem minmax(0, 1fr) minmax(13rem, 1.2fr) var(--ma-actions-width);
   --ma-row-areas: "icon info status actions" "icon dates status actions";
+}
+.block_my_assessments_dashboard .ma-view--staff .ma-row .ma-row-date-label,
+.block_my_assessments_dashboard .ma-view--convenor .ma-row .ma-row-date-label {
+  display: block;
 }
 @container ma (width < 62rem) {
   .block_my_assessments_dashboard .ma-view--student .ma-row {

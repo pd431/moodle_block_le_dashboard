@@ -111,7 +111,9 @@ abstract class base {
         return [
             'text' => format::updated($oldest, $this->now),
             'refreshing' => $refreshing,
-            'preparing' => (bool)get_config('block_my_assessments', 'backfillpending'),
+            // Only while this view has nothing indexed yet, or the index has never been filled.
+            'preparing' => get_config('block_my_assessments', 'backfillpending')
+                && ($oldest === null || !get_config('block_my_assessments', 'backfilldone')),
         ];
     }
 

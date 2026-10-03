@@ -43,7 +43,9 @@ final class marking_row {
      * @param int|null $timemarked When it was marked, when known.
      * @param bool $released Whether the agreed or final grade is published to the student (D4).
      * @param int|null $timeready When the unit became ready at this stage (submission, or the previous
-     *                            stage finishing), when known.
+     *                            stage finishing), when known. The indexer makes it no earlier than unitdue.
+     * @param int|null $unitdue The unit's effective deadline. The indexer fills it in: the student's own
+     *                          deadline, or a group's latest member deadline.
      */
     public function __construct(
         /** @var int User or group id. */
@@ -66,6 +68,8 @@ final class marking_row {
         public bool $released = false,
         /** @var int|null When it became ready. */
         public ?int $timeready = null,
+        /** @var int|null The unit's effective deadline. */
+        public ?int $unitdue = null,
     ) {
     }
 }

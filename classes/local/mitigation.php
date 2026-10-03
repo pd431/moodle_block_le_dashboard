@@ -36,6 +36,10 @@ class mitigation {
     protected static function available(): bool {
         global $CFG;
         $lib = $CFG->dirroot . '/blocks/rhb/lib.php';
+        if (!file_exists($lib) && defined('BEHAT_SITE_RUNNING') && get_config('block_my_assessments', 'behatrhbstub')) {
+            // Scenarios tagged @block_rhb on a site without it.
+            $lib = $CFG->dirroot . '/blocks/my_assessments/tests/fixtures/rhb_stub.php';
+        }
         if (!file_exists($lib)) {
             return false;
         }

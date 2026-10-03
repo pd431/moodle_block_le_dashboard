@@ -236,8 +236,10 @@ class student extends base {
                 $notes[] = format_string($latenote);
             }
         }
-        if ($section === classifier::OVERDUE && $r->cutoff && (int)$r->cutoff > $this->now) {
-            $notes[] = get_string('stillsubmit', 'block_my_assessments', format::duration((int)$r->cutoff - $this->now));
+        // Time left: to the cut-off, or to the deadline plus the grace period when there is none (G9).
+        $until = $r->cutoff ? (int)$r->cutoff : ($due ? $due + config::grace() : null);
+        if ($section === classifier::OVERDUE && $until && $until > $this->now) {
+            $notes[] = get_string('stillsubmit', 'block_my_assessments', format::duration($until - $this->now));
         }
         $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]);
         if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
@@ -275,13 +277,17 @@ class student extends base {
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
-            $dates[] = format::date('released', (int)$r->timereleased);
+            // First, under the Feedback released pill, so it never reads as the student's own deadline (D6).
+            array_unshift($dates, format::date('released', (int)$r->timereleased));
             if ($r->gradedisplay !== null && $r->gradedisplay !== '') {
                 $row['grade'] = ['text' => $r->gradedisplay];
             }
-        } else if ($status === classifier::STATUS_INMARKING && $r->markingdue && (int)$r->markingdue > $this->now) {
-            // Only while it's still to come; once it has passed, the In marking pill says the rest.
+        } else if ($status === classifier::STATUS_INMARKING && $r->markingdue) {
+            // The date stays once it has passed, with a hint saying who to contact (G12).
             $dates[] = format::date('feedbackexpected', (int)$r->markingdue);
+            if ((int)$r->markingdue < $this->now) {
+                $row['hints'][] = $this->feedback_hint($row['id']);
+            }
         }
         $row['dates'] = $dates;
         $row['notes'] = $this->notes($r, $section, $status);
@@ -292,18 +298,38 @@ class student extends base {
                 && $section !== classifier::PAST
         ) {
             $actions[] = format::action('submit', $row['url']);
-            $links = mitigation::links($r->modname, $r->instance);
-            if ($links) {
-                $row['mitigation'] = [
-                    'id' => $row['id'] . '-mitigate',
-                    'icon' => format::ACTION_ICONS['mitigate'],
-                    'links' => array_map(fn($h) => ['html' => $h], $links),
-                ];
-            }
         } else {
             $actions[] = format::view_action($row['url']);
         }
         $row['actions'] = $actions;
+        // Mitigate around the student's own deadline, whatever the section or status (G4).
+        $links = config::mitigation_open($r->due ? (int)$r->due : null, $this->now)
+            ? mitigation::links($r->modname, $r->instance) : [];
+        if ($links) {
+            $row['mitigation'] = [
+                'id' => $row['id'] . '-mitigate',
+                'icon' => format::ACTION_ICONS['mitigate'],
+                'links' => array_map(fn($h) => ['html' => $h], $links),
+            ];
+        }
         return $row;
+    }
+
+    /**
+     * The hint on work in marking whose feedback date has passed: feedback should arrive
+     * soon, and who to contact if it doesn't. The contact text and link are settings.
+     *
+     * @param string $rowid
+     * @return array
+     */
+    protected function feedback_hint(string $rowid): array {
+        $text = trim((string)get_config('block_my_assessments', 'feedbackcontact'));
+        $url = trim((string)get_config('block_my_assessments', 'feedbackcontacturl'));
+        $contact = null;
+        if ($text !== '') {
+            $who = $url !== '' ? \html_writer::link(new \moodle_url($url), format_string($text)) : format_string($text);
+            $contact = get_string('hint_feedbackcontact_contact', 'block_my_assessments', $who);
+        }
+        return format::hint($rowid, 'feedbackcontact', get_string('hint_feedbackcontact_text', 'block_my_assessments'), $contact);
     }
 }

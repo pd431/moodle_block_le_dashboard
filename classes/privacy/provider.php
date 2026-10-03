@@ -54,6 +54,7 @@ class provider implements
             'gradedisplay' => 'privacy:metadata:stu:gradedisplay',
             'mitigation' => 'privacy:metadata:stu:mitigation',
             'reopened' => 'privacy:metadata:stu:reopened',
+            'allocatedto' => 'privacy:metadata:stu:allocatedto',
         ], 'privacy:metadata:stu');
         $collection->add_database_table('block_my_assessments_mark', [
             'unitid' => 'privacy:metadata:mark:unitid',
@@ -61,6 +62,7 @@ class provider implements
             'markedby' => 'privacy:metadata:mark:markedby',
             'timemarked' => 'privacy:metadata:mark:timemarked',
             'timeready' => 'privacy:metadata:mark:timeready',
+            'unitdue' => 'privacy:metadata:mark:unitdue',
         ], 'privacy:metadata:mark');
         foreach (self::PREFERENCES as $name) {
             $collection->add_user_preference('block_my_assessments_' . $name, 'privacy:metadata:preference:' . $name);

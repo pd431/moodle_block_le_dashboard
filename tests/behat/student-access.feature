@@ -136,17 +136,53 @@ Feature: Students see only assessments they can actually access
     Then the "Overdue" summary count should be "1"
     And I should not see "A1" in the "My assessments" block
 
-  # Added 2026-10-03 (F7, coordinator-approved): a passed date is not news; the In marking pill says the rest.
-  Scenario Outline: "Feedback expected" shows only while that date is still to come
-    Given a summative "assign" "A1" in "M1" with a marking deadline "<marking>" was due "10 days ago"
-    And "student1" has submitted "A1"
+  # G12 (Pierre, 2026-10-03, Q2), replacing F7: the feedback date stays, with a hint once it passes.
+  Scenario: A passed feedback date stays, with a hint saying who to contact
+    Given the My assessments feedback contact is "your module convenor" linking to "https://example.com/contact"
+    And a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
+    And "student1" submitted "A1" "11 days ago"
     When I log in as "student1" and view my dashboard
-    Then "A1" <shows> "Feedback expected"
+    Then "A1" should show "Feedback expected"
+    And "A1" should have a feedback contact hint
+    When I click on the feedback contact hint of "A1"
+    Then I should see "Feedback should arrive soon. If it doesn't, contact your module convenor." in the "My assessments" block
+    And I should see "your module convenor" linking to "https://example.com/contact"
+
+  Scenario: A feedback date still to come has no hint
+    Given a summative "assign" "A1" in "M1" with a marking deadline "in 5 days" was due "3 days ago"
+    And "student1" submitted "A1" "4 days ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Feedback expected"
+    And "A1" should not have a feedback contact hint
+
+  # G4 (Pierre, 2026-10-03, Q1). Mitigate needs block_rhb's links: without block_rhb, a stand-in gives one.
+  @block_rhb
+  Scenario Outline: Mitigate is offered from 3 months before the deadline to 24 hours after it
+    Given a summative "assign" "A1" in "M1" <is> due "<due>"
+    And <step>
+    When I log in as "student1" and view my dashboard
+    Then "A1" should <show> "Mitigate"
 
     Examples:
-      | marking    | shows           |
-      | in 5 days  | should show     |
-      | 2 days ago | should not show |
+      | is  | due          | step                          | show     |
+      | is  | in 100 days  | nothing happens               | not show |
+      | is  | in 80 days   | nothing happens               | show     |
+      | is  | in 3 days    | "student1" has submitted "A1" | show     |
+      | was | 20 hours ago | nothing happens               | show     |
+      | was | 20 hours ago | "student1" has submitted "A1" | show     |
+      | was | 2 days ago   | nothing happens               | not show |
+
+  @block_rhb
+  Scenario: The Mitigate window follows the settings and the student's own deadline
+    Given the My assessments Mitigate window opens "30" days before and closes "48" hours after the deadline
+    And a summative "assign" "A1" in "M1" was due "3 days ago"
+    And a summative "assign" "A2" in "M1" is due "in 40 days"
+    And a summative "assign" "A3" in "M1" was due "30 hours ago"
+    And "student1" has an extension on "A1" to "tomorrow"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Mitigate"
+    And "A2" should not show "Mitigate"
+    And "A3" should show "Mitigate"
 
   # beta6 (Pierre, 2026-10-03): two lines, the module's full name, then the kind of activity.
   Scenario: A student row names the module in full and the kind of activity

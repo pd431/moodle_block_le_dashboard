@@ -75,6 +75,8 @@ class staff extends base {
      * activities without allocation in my staff courses; and my share of activities with
      * several markers and no allocation (G7, see shared_marking()).
      *
+     * Work counts once the unit's own deadline has passed (G9); see ready_sql().
+     *
      * @return \stdClass[]
      */
     protected function marking(): array {
@@ -99,14 +101,15 @@ class staff extends base {
             $shared = $this->shared_marking($staff);
         }
         $params += ['me' => $this->userid, 'me2' => $this->userid];
+        $ready = self::ready_sql($this->now);
         $records = $DB->get_records_sql("SELECT " . $DB->sql_concat('m.cmid', "'-'", 'm.stage') . " AS id, m.cmid, m.stage,
-                                            SUM(CASE WHEN m.submitted = 1 AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
-                                            SUM(CASE WHEN m.submitted = 1 THEN 1 ELSE 0 END) AS mine,
-                                            SUM(CASE WHEN m.submitted = 1 AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
-                                            SUM(CASE WHEN m.submitted = 1 AND m.allocatedto IS NULL AND c.hasallocation = 1
+                                            SUM(CASE WHEN $ready AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
+                                            SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS mine,
+                                            SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
+                                            SUM(CASE WHEN $ready AND m.allocatedto IS NULL AND c.hasallocation = 1
                                                      THEN 1 ELSE 0 END) AS unallocated,
                                             MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
-                                            MAX(CASE WHEN m.submitted = 1 AND m.marked = 0 THEN m.timeready ELSE NULL END)
+                                            MAX(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
                                                 AS lastready,
                                             MAX(CASE WHEN m.markedby = :me2 THEN m.timemarked ELSE NULL END) AS lastmarked
                                        FROM {block_my_assessments_mark} m
@@ -114,6 +117,101 @@ class staff extends base {
                                       WHERE " . implode(' OR ', $where) . "
                                    GROUP BY m.cmid, m.stage", $params);
         return array_merge(array_values($records), array_values($shared));
+    }
+
+    /**
+     * SQL for a mark index row (alias m) that is ready to mark at a time: submitted, and its
+     * unit's deadline has passed (G9). Work already marked counts whenever it was marked.
+     *
+     * @param int $now
+     * @return string
+     */
+    public static function ready_sql(int $now): string {
+        return "(m.submitted = 1 AND (m.unitdue IS NULL OR m.unitdue < $now OR m.marked = 1))";
+    }
+
+    /**
+     * Whether a mark index row is ready to mark at a time, as ready_sql().
+     *
+     * @param \stdClass $r
+     * @param int $now
+     * @return bool
+     */
+    public static function is_ready(\stdClass $r, int $now): bool {
+        return $r->submitted && ($r->unitdue === null || (int)$r->unitdue < $now || $r->marked);
+    }
+
+    /**
+     * Students with an extension whose work may still arrive, per assessment, counting only
+     * students whose marking is mine (as marking()): allocated to me, unallocated where I
+     * convene, or anyone on activities without allocation in my staff courses. A student counts
+     * until their deadline (if they submitted early) or their deadline plus the grace period
+     * (if they haven't submitted yet).
+     *
+     * @return \stdClass[] Keyed by cmid: students, latest (latest extended deadline).
+     */
+    protected function extensions(): array {
+        global $DB;
+        [$staff, $marker, $convenor] = $this->courses();
+        if (!$marker) {
+            return [];
+        }
+        [$markersql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED, 'xm');
+        $where = ["(c.hasallocation = 1 AND c.courseid $markersql AND " . $DB->sql_like('s.allocatedto', ':me') . ")"];
+        $params['me'] = '%,' . $this->userid . ',%';
+        if ($convenor) {
+            [$convenorsql, $convenorparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'xc');
+            $where[] = "(c.hasallocation = 1 AND s.allocatedto IS NULL AND c.courseid $convenorsql)";
+            $params += $convenorparams;
+        }
+        if ($staff) {
+            [$staffsql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'xs');
+            $where[] = "(c.hasallocation = 0 AND c.courseid $staffsql)";
+            $params += $staffparams;
+        }
+        return self::pending_extensions('(' . implode(' OR ', $where) . ')', $params, $this->now);
+    }
+
+    /**
+     * Students with an extension whose work may still arrive, per assessment (G9), for the
+     * staff and convenor views.
+     *
+     * @param string $where SQL on s (student index) and c (assessment index) choosing whose count.
+     * @param array $params
+     * @param int $now
+     * @return \stdClass[] Keyed by cmid: students, latest.
+     */
+    public static function pending_extensions(string $where, array $params, int $now): array {
+        global $DB;
+        $params += ['now1' => $now, 'now2' => $now - config::grace()];
+        $records = $DB->get_records_sql("SELECT s.cmid, COUNT(1) AS students, MAX(s.due) AS latest
+                                           FROM {block_my_assessments_stu} s
+                                           JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
+                                          WHERE s.canaccess = 1 AND s.due > c.due
+                                                AND ((s.submitted = 1 AND s.due >= :now1)
+                                                     OR (s.submitted = 0 AND s.due >= :now2))
+                                                AND $where
+                                       GROUP BY s.cmid", $params);
+        return array_column(array_values($records), null, 'cmid');
+    }
+
+    /**
+     * The hint on a row with extensions still to come (G9): the button gives the count.
+     *
+     * @param string $rowid
+     * @param \stdClass $pending students, latest
+     * @return array
+     */
+    public static function extensions_hint(string $rowid, \stdClass $pending): array {
+        $n = (int)$pending->students;
+        return format::hint(
+            $rowid,
+            'extensions',
+            get_string('hint_extensions_text', 'block_my_assessments', format::datetime((int)$pending->latest)),
+            null,
+            $n === 1 ? get_string('hint_extensions_one', 'block_my_assessments')
+                : get_string('hint_extensions_many', 'block_my_assessments', $n)
+        );
     }
 
     /**
@@ -130,7 +228,7 @@ class staff extends base {
         [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sh');
         $params['multi'] = '%marker%';
         $rs = $DB->get_recordset_sql("SELECT m.id, m.cmid, m.unitid, m.unittype, m.stage, m.submitted, m.marked,
-                                             m.markedby, m.timemarked, m.timeready
+                                             m.markedby, m.timemarked, m.timeready, m.unitdue
                                         FROM {block_my_assessments_mark} m
                                         JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
                                        WHERE c.hasallocation = 0 AND " . $DB->sql_like('c.stages', ':multi') . "
@@ -147,10 +245,10 @@ class staff extends base {
             foreach ($byunit as $stages) {
                 $markerstages = array_filter($stages, fn($r) => str_starts_with($r->stage, 'marker'));
                 $mymark = array_filter($markerstages, fn($r) => $r->marked && (int)$r->markedby === $this->userid);
-                $open = array_filter($markerstages, fn($r) => $r->submitted && !$r->marked);
+                $open = array_filter($markerstages, fn($r) => self::is_ready($r, $this->now) && !$r->marked);
                 $share = array_slice($mymark ?: $open, 0, 1);
                 foreach ($stages as $r) {
-                    if (!str_starts_with($r->stage, 'marker') && $r->submitted) {
+                    if (!str_starts_with($r->stage, 'marker') && self::is_ready($r, $this->now)) {
                         $share[] = $r;
                     }
                 }
@@ -177,25 +275,37 @@ class staff extends base {
     }
 
     /**
-     * Assessments in my staff courses whose deadline is ahead.
+     * Assessments in my staff courses whose deadline is ahead, and those past it whose only
+     * work still to come is extensions (G9).
      *
+     * @param int[] $later Cmids past their deadline that stay in Upcoming deadlines.
      * @return \stdClass[] Keyed by cmid.
      */
-    protected function upcoming(): array {
+    protected function upcoming(array $later): array {
         global $DB;
         [$staff] = $this->courses();
-        if (!$staff) {
+        if (!$staff && !$later) {
             return [];
         }
-        [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
-        $params['now'] = $this->now;
+        $where = [];
+        $params = ['now' => $this->now];
+        if ($staff) {
+            [$insql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
+            $where[] = "(c.courseid $insql AND c.due >= :now)";
+            $params += $staffparams;
+        }
+        if ($later) {
+            [$latersql, $laterparams] = $DB->get_in_or_equal($later, SQL_PARAMS_NAMED, 'lt');
+            $where[] = "c.cmid $latersql";
+            $params += $laterparams;
+        }
         $records = $DB->get_records_sql("SELECT c.*,
                                             (SELECT COUNT(1) FROM {block_my_assessments_stu} s
                                               WHERE s.cmid = c.cmid AND s.canaccess = 1) AS students,
                                             (SELECT COUNT(1) FROM {block_my_assessments_stu} s
                                               WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.submitted = 1) AS submissions
                                        FROM {block_my_assessments_cm} c
-                                      WHERE c.courseid $insql AND c.due >= :now
+                                      WHERE " . implode(' OR ', $where) . "
                                    ORDER BY c.due ASC", $params);
         return array_column(array_values($records), null, 'cmid');
     }
@@ -218,8 +328,8 @@ class staff extends base {
         foreach ($this->marking() as $m) {
             $bycm[(int)$m->cmid][$m->stage] = $m;
         }
-        $upcoming = $this->upcoming();
-        $cmids = array_unique(array_merge(array_keys($bycm), array_keys($upcoming)));
+        $pending = $this->extensions();
+        $cmids = array_unique(array_merge(array_keys($bycm), array_keys($pending)));
         $cms = [];
         if ($cmids) {
             [$insql, $params] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED);
@@ -241,8 +351,14 @@ class staff extends base {
                 $lastready = max($lastready, (int)$s->lastready);
                 $lastmarked = max($lastmarked, (int)$s->lastmarked);
             }
-            $section = classifier::staff($tomark, $mine, $cm->due === null ? null : (int)$cm->due, $this->now);
-            if (!$section) {
+            $section = classifier::staff(
+                $tomark,
+                $mine,
+                $cm->due === null ? null : (int)$cm->due,
+                $this->now,
+                isset($pending[$cmid])
+            );
+            if (!$section || $section === classifier::STAFF_UPCOMING) {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
@@ -268,6 +384,9 @@ class staff extends base {
             if ($tomark && $lastmarked && $lastready >= $lastmarked) {
                 $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_my_assessments'));
             }
+            if (isset($pending[$cmid])) {
+                $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
+            }
             $row['actions'] = [format::view_action($row['url'])];
             $sections[$section][] = $row + ['sortkey' => (int)($cm->markingdue ?: $cm->due)];
             if ($section === classifier::TOMARK) {
@@ -280,15 +399,25 @@ class staff extends base {
         foreach (self::WINDOWS as $days) {
             $windowcounts[$days] = format::zero_counts();
         }
-        // Upcoming leaves out what is already listed to mark.
-        $tomarkcmids = array_flip(array_column($sections[classifier::TOMARK], 'cmid'));
-        foreach ($upcoming as $cmid => $cm) {
+        // Upcoming leaves out what is already listed, and adds what is past its deadline with
+        // only extensions to come (G9).
+        $listed = array_flip(array_merge(
+            array_column($sections[classifier::TOMARK], 'cmid'),
+            array_column($sections[classifier::COMPLETED], 'cmid')
+        ));
+        $later = [];
+        foreach (array_keys($pending) as $cmid) {
+            if (!isset($listed[$cmid]) && isset($cms[$cmid]) && (int)$cms[$cmid]->due < $this->now) {
+                $later[] = $cmid;
+            }
+        }
+        foreach ($this->upcoming($later) as $cmid => $cm) {
             foreach (self::WINDOWS as $days) {
-                if ((int)$cm->due <= $this->now + $days * DAYSECS) {
+                if ((int)$cm->due >= $this->now && (int)$cm->due <= $this->now + $days * DAYSECS) {
                     format::count($windowcounts[$days], $cm->assesstype);
                 }
             }
-            if (isset($tomarkcmids[$cmid])) {
+            if (isset($listed[$cmid])) {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
@@ -300,6 +429,7 @@ class staff extends base {
                 (int)$cm->submissions,
                 (int)$cm->students
             )];
+            $row['hints'] = isset($pending[$cmid]) ? [self::extensions_hint($row['id'], $pending[$cmid])] : [];
             $row['actions'] = [format::view_action($row['url'])];
             $sections[classifier::STAFF_UPCOMING][] = $row + ['sortkey' => (int)$cm->due];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);

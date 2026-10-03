@@ -245,8 +245,11 @@ $ma-dark-ink-on-solid: ("attention");
   .ma-btn,
   .ma-filter-btn,
   .ma-row-iconbtn {
+    // A mouse click shows no ring (Boost's .nav-link:focus shadow included);
+    // keyboard focus gets ours below.
     &:focus {
       outline: 0;
+      box-shadow: none;
     }
 
     &:focus-visible {
@@ -533,6 +536,11 @@ $ma-dark-ink-on-solid: ("attention");
   .ma-view--convenor .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr) minmax(13rem, 1.2fr) var(--ma-actions-width);
     --ma-row-areas: "icon info status actions" "icon dates status actions";
+
+    // "Submission deadline" on its own line, so it never wraps away from its date (D7).
+    .ma-row-date-label {
+      display: block;
+    }
   }
 
   // Narrower blocks, by the block's own width. Student rows first put the

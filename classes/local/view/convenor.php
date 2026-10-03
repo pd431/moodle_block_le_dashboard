@@ -83,17 +83,19 @@ class convenor extends base {
                                             JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
                                            WHERE c.courseid $insql
                                         GROUP BY s.cmid", $params);
-        // Marking units per stage.
+        // Marking units per stage. Work counts once its unit's deadline has passed (G9).
+        $ready = staff::ready_sql($this->now);
         $marking = [];
         $rs = $DB->get_recordset_sql("SELECT m.cmid, m.stage,
                                              COUNT(1) AS units,
-                                             SUM(CASE WHEN m.submitted = 1 THEN 1 ELSE 0 END) AS ready,
-                                             SUM(CASE WHEN m.submitted = 1 AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
+                                             SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS ready,
+                                             SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
+                                             SUM(CASE WHEN m.submitted = 1 THEN 1 ELSE 0 END) AS submittedunits,
                                              SUM(CASE WHEN m.submitted = 1 AND m.allocatedto IS NULL THEN 1 ELSE 0 END)
                                                  AS unallocated,
                                              SUM(m.released) AS released,
                                              MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
-                                             MAX(CASE WHEN m.submitted = 1 AND m.marked = 0 THEN m.timeready ELSE NULL END)
+                                             MAX(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
                                                  AS lastready,
                                              MAX(m.timemarked) AS lastmarked
                                         FROM {block_my_assessments_mark} m
@@ -109,13 +111,13 @@ class convenor extends base {
         $unmarked = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
                                                  FROM {block_my_assessments_mark} m
                                                  JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
-                                                WHERE c.courseid $insql AND m.submitted = 1 AND m.marked = 0
+                                                WHERE c.courseid $insql AND $ready AND m.marked = 0
                                              GROUP BY m.cmid", $params);
         // Per marker, per stage.
         $markers = [];
         $rs = $DB->get_recordset_sql("SELECT m.cmid, m.allocatedto, m.stage,
-                                             SUM(CASE WHEN m.submitted = 1 THEN 1 ELSE 0 END) AS ready,
-                                             SUM(CASE WHEN m.submitted = 1 AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
+                                             SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS ready,
+                                             SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
                                         FROM {block_my_assessments_mark} m
                                         JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
                                        WHERE c.courseid $insql AND m.allocatedto IS NOT NULL
@@ -132,6 +134,9 @@ class convenor extends base {
             $namefields = implode(', ', \core_user\fields::get_name_fields());
             $people = $DB->get_records_select('user', "id $usql", $uparams, '', 'id, ' . $namefields);
         }
+
+        // Extensions still to come, for every student (G9).
+        $pending = staff::pending_extensions("c.courseid $insql", $params, $this->now);
 
         $names = format::course_names(array_column($cms, 'courseid'));
         $threshold = config::overdue_threshold_days();
@@ -154,18 +159,20 @@ class convenor extends base {
                     (int)($s->total ?? 0)
                 );
             }
+            // Allocation counts every submission, early ones included: it happens before marking.
+            $submittedunits = $first ? (int)$first->submittedunits : 0;
+            if ($cm->hasallocation && $submittedunits > 0) {
+                $bars[] = format::bar(
+                    'unallocated',
+                    get_string('bar_unallocated', 'block_my_assessments'),
+                    (int)$first->unallocated,
+                    $submittedunits,
+                    $groups
+                );
+            }
             // Marking bars only once there is something to mark: "0 of 0" says nothing.
             $outstanding = 0;
             if ($units > 0) {
-                if ($cm->hasallocation) {
-                    $bars[] = format::bar(
-                        'unallocated',
-                        get_string('bar_unallocated', 'block_my_assessments'),
-                        $first ? (int)$first->unallocated : 0,
-                        $units,
-                        $groups
-                    );
-                }
                 foreach ($stages as $stage) {
                     $marked = isset($m[$stage]) ? (int)$m[$stage]->marked : 0;
                     $bars[] = format::bar($stage, format::stage($stage), $marked, $units, $groups);
@@ -175,7 +182,13 @@ class convenor extends base {
                 $outstanding += $units - $released;
             }
 
-            $section = classifier::convenor($cm->due === null ? null : (int)$cm->due, $this->now, $units, $outstanding, $threshold);
+            $section = classifier::convenor(
+                $cm->due === null ? null : (int)$cm->due,
+                $this->now,
+                $units,
+                $outstanding + (int)($pending[$cmid]->students ?? 0),
+                $threshold
+            );
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
@@ -216,6 +229,9 @@ class convenor extends base {
             if ($section === classifier::INPROGRESS && $lastmarked && $lastready >= $lastmarked) {
                 $text = get_string('hint_returned_convenor', 'block_my_assessments');
                 $row['hints'][] = format::hint($row['id'], 'returned', $text);
+            }
+            if (isset($pending[$cmid])) {
+                $row['hints'][] = staff::extensions_hint($row['id'], $pending[$cmid]);
             }
             // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
             $late = (int)($unmarked[$cmid] ?? 0);

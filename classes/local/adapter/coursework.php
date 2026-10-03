@@ -251,12 +251,14 @@ class coursework extends base {
         $extensions = self::extensions($cw->id);
         $submissions = self::submissions($cw->id);
         $finalgrades = $this->final_grades($cw);
+        $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id) : [];
 
         foreach ($rows as $userid => $row) {
             if (!isset($allocatables[$userid])) {
                 continue;
             }
             $key = implode(':', $allocatables[$userid]);
+            $row->allocatedto = array_values(array_unique($pairs[$key] ?? []));
             // D2: a personal deadline replaces the default, earlier or later.
             if (isset($personal[$key]) && !empty($personal[$key]->$pdcol)) {
                 $row->due = (int)$personal[$key]->$pdcol;
@@ -300,6 +302,29 @@ class coursework extends base {
     }
 
     /**
+     * Allocated assessors by allocatable and stage.
+     *
+     * @param int $courseworkid
+     * @return array "type:id" => [stage => assessorid]
+     */
+    protected static function allocation_pairs(int $courseworkid): array {
+        global $DB;
+        $stagecol = self::column('coursework_allocation_pairs', ['stageidentifier', 'stage_identifier']);
+        if (!$stagecol) {
+            return [];
+        }
+        $pairs = [];
+        $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, assessorid, $stagecol AS stage
+                                        FROM {coursework_allocation_pairs}
+                                       WHERE courseworkid = :cwid", ['cwid' => $courseworkid]);
+        foreach ($rs as $p) {
+            $pairs[$p->allocatabletype . ':' . $p->allocatableid][$p->stage] = (int)$p->assessorid;
+        }
+        $rs->close();
+        return $pairs;
+    }
+
+    /**
      * Final grade per submission: the agreed grade, or the only marker's grade.
      *
      * @param \stdClass $cw
@@ -337,7 +362,6 @@ class coursework extends base {
         }
 
         $stagecol = self::column('coursework_feedbacks', ['stageidentifier', 'stage_identifier']);
-        $pairstagecol = self::column('coursework_allocation_pairs', ['stageidentifier', 'stage_identifier']);
 
         // Feedback by submission and stage.
         $feedback = [];
@@ -363,17 +387,7 @@ class coursework extends base {
                                                    JOIN {coursework_submissions} s ON s.id = f.submissionid
                                                   WHERE s.courseworkid = :cwid", ['cwid' => $cw->id]);
         }
-        // Allocations by allocatable and stage.
-        $pairs = [];
-        if ($cmrow->hasallocation && $pairstagecol) {
-            $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, assessorid, $pairstagecol AS stage
-                                            FROM {coursework_allocation_pairs}
-                                           WHERE courseworkid = :cwid", ['cwid' => $cw->id]);
-            foreach ($rs as $p) {
-                $pairs[$p->allocatabletype . ':' . $p->allocatableid][$p->stage] = (int)$p->assessorid;
-            }
-            $rs->close();
-        }
+        $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id) : [];
 
         $rows = [];
         foreach ($submissions as $key => $s) {

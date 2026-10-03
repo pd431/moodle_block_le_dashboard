@@ -180,13 +180,15 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     When I log in as "convenor" and view the "My marking"
     Then "A1" should not have an unallocated hint
 
-  # G6: work that arrives after I finished marking comes back, and says why.
+  # G6: work that arrives after I finished marking comes back, and says why. Since G9 the
+  # extension's deadline has to pass first.
   Scenario: Work that arrives after I finished marking comes back with a hint
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student2" has an extension on "A1" to "in 3 days"
+    And "student2" has an extension on "A1" to "in 2 minutes"
     And "student1" has submitted "A1"
     And "marker1" marks the submission of "student1" for "A1"
     And "student2" has submitted "A1"
+    And 3 minutes pass
     When I log in as "marker1" and view my dashboard
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
     And "A1" should have a returned work hint
@@ -218,3 +220,62 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And "A1" should show an "Agreed" progress bar with "0" of "1"
     When I log in as "marker2" and view my dashboard
     Then "A1" should appear in the "Completed marking" section
+
+  # ---------- G9 (Pierre, 2026-10-03, Q3): marking arrives at each student's deadline ----------
+
+  Scenario: An early submission waits in Upcoming deadlines until the deadline passes
+    Given a summative "assign" "A1" in "M1" is due "in 3 days"
+    And "student1" has submitted "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Upcoming deadlines" section
+    And "A1" should not appear in the "Marking in progress" section
+
+  Scenario: An extension student's work counts once their own deadline passes, and their extension is shown until then
+    Given a summative "assign" "A1" in "M1" was due "3 days ago"
+    And "student2" has an extension on "A1" to "tomorrow"
+    And "student1" and "student2" have submitted "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Marking in progress" section with "1" to mark
+    And "A1" should show "1 student has an extension"
+    When I click on the extension hint of "A1"
+    Then I should see "Their work may still arrive" in the "My assessments" block
+
+  Scenario Outline: An extension stops counting once its deadline and the grace period have passed
+    Given a summative "assign" "A1" in "M1" was due "5 days ago"
+    And "student1" has submitted "A1"
+    And "student2" has an extension on "A1" to "<extension>"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should <show> "has an extension"
+
+    Examples:
+      | extension    | show     |
+      | 20 hours ago | show     |
+      | 30 hours ago | not show |
+
+  Scenario: With only extension work to come, the assessment stays in Upcoming deadlines
+    Given a summative "assign" "A1" in "M1" was due "2 days ago"
+    And "student2" has an extension on "A1" to "in 5 days"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Upcoming deadlines" section
+    And "A1" should show "1 student has an extension"
+
+  # Whose extensions: allocated to me, or unallocated when I convene.
+  Scenario: Extensions count only for students whose marking is mine
+    Given the following "users" exist:
+      | username | firstname | lastname |
+      | convenor | Cara      | Convenor |
+    And the following "course enrolments" exist:
+      | user     | course | role           |
+      | convenor | M1     | editingteacher |
+      | convenor | M1     | moduleconvenor |
+    And a summative "assign" "A1" in "M1" with marker allocation was due "3 days ago"
+    And "student1" has an extension on "A1" to "tomorrow"
+    And "student2" has an extension on "A1" to "tomorrow"
+    And the submission of "student1" for "A1" is allocated to "marker1"
+    And the submission of "student2" for "A1" is not allocated
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should show "1 student has an extension"
+    When I log in as "convenor" and view the "My marking"
+    Then "A1" should show "1 student has an extension"
+    When I log in as "marker2" and view my dashboard
+    Then I should not see "has an extension" in the "My assessments" block

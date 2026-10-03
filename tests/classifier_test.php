@@ -91,6 +91,11 @@ final class classifier_test extends \basic_testcase {
         $this->assertSame(c::COMPLETED, c::staff(0, 3, self::NOW - DAYSECS, self::NOW));
         $this->assertNull(c::staff(0, 3, self::NOW + DAYSECS, self::NOW));
         $this->assertNull(c::staff(0, 0, self::NOW - DAYSECS, self::NOW));
+        // G9: past the deadline with only extensions to come, it stays upcoming; work to mark wins.
+        $this->assertSame(c::STAFF_UPCOMING, c::staff(0, 0, self::NOW - DAYSECS, self::NOW, true));
+        $this->assertSame(c::STAFF_UPCOMING, c::staff(0, 2, self::NOW - DAYSECS, self::NOW, true));
+        $this->assertSame(c::TOMARK, c::staff(1, 2, self::NOW - DAYSECS, self::NOW, true));
+        $this->assertNull(c::staff(0, 0, self::NOW + DAYSECS, self::NOW, true));
     }
 
     /**

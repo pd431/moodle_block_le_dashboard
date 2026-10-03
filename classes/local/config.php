@@ -27,6 +27,42 @@ class config {
     /** Default days after which an unsubmitted assessment moves from Overdue to Past. */
     const DEFAULT_THRESHOLD = 90;
 
+    /** Number settings and their defaults: grace period (hours), Mitigate window (days before, hours after). */
+    const NUMBERS = ['graceperiod' => 24, 'mitigationopens' => 90, 'mitigationcloses' => 24];
+
+    /**
+     * A whole-number setting, or its default when unset.
+     *
+     * @param string $name A key of NUMBERS.
+     * @return int
+     */
+    public static function number(string $name): int {
+        $value = get_config('block_my_assessments', $name);
+        return $value === false || $value === '' ? self::NUMBERS[$name] : max(0, (int)$value);
+    }
+
+    /**
+     * Seconds after a deadline (the default or a student's own) before work still to come stops
+     * counting, and that a student without a cut-off is told they can still submit for (G9).
+     *
+     * @return int
+     */
+    public static function grace(): int {
+        return self::number('graceperiod') * HOURSECS;
+    }
+
+    /**
+     * Whether Mitigate is offered at a time, from the student's effective deadline (G4).
+     *
+     * @param int|null $due
+     * @param int $now
+     * @return bool
+     */
+    public static function mitigation_open(?int $due, int $now): bool {
+        return $due !== null && $now >= $due - self::number('mitigationopens') * DAYSECS
+            && $now <= $due + self::number('mitigationcloses') * HOURSECS;
+    }
+
     /**
      * A comma-separated setting as a clean list.
      *
