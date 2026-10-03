@@ -35,6 +35,7 @@
         <FIELD NAME="markingdue" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="hiddenfromstudents" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="hasallocation" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="hasbrief" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when the activity has a description or a brief file"/>
         <FIELD NAME="stages" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Comma-separated marking stage keys, in order"/>
         <FIELD NAME="timeindexed" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
@@ -54,6 +55,7 @@
         <FIELD NAME="due" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Effective deadline for this student"/>
         <FIELD NAME="cutoff" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Effective cut-off for this student"/>
         <FIELD NAME="individual" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when an override, personal deadline or extension applies"/>
+        <FIELD NAME="mitigation" TYPE="char" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="extension or selfcert when one applies"/>
         <FIELD NAME="canaccess" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Restrictions and groups, as of indexing"/>
         <FIELD NAME="submitted" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="NULL when the adapter cannot tell"/>
         <FIELD NAME="timesubmitted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>

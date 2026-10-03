@@ -29,6 +29,11 @@ use block_my_assessments\local\index\student_row;
  * extension (assign_user_flags.extensionduedate) then moves the deadline and
  * cut-off later. A unit test compares this with assign's own API.
  *
+ * Moodle 5.0+ (checked by schema, not version): markers are allocated in
+ * assign_allocated_marker, and an assignment can have several markers
+ * (markercount). Each marker's own mark is a stage (marker1..n, from assign_mark),
+ * and with the manual method someone then sets the final grade (agreed).
+ *
  * @package    block_my_assessments
  * @copyright  2026 onwards block_my_assessments contributors
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -64,14 +69,116 @@ class assign extends base {
     #[\Override]
     public function cm_row(\cm_info $cm): ?cm_row {
         $a = $this->instance($cm);
+        $markers = self::markercount($a);
+        $stages = ['marked'];
+        if ($markers > 1) {
+            $stages = array_map(fn($i) => 'marker' . $i, range(1, $markers));
+            if (($a->multimarkmethod ?? '') === 'manual') {
+                $stages[] = 'agreed';
+            }
+        }
         return new cm_row(
             opens: self::date($a->allowsubmissionsfromdate),
             due: self::date($a->duedate),
             cutoff: self::date($a->cutoffdate),
             markingdue: self::date($a->gradingduedate),
             hasallocation: !empty($a->markingworkflow) && !empty($a->markingallocation),
-            stages: ['marked'],
+            stages: $stages,
         );
+    }
+
+    /**
+     * Number of markers per submission (always 1 before Moodle 5.0).
+     *
+     * @param \stdClass $a
+     * @return int
+     */
+    protected static function markercount(\stdClass $a): int {
+        return max(1, (int)($a->markercount ?? 1));
+    }
+
+    /**
+     * Whether markers are allocated in their own table (Moodle 5.0+).
+     *
+     * @return bool
+     */
+    protected static function allocation_table(): bool {
+        global $DB;
+        static $exists = null;
+        if ($exists === null || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+            $exists = $DB->get_manager()->table_exists('assign_allocated_marker');
+        }
+        return $exists;
+    }
+
+    /**
+     * Allocated markers per student, in allocation order.
+     *
+     * @param \stdClass $a
+     * @param int[] $userids
+     * @param \stdClass[] $flags From flags(), used before Moodle 5.0.
+     * @return int[][] Keyed by user id.
+     */
+    protected function allocations(\stdClass $a, array $userids, array $flags): array {
+        global $DB;
+        if (!self::allocation_table()) {
+            $out = [];
+            foreach ($userids as $userid) {
+                if ($marker = (int)($flags[$userid]->allocatedmarker ?? 0)) {
+                    $out[$userid] = [$marker];
+                }
+            }
+            return $out;
+        }
+        $out = [];
+        foreach (array_chunk($userids, self::CHUNK) as $chunk) {
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
+            $params['assignid'] = $a->id;
+            $rs = $DB->get_recordset_select(
+                'assign_allocated_marker',
+                "assignment = :assignid AND student $insql",
+                $params,
+                'id',
+                'id, student, marker'
+            );
+            foreach ($rs as $r) {
+                $out[(int)$r->student][] = (int)$r->marker;
+            }
+            $rs->close();
+        }
+        return $out;
+    }
+
+    /**
+     * Each marker's own marks (Moodle 5.0+, several markers), oldest first.
+     *
+     * @param \stdClass $a
+     * @param int[] $userids
+     * @return \stdClass[][] Keyed by user id, then marker id: mark, timemodified.
+     */
+    protected function marks(\stdClass $a, array $userids): array {
+        global $DB;
+        $out = [];
+        foreach (array_chunk($userids, self::CHUNK) as $chunk) {
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
+            $params['assignid'] = $a->id;
+            $params['assignid2'] = $a->id;
+            $rs = $DB->get_recordset_sql("SELECT m.id, g.userid, m.marker, m.mark, m.timemodified
+                                            FROM {assign_mark} m
+                                            JOIN {assign_grades} g ON g.id = m.gradeid
+                                            JOIN (SELECT userid, MAX(attemptnumber) AS attemptnumber
+                                                    FROM {assign_grades}
+                                                   WHERE assignment = :assignid2
+                                                GROUP BY userid) latest
+                                              ON latest.userid = g.userid AND latest.attemptnumber = g.attemptnumber
+                                           WHERE m.assignment = :assignid AND m.mark IS NOT NULL AND g.userid $insql
+                                        ORDER BY m.timecreated, m.id", $params);
+            foreach ($rs as $r) {
+                $out[(int)$r->userid][(int)$r->marker] = $r;
+            }
+            $rs->close();
+        }
+        return $out;
     }
 
     #[\Override]
@@ -121,6 +228,7 @@ class assign extends base {
             if ($extension && $extension > (int)$row->due) {
                 $row->due = $extension;
                 $row->individual = true;
+                $row->mitigation = student_row::MITIGATION_EXTENSION;
                 if ($row->cutoff && $row->cutoff < $extension) {
                     $row->cutoff = $extension;
                 }
@@ -137,7 +245,6 @@ class assign extends base {
 
     #[\Override]
     public function marking_rows(\cm_info $cm, cm_row $cmrow, array $userids): array {
-        global $DB;
         $a = $this->instance($cm);
         $submissions = array_filter($this->submissions($cm, $a, $userids), fn($s) => $s->status === 'submitted');
         if (!$submissions) {
@@ -146,42 +253,69 @@ class assign extends base {
         $flags = $this->flags($a->id, $userids);
         $grades = $this->latest_grades($a->id, array_keys($submissions));
         $released = self::released_now($cm, array_keys($submissions));
+        $allocations = $cmrow->hasallocation ? $this->allocations($a, array_keys($submissions), $flags) : [];
+        $markers = self::markercount($a);
+        $marks = $markers > 1 ? $this->marks($a, array_keys($submissions)) : [];
 
-        // One unit per submission: the group for team submissions, else the student.
+        // One unit per submission and stage: the group for team submissions, else the student.
         $units = [];
         foreach ($submissions as $userid => $s) {
             $isgroup = !empty($a->teamsubmission) && !empty($s->groupid);
-            $key = ($isgroup ? 'g' : 'u') . ($isgroup ? $s->groupid : $userid);
             $grade = $grades[$userid] ?? null;
             if ($a->markingworkflow) {
-                $marked = in_array($flags[$userid]->workflowstate ?? '', self::MARKED_STATES);
+                $final = in_array($flags[$userid]->workflowstate ?? '', self::MARKED_STATES);
             } else {
                 // The assign needs-grading rule: a grade newer than the submission.
-                $marked = $grade && $grade->grade !== null && (float)$grade->grade >= 0
+                $final = $grade && $grade->grade !== null && (float)$grade->grade >= 0
                     && (int)$grade->timemodified >= (int)$s->timemodified;
             }
-            $allocated = $cmrow->hasallocation ? ((int)($flags[$userid]->allocatedmarker ?? 0) ?: null) : null;
-            if (!isset($units[$key])) {
-                $units[$key] = new marking_row(
-                    unitid: $isgroup ? (int)$s->groupid : (int)$userid,
-                    unittype: $isgroup ? marking_row::UNIT_GROUP : marking_row::UNIT_USER,
-                    stage: 'marked',
-                    allocatedto: $allocated,
-                    submitted: true,
-                    marked: $marked,
-                    markedby: $marked && $grade ? ((int)$grade->grader ?: null) : null,
-                    timemarked: $marked && $grade ? (int)$grade->timemodified : null,
-                    released: isset($released[$userid]),
-                );
+            $allocated = $allocations[$userid] ?? [];
+            $stages = [];
+            if ($markers === 1) {
+                $stages['marked'] = [$allocated[0] ?? null, true, $final,
+                    $final && $grade ? ((int)$grade->grader ?: null) : null,
+                    $final && $grade ? (int)$grade->timemodified : null];
             } else {
+                // Each marker's own mark; unallocated stages take marks in the order given.
+                $mine = $marks[$userid] ?? [];
+                $loose = array_values(array_diff_key($mine, array_flip($allocated)));
+                for ($i = 1; $i <= $markers; $i++) {
+                    $marker = $allocated[$i - 1] ?? null;
+                    $mark = $marker !== null ? ($mine[$marker] ?? null) : array_shift($loose);
+                    $stages['marker' . $i] = [$marker, true, $mark !== null,
+                        $mark ? (int)$mark->marker : null, $mark ? (int)$mark->timemodified : null];
+                }
+                if (in_array('agreed', $cmrow->stages)) {
+                    $stages['agreed'] = [null, count($mine) >= $markers, $final,
+                        $final && $grade ? ((int)$grade->grader ?: null) : null,
+                        $final && $grade ? (int)$grade->timemodified : null];
+                }
+            }
+            foreach ($stages as $stage => [$allocatedto, $ready, $marked, $markedby, $timemarked]) {
+                $key = ($isgroup ? 'g' . $s->groupid : 'u' . $userid) . '-' . $stage;
+                if (!isset($units[$key])) {
+                    $units[$key] = new marking_row(
+                        unitid: $isgroup ? (int)$s->groupid : (int)$userid,
+                        unittype: $isgroup ? marking_row::UNIT_GROUP : marking_row::UNIT_USER,
+                        stage: $stage,
+                        allocatedto: $allocatedto,
+                        submitted: $ready,
+                        marked: $marked,
+                        markedby: $markedby,
+                        timemarked: $timemarked,
+                        released: isset($released[$userid]),
+                    );
+                    continue;
+                }
                 // A team: the unit is marked or released once any member is.
                 $unit = $units[$key];
+                $unit->submitted = $unit->submitted || $ready;
                 $unit->marked = $unit->marked || $marked;
                 $unit->released = $unit->released || isset($released[$userid]);
-                $unit->allocatedto = $unit->allocatedto ?? $allocated;
-                if ($marked && $grade && (int)$grade->timemodified > (int)$unit->timemarked) {
-                    $unit->markedby = (int)$grade->grader ?: null;
-                    $unit->timemarked = (int)$grade->timemodified;
+                $unit->allocatedto = $unit->allocatedto ?? $allocatedto;
+                if ($marked && $timemarked > (int)$unit->timemarked) {
+                    $unit->markedby = $markedby;
+                    $unit->timemarked = $timemarked;
                 }
             }
         }
@@ -200,7 +334,8 @@ class assign extends base {
         return self::chunked($userids, function ($chunk) use ($DB, $assignid) {
             [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
             $params['assignid'] = $assignid;
-            return $DB->get_records_sql("SELECT userid, extensionduedate, workflowstate, allocatedmarker
+            $marker = self::allocation_table() ? '' : ', allocatedmarker';
+            return $DB->get_records_sql("SELECT userid, extensionduedate, workflowstate $marker
                                            FROM {assign_user_flags}
                                           WHERE assignment = :assignid AND userid $insql", $params);
         });

@@ -199,19 +199,26 @@ class coursework extends base {
      * Extensions by allocatable, from whichever table this coursework version has.
      *
      * @param int $courseworkid
-     * @return int[] "type:id" => extended deadline
+     * @return array[] "type:id" => [extended deadline, whether it was self-certified]
      */
     protected static function extensions(int $courseworkid): array {
         $out = [];
+        $add = function (string $key, \stdClass $r) use (&$out) {
+            $due = (int)$r->extended_deadline;
+            if ($due > ($out[$key][0] ?? 0)) {
+                $out[$key] = [$due, !empty($r->selfcert)];
+            }
+        };
         if (self::column('coursework_mitigations', ['extended_deadline'])) {
             $type = self::column('coursework_mitigations', ['type']) ? "AND type = 'extension'" : '';
-            foreach (self::by_allocatable('coursework_mitigations', $courseworkid, 'extended_deadline', $type) as $k => $r) {
-                $out[$k] = max($out[$k] ?? 0, (int)$r->extended_deadline);
+            $fields = 'extended_deadline' . (self::column('coursework_mitigations', ['selfcert']) ? ', selfcert' : '');
+            foreach (self::by_allocatable('coursework_mitigations', $courseworkid, $fields, $type) as $k => $r) {
+                $add($k, $r);
             }
         }
         if (self::column('coursework_extensions', ['extended_deadline'])) {
             foreach (self::by_allocatable('coursework_extensions', $courseworkid, 'extended_deadline') as $k => $r) {
-                $out[$k] = max($out[$k] ?? 0, (int)$r->extended_deadline);
+                $add($k, $r);
             }
         }
         return $out;
@@ -259,12 +266,13 @@ class coursework extends base {
                 $row->individual = true;
             }
             // An extension can only move it later.
-            if (!empty($extensions[$key]) && $extensions[$key] > (int)$row->due) {
-                $row->due = $extensions[$key];
+            if (!empty($extensions[$key]) && $extensions[$key][0] > (int)$row->due) {
+                [$row->due, $selfcert] = $extensions[$key];
                 if ($row->cutoff !== null) {
                     $row->cutoff = $row->due;
                 }
                 $row->individual = true;
+                $row->mitigation = $selfcert ? student_row::MITIGATION_SELFCERT : student_row::MITIGATION_EXTENSION;
             }
             if (isset($submissions[$key])) {
                 $s = $submissions[$key];

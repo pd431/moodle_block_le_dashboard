@@ -53,4 +53,33 @@ class block_my_assessments_generator extends component_generator_base {
         core_tag_tag::set_item_tags('core', 'course_modules', $cmid, context_module::instance($cmid), [$type]);
         (new \block_my_assessments\local\index\indexer())->index_cm($cmid);
     }
+
+    /**
+     * Allocates a student's assignment to a marker, in assign_user_flags before Moodle 5.0
+     * and in assign_allocated_marker from 5.0.
+     *
+     * @param int $cmid
+     * @param int $userid
+     * @param int $markerid 0 removes the allocation.
+     * @param string|null $workflowstate Also sets the marking workflow state.
+     */
+    public function allocate_assign(int $cmid, int $userid, int $markerid, ?string $workflowstate = null): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $assign = new assign(context_module::instance($cmid), null, null);
+        $flags = $assign->get_user_flags($userid, true);
+        if ($workflowstate !== null) {
+            $flags->workflowstate = $workflowstate;
+        }
+        if ($DB->get_manager()->table_exists('assign_allocated_marker')) {
+            $params = ['assignment' => $assign->get_instance()->id, 'student' => $userid];
+            $DB->delete_records('assign_allocated_marker', $params);
+            if ($markerid) {
+                $DB->insert_record('assign_allocated_marker', $params + ['marker' => $markerid]);
+            }
+        } else {
+            $flags->allocatedmarker = $markerid;
+        }
+        $assign->update_user_flags($flags);
+    }
 }

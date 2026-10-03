@@ -28,13 +28,16 @@
         "url": "https://example.com/mod/assign/view.php?id=12",
         "course": "M1",
         "modlabel": "Assignment",
-        "icon": "https://example.com/theme/image.php/boost/assign/1/monologo",
+        "faicon": "fa-file-arrow-up",
+        "tip": "Assignment. Extension granted. Due soon.",
         "assesstype": "summative",
         "typelabel": "Summative",
         "hidden": false,
         "search": "essay 1 m1 assignment",
         "overflow": false,
-        "overlay": {"state": "pending", "icon": "fa-clock"},
+        "overlay": {"state": "duesoon", "icon": "fa-clock"},
+        "mitigationoverlay": {"state": "extension", "icon": "fa-calendar-plus"},
+        "briefhint": null,
         "status": {"key": "pending", "label": "Not submitted yet"},
         "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00", "note": null}],
         "actions": [{"key": "submit", "label": "Submit", "url": "https://example.com/mod/assign/view.php?id=12"}]
@@ -42,9 +45,14 @@
 }}
 <li class="list-group-item ma-row" id="{{id}}" data-region="ma-row" data-cmid="{{cmid}}" data-assesstype="{{assesstype}}"
     data-search="{{search}}"{{#overflow}} data-overflow="1" hidden{{/overflow}}>
-    <div class="ma-row-icon" aria-hidden="true">
-        <img class="ma-row-modicon" src="{{icon}}" alt="">
-        {{#overlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa {{icon}}"></i></span>{{/overlay}}
+    <div class="ma-row-icon ma-tip-wrap">
+        <button type="button" class="ma-row-iconbtn" data-action="tip" aria-expanded="false" aria-controls="{{id}}-tip"
+                aria-label="{{tip}}">
+            <i class="fa-solid {{faicon}} ma-row-faicon" aria-hidden="true"></i>
+            {{#overlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}" aria-hidden="true"><i class="fa-solid {{icon}}"></i></span>{{/overlay}}
+            {{#mitigationoverlay}}<span class="ma-row-overlay ma-row-overlay--top ma-row-overlay--{{state}}" aria-hidden="true"><i class="fa-solid {{icon}}"></i></span>{{/mitigationoverlay}}
+        </button>
+        <div class="ma-tip" id="{{id}}-tip" data-region="ma-tip" hidden>{{tip}}</div>
     </div>
     <div class="ma-row-info">
         <a class="ma-row-name" href="{{url}}">{{name}}</a>
@@ -52,6 +60,18 @@
             <span class="ma-row-course">{{course}}</span>
             <span class="ma-row-type">{{typeline}}</span>
             {{#hidden}}<span class="badge ma-pill ma-pill--hidden">{{#str}}hiddenfromstudents, block_my_assessments{{/str}}</span>{{/hidden}}
+            {{#briefhint}}
+            <span class="ma-tip-wrap ma-tip-wrap--row">
+                <button type="button" class="btn btn-sm ma-btn ma-btn--hint" data-action="tip" aria-expanded="false"
+                        aria-controls="{{id}}">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{#str}}briefhint, block_my_assessments{{/str}}
+                </button>
+                <span class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden>
+                    {{#str}}briefhint_text, block_my_assessments{{/str}}
+                    {{#link}} {{{link}}}{{/link}}
+                </span>
+            </span>
+            {{/briefhint}}
         </div>
     </div>
     <div class="ma-row-dates">

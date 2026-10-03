@@ -52,6 +52,7 @@ class provider implements
             'timesubmitted' => 'privacy:metadata:stu:timesubmitted',
             'timereleased' => 'privacy:metadata:stu:timereleased',
             'gradedisplay' => 'privacy:metadata:stu:gradedisplay',
+            'mitigation' => 'privacy:metadata:stu:mitigation',
         ], 'privacy:metadata:stu');
         $collection->add_database_table('block_my_assessments_mark', [
             'unitid' => 'privacy:metadata:mark:unitid',

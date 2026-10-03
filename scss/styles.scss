@@ -97,15 +97,16 @@ $ma-state-tones: (
     "inmarking": "info",
     "released": "info",
   ),
-  // The small badge on a row's activity icon. "overdue" is the Overdue
-  // section's, whatever the status.
+  // The modifier icons on a row's activity icon. "overdue" is the Overdue
+  // section's red, as in rc6. Late is already done, so it is grey, never
+  // red or orange (Pierre, 2026-10-03).
   "overlay": (
     "default": "grey",
-    "pending": "attention",
-    "submitted": "success",
-    "inmarking": "success",
-    "released": "success",
     "overdue": "danger",
+    "submitted": "success",
+    "duesoon": "attention",
+    "selfcert": "info",
+    "extension": "info",
   ),
   // Progress bars, by bar key (marking stages included).
   "bar": (
@@ -120,13 +121,14 @@ $ma-state-tones: (
 // Tones too light for white text on their solid step; they keep their ink.
 $ma-dark-ink-on-solid: ("attention");
 
-// The tone rules for one component: the default on $base, each state on
-// $base--state.
+// The tone rules for one component: the default tone and the component's
+// own declarations (the @content) on $base, each state on $base--state.
 @mixin ma-state-tones($component, $base) {
   $states: map.get($ma-state-tones, $component);
 
   #{$base} {
     @include ma-tone(map.get($states, "default"));
+    @content;
   }
 
   @each $state, $tone in $states {
@@ -136,6 +138,7 @@ $ma-dark-ink-on-solid: ("attention");
 
         @if list.index($ma-dark-ink-on-solid, $tone) {
           --ma-on-solid: var(--ma-ink);
+          --ma-glyph: var(--ma-ink);
         }
       }
     }
@@ -235,7 +238,8 @@ $ma-dark-ink-on-solid: ("attention");
 
   .ma-tabs .nav-link,
   .ma-btn,
-  .ma-filter-btn {
+  .ma-filter-btn,
+  .ma-row-iconbtn {
     &:focus {
       outline: 0;
     }
@@ -489,25 +493,34 @@ $ma-dark-ink-on-solid: ("attention");
     }
   }
 
-  // Row icon, with a status overlay on the -solid step. Grey unless the row
-  // says otherwise; orange carries dark ink.
+  // Row icon: the activity's Font Awesome icon as a button that opens its
+  // tip, with up to two modifier icons: status bottom right, mitigation top
+  // right. A modifier is its tone's -solid glyph on a white disc; orange
+  // uses its ink, which is the only way it reaches 3:1.
   .ma-row-icon {
-    @include ma-tone("grey");
-
     position: relative;
     grid-area: icon;
     align-self: start;
-    width: 1.5rem;
-    height: 1.5rem;
     margin-top: 0.125rem;
   }
 
-  .ma-row-modicon {
-    width: 1.5rem;
-    height: 1.5rem;
+  .ma-row-iconbtn {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.25rem;
+    background: none;
+    color: var(--ma-text);
+    font-size: 1.25rem;
+    cursor: pointer;
   }
 
-  .ma-row-overlay {
+  @include ma-state-tones("overlay", ".ma-row-overlay") {
     position: absolute;
     right: -0.375rem;
     bottom: -0.25rem;
@@ -517,16 +530,21 @@ $ma-dark-ink-on-solid: ("attention");
     width: 0.875rem;
     height: 0.875rem;
     border-radius: 50%;
-    box-shadow: 0 0 0 1px var(--ma-surface);
-    background-color: var(--ma-solid);
-    color: var(--ma-on-solid);
-    font-size: 0.5rem;
+    background-color: var(--ma-surface);
+    color: var(--ma-glyph, var(--ma-solid));
+    font-size: 0.8125rem;
+    line-height: 1;
   }
 
-  @include ma-state-tones("overlay", ".ma-row-overlay");
+  .ma-row-overlay--selfcert,
+  .ma-row-overlay--extension {
+    top: -0.25rem;
+    bottom: auto;
+  }
 
   // Row text.
   .ma-row-info {
+    position: relative;
     grid-area: info;
     min-width: 0;
   }
@@ -608,9 +626,7 @@ $ma-dark-ink-on-solid: ("attention");
 
   // Pills: tone fill with tone ink, at body size so APCA holds. Late or
   // not submitted stays grey, never red.
-  @include ma-state-tones("pill", ".ma-pill");
-
-  .ma-pill {
+  @include ma-state-tones("pill", ".ma-pill") {
     padding: 0.2em 0.5em;
     background-color: var(--ma-fill);
     color: var(--ma-ink);
@@ -622,9 +638,7 @@ $ma-dark-ink-on-solid: ("attention");
 
   // Progress bars: the pastel -border step on a grey track, the count
   // always beside the bar.
-  @include ma-state-tones("bar", ".ma-bar");
-
-  .ma-bar {
+  @include ma-state-tones("bar", ".ma-bar") {
     display: grid;
     grid-template-columns: 5.5rem minmax(2.5rem, 1fr) minmax(3.5rem, auto);
     align-items: center;
@@ -647,5 +661,46 @@ $ma-dark-ink-on-solid: ("attention");
 
   .ma-bar-fill {
     background-color: var(--ma-border);
+  }
+
+  // Tips: Moodle's help-icon popover look. They open on click or keyboard
+  // focus (never hover) and close on Escape, a click elsewhere or when focus
+  // leaves (dashboard.js). The activity icon's opens to the right of it;
+  // wide ones (the brief hint) open below their button.
+  .ma-tip-wrap {
+    position: relative;
+  }
+
+  .ma-tip {
+    position: absolute;
+    z-index: 1000;
+    top: -0.25rem;
+    left: calc(100% + 0.5rem);
+    width: max-content;
+    max-width: min(17.25rem, 70vw);
+    padding: 0.5rem 0.75rem;
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 0.3rem;
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
+    background-color: var(--ma-surface);
+    color: var(--ma-text);
+    font-size: $ma-font-small;
+    font-weight: 400;
+    text-align: left;
+    white-space: normal;
+  }
+
+  // Anchored to the row's text column instead of its button, so it can't run
+  // off a phone screen.
+  .ma-tip-wrap--row {
+    position: static;
+  }
+
+  .ma-tip--wide {
+    top: calc(100% + 0.25rem);
+    right: 0;
+    left: 0;
+    width: auto;
+    max-width: 24rem;
   }
 }

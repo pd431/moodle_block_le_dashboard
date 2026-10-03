@@ -143,6 +143,7 @@ class indexer {
             'markingdue' => $cmrow->markingdue,
             'hiddenfromstudents' => (!$cm->visible || ($section && !$section->visible)) ? 1 : 0,
             'hasallocation' => $cmrow->hasallocation ? 1 : 0,
+            'hasbrief' => self::has_brief($cm) ? 1 : 0,
             'stages' => implode(',', $cmrow->stages),
             'timeindexed' => $now,
         ];
@@ -155,6 +156,7 @@ class indexer {
                 'due' => $row->due,
                 'cutoff' => $row->cutoff,
                 'individual' => $row->individual ? 1 : 0,
+                'mitigation' => $row->mitigation,
                 'canaccess' => $canaccess ? 1 : 0,
                 'submitted' => $row->submitted === null ? null : ($row->submitted ? 1 : 0),
                 'timesubmitted' => $row->timesubmitted,
@@ -196,6 +198,34 @@ class indexer {
         $transaction->allow_commit();
         registry::clear_error($cm->modname);
         return true;
+    }
+
+    /** File areas that hold an activity's brief, besides its intro. */
+    const BRIEF_AREAS = ['assign' => ['introattachment']];
+
+    /**
+     * Whether the activity has a description (intro text that isn't just markup)
+     * or a brief file.
+     *
+     * @param \cm_info $cm
+     * @return bool
+     */
+    public static function has_brief(\cm_info $cm): bool {
+        global $DB;
+        $columns = $DB->get_columns($cm->modname);
+        if (isset($columns['intro'])) {
+            $intro = (string)$DB->get_field($cm->modname, 'intro', ['id' => $cm->instance]);
+            if (trim(html_entity_decode(strip_tags($intro), ENT_QUOTES | ENT_HTML5), " \t\n\r\0\x0B\xC2\xA0") !== '') {
+                return true;
+            }
+        }
+        $fs = get_file_storage();
+        foreach (array_merge(['intro'], self::BRIEF_AREAS[$cm->modname] ?? []) as $area) {
+            if (!$fs->is_area_empty($cm->context->id, 'mod_' . $cm->modname, $area, false, true)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

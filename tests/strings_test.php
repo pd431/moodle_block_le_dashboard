@@ -20,6 +20,7 @@ use block_my_assessments\local\mitigation;
 use block_my_assessments\local\scope;
 use block_my_assessments\local\view\classifier;
 use block_my_assessments\local\view\staff;
+use block_my_assessments\local\view\student;
 use block_my_assessments\privacy\provider;
 
 /**
@@ -77,6 +78,9 @@ final class strings_test extends \advanced_testcase {
         }
         foreach (array_keys(staff::RANGES) as $range) {
             $keys[] = 'range_' . $range;
+        }
+        foreach (array_keys(student::OVERLAY_ICONS) as $state) {
+            $keys[] = 'tip_' . $state;
         }
         foreach (self::DATES as $date) {
             $keys[] = 'date_' . $date;

@@ -17,6 +17,7 @@
 namespace block_my_assessments\local\view;
 
 use block_my_assessments\local\config;
+use block_my_assessments\local\index\student_row;
 use block_my_assessments\local\mitigation;
 use block_my_assessments\local\output\format;
 use block_my_assessments\local\scope;
@@ -32,19 +33,19 @@ use block_my_assessments\local\scope;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class student extends base {
-    /** Status => overlay icon. Tones come from the state map in scss/styles.scss. */
-    const STATUS_ICONS = [
-        classifier::STATUS_PENDING => 'fa-clock',
-        classifier::STATUS_SUBMITTED => 'fa-check',
-        classifier::STATUS_INMARKING => 'fa-check',
-        classifier::STATUS_RELEASED => 'fa-check',
-        classifier::STATUS_NOTSUBMITTED => 'fa-minus',
-        classifier::STATUS_DUE => 'fa-clock',
-        classifier::STATUS_CLOSED => 'fa-minus',
+    /** Overlay state => icon. Tones come from the state map in scss/styles.scss. */
+    const OVERLAY_ICONS = [
+        'overdue' => 'fa-circle-exclamation',
+        'submitted' => 'fa-circle-check',
+        'late' => 'fa-hourglass-end',
+        'duesoon' => 'fa-clock',
+        'notsubmitted' => 'fa-circle-xmark',
+        student_row::MITIGATION_SELFCERT => 'fa-hand-holding-heart',
+        student_row::MITIGATION_EXTENSION => 'fa-calendar-plus',
     ];
 
-    /** Overlay state of a row in the Overdue section, whatever its status. */
-    const OVERLAY_OVERDUE = 'overdue';
+    /** A pending assessment is due soon within this many days (rc6). */
+    const DUESOON_DAYS = 7;
 
     /** @var array|null Rows, once loaded. */
     protected ?array $rows = null;
@@ -81,7 +82,7 @@ class student extends base {
         $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue,
                                                 c.hiddenfromstudents, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
-                                                s.timereleased, s.gradedisplay
+                                                s.timereleased, s.gradedisplay, s.mitigation
                                            FROM {block_my_assessments_stu} s
                                            JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0
@@ -175,6 +176,39 @@ class student extends base {
     }
 
     /**
+     * The modifier icons on a row's activity icon, and the sentences that describe them.
+     *
+     * @param \stdClass $r
+     * @param string $section
+     * @param string $status
+     * @return array [status overlay or null, mitigation overlay or null, sentences]
+     */
+    protected function modifiers(\stdClass $r, string $section, string $status): array {
+        $parts = [];
+        $mitigation = null;
+        if ($r->mitigation && isset(self::OVERLAY_ICONS[$r->mitigation])) {
+            $mitigation = ['state' => $r->mitigation, 'icon' => self::OVERLAY_ICONS[$r->mitigation]];
+            $parts[] = get_string('tip_' . $r->mitigation, 'block_my_assessments');
+        }
+        $state = null;
+        if ($section === classifier::OVERDUE) {
+            // The red overlay is rc6's and only appears in the actionable Overdue section.
+            $state = 'overdue';
+        } else if (in_array($status, [classifier::STATUS_SUBMITTED, classifier::STATUS_INMARKING, classifier::STATUS_RELEASED])) {
+            $late = $r->due && $r->timesubmitted && (int)$r->timesubmitted > (int)$r->due;
+            $state = $late ? 'late' : 'submitted';
+        } else if (in_array($status, [classifier::STATUS_NOTSUBMITTED, classifier::STATUS_CLOSED])) {
+            $state = 'notsubmitted';
+        } else if ($r->due && (int)$r->due - $this->now <= self::DUESOON_DAYS * DAYSECS) {
+            $state = 'duesoon';
+        }
+        if ($state) {
+            $parts[] = get_string('tip_' . $state, 'block_my_assessments');
+        }
+        return [$state ? ['state' => $state, 'icon' => self::OVERLAY_ICONS[$state]] : null, $mitigation, $parts];
+    }
+
+    /**
      * One student row.
      *
      * @param \stdClass $r
@@ -185,10 +219,8 @@ class student extends base {
     protected function row(\stdClass $r, string $section, string $status): array {
         $row = format::row($r, $r->courseshortname, $this->key());
         $row['status'] = ['key' => $status, 'label' => get_string('status_' . $status, 'block_my_assessments')];
-        // The red overlay is rc6's and only appears in the actionable Overdue section.
-        $row['overlay'] = $section === classifier::OVERDUE
-            ? ['state' => self::OVERLAY_OVERDUE, 'icon' => 'fa-exclamation']
-            : ['state' => $status, 'icon' => self::STATUS_ICONS[$status]];
+        [$row['overlay'], $row['mitigationoverlay'], $parts] = $this->modifiers($r, $section, $status);
+        $row['tip'] = format::tip($row['modlabel'], $parts);
 
         $dates = [];
         if ($r->due) {

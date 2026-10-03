@@ -153,11 +153,12 @@ final class assign_test extends \advanced_testcase {
             'assignsubmission_onlinetext_enabled' => 1, 'markingworkflow' => 1, 'markingallocation' => 1]);
         $agen->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid, 'onlinetext' => 'Mine']);
         $this->setAdminUser();
-        $assign = new \assign(\context_module::instance($a->cmid), null, null);
-        $flags = $assign->get_user_flags($s1->id, true);
-        $flags->allocatedmarker = $marker->id;
-        $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_INMARKING;
-        $assign->update_user_flags($flags);
+        $gen->get_plugin_generator('block_my_assessments')->allocate_assign(
+            $a->cmid,
+            $s1->id,
+            $marker->id,
+            ASSIGN_MARKING_WORKFLOW_STATE_INMARKING
+        );
 
         $cm = get_fast_modinfo($course->id)->cms[$a->cmid];
         $adapter = new assign();
@@ -167,10 +168,62 @@ final class assign_test extends \advanced_testcase {
         $this->assertSame((int)$marker->id, $m->allocatedto);
         $this->assertFalse($m->marked);
 
-        $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_READYFORRELEASE;
-        $assign->update_user_flags($flags);
+        $gen->get_plugin_generator('block_my_assessments')->allocate_assign(
+            $a->cmid,
+            $s1->id,
+            $marker->id,
+            ASSIGN_MARKING_WORKFLOW_STATE_READYFORRELEASE
+        );
         [$m] = $adapter->marking_rows($cm, $cmrow, [$s1->id]);
         $this->assertTrue($m->marked);
         $this->assertFalse($m->released);
+    }
+
+    /**
+     * Moodle 5.0+ multiple markers: each marker's own mark is a stage, then the agreed grade.
+     */
+    public function test_multiple_markers(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        if (!$DB->get_manager()->table_exists('assign_mark')) {
+            $this->markTestSkipped('Multiple markers need Moodle 5.0 or later.');
+        }
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $m1 = $gen->create_and_enrol($course, 'teacher');
+        $m2 = $gen->create_and_enrol($course, 'teacher');
+        $a = $gen->get_plugin_generator('mod_assign')->create_instance(['course' => $course->id,
+            'duedate' => time() - DAYSECS, 'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1,
+            'markingworkflow' => 1, 'markingallocation' => 1, 'markercount' => 2, 'multimarkmethod' => 'manual']);
+        $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid,
+            'onlinetext' => 'Mine']);
+        $this->setAdminUser();
+        foreach ([$m1, $m2] as $m) {
+            $DB->insert_record('assign_allocated_marker', ['assignment' => $a->id, 'student' => $s1->id, 'marker' => $m->id]);
+        }
+
+        $cm = get_fast_modinfo($course->id)->cms[$a->cmid];
+        $adapter = new assign();
+        $cmrow = $adapter->cm_row($cm);
+        $this->assertSame(['marker1', 'marker2', 'agreed'], $cmrow->stages);
+
+        // Marker 2 marks first.
+        $assign = new \assign(\context_module::instance($a->cmid), null, null);
+        $grade = $assign->get_user_grade($s1->id, true);
+        $grade->grader = $m2->id;
+        $assign->update_mark($grade, 60);
+
+        $units = [];
+        foreach ($adapter->marking_rows($cm, $cmrow, [$s1->id]) as $u) {
+            $units[$u->stage] = $u;
+        }
+        $this->assertSame((int)$m1->id, $units['marker1']->allocatedto);
+        $this->assertFalse($units['marker1']->marked);
+        $this->assertSame((int)$m2->id, $units['marker2']->allocatedto);
+        $this->assertTrue($units['marker2']->marked);
+        $this->assertNull($units['agreed']->allocatedto);
+        $this->assertFalse($units['agreed']->submitted, 'Agreement waits for every marker.');
     }
 }

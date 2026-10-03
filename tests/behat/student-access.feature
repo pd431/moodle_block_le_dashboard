@@ -110,15 +110,7 @@ Feature: Students see only assessments they can actually access
     When I log in as "student2" and view my dashboard
     Then "A1" should appear in the "Upcoming" section
 
-  Scenario: Someone who teaches one module and studies another sees their own assessments as a student
-    Given the following "courses" exist:
-      | fullname | shortname |
-      | Module 3 | M3        |
-    And "student1" is enrolled in "M3" as "editingteacher"
-    And a summative "coursework" "A1" in "M1" is due "tomorrow"
-    When I log in as "student1" and view my dashboard
-    Then I should be able to open the "Student view"
-    And "A1" should appear in the "Upcoming" section
+  # 2026-10-03: the dual-role scenario moved to view-routing.feature (rc6 routing, Pierre).
 
   # Added 2026-10-02 with design-v2 section 5a: counts come from data, not from section titles.
   Scenario: Summary counts are unaffected by a customised section title

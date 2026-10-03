@@ -65,10 +65,7 @@ final class views_test extends \advanced_testcase {
         // Student s2 submits the overdue essay late; it is allocated to the marker.
         $agen->create_submission(['userid' => $this->u['s2']->id, 'cmid' => $this->a['overdue']->cmid,
             'onlinetext' => 'x']);
-        $assign = new \assign(\context_module::instance($this->a['overdue']->cmid), null, null);
-        $flags = $assign->get_user_flags($this->u['s2']->id, true);
-        $flags->allocatedmarker = $this->u['marker']->id;
-        $assign->update_user_flags($flags);
+        $ma->allocate_assign($this->a['overdue']->cmid, $this->u['s2']->id, $this->u['marker']->id);
         // Student s1 submits the upcoming report, unallocated (no allocation on that one).
         $agen->create_submission(['userid' => $this->u['s1']->id, 'cmid' => $this->a['upcoming']->cmid, 'onlinetext' => 'x']);
 

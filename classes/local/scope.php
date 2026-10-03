@@ -74,20 +74,19 @@ class scope {
     /**
      * The views this user can open, in tab order.
      *
-     * The student view is offered to anyone with a student role somewhere, and
-     * to anyone with no staff or convenor role at all (it then says there is nothing to show).
+     * As in rc6: anyone with a staff or convenor role (active enrolment, any course,
+     * any year) gets only the staff views; everyone else gets the student view.
      *
      * @param int $userid
      * @return string[]
      */
     public static function views(int $userid): array {
-        $views = [];
         $staff = (bool)self::courses_with_roles($userid, config::role_ids('staffrole'));
         $convenor = (bool)self::courses_with_roles($userid, config::role_ids('moduleconvenorrole'));
-        $student = (bool)self::courses_with_roles($userid, config::role_ids('studentrole'));
-        if ($student || (!$staff && !$convenor)) {
-            $views[] = self::STUDENT;
+        if (!$staff && !$convenor) {
+            return [self::STUDENT];
         }
+        $views = [];
         if ($staff) {
             $views[] = self::STAFF;
         }

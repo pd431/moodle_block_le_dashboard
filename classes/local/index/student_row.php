@@ -27,6 +27,12 @@ namespace block_my_assessments\local\index;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class student_row {
+    /** An extension was granted. */
+    const MITIGATION_EXTENSION = 'extension';
+
+    /** A self-certified extension was applied. */
+    const MITIGATION_SELFCERT = 'selfcert';
+
     /**
      * Constructor.
      *
@@ -38,6 +44,7 @@ final class student_row {
      * @param int|null $timesubmitted When they submitted.
      * @param int|null $timereleased When the grade is (or will be) visible to the student; null if not released.
      * @param string|null $gradedisplay The grade as the student should see it.
+     * @param string|null $mitigation MITIGATION_EXTENSION or MITIGATION_SELFCERT when one applies.
      */
     public function __construct(
         /** @var int The student. */
@@ -56,6 +63,8 @@ final class student_row {
         public ?int $timereleased = null,
         /** @var string|null Grade as shown to the student. */
         public ?string $gradedisplay = null,
+        /** @var string|null Mitigation that applies, if any. */
+        public ?string $mitigation = null,
     ) {
     }
 }

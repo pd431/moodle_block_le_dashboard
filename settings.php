@@ -89,6 +89,13 @@ if ($ADMIN->fulltree) {
             PARAM_INT
         ));
     }
+    $settings->add(new admin_setting_configtext(
+        'block_my_assessments/briefguidanceurl',
+        new lang_string('briefguidanceurl', 'block_my_assessments'),
+        new lang_string('briefguidanceurl_desc', 'block_my_assessments'),
+        '',
+        PARAM_URL
+    ));
 
     $settings->add(new admin_setting_heading(
         'block_my_assessments/selfcertheading',

@@ -185,11 +185,32 @@ class convenor extends base {
             $row['hasmarkers'] = !empty($row['markers']);
             $row['markersid'] = $row['id'] . '-markers';
             $row['actions'] = [format::view_action($row['url'])];
+            if (empty($cm->hasbrief)) {
+                $row['briefhint'] = $this->brief_hint($row['id']);
+            }
             $sections[$section][] = $row;
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
         $sections[classifier::CONVENOR_PAST] = array_reverse($sections[classifier::CONVENOR_PAST]);
         return $this->sections_context($sections, $oldest, $extra);
+    }
+
+    /**
+     * The hint shown on an assessment with no brief or description.
+     *
+     * @param string $rowid
+     * @return array
+     */
+    protected function brief_hint(string $rowid): array {
+        $url = (string)get_config('block_my_assessments', 'briefguidanceurl');
+        $link = null;
+        if ($url !== '') {
+            $link = get_string('briefhint_link', 'block_my_assessments', \html_writer::link(
+                new \moodle_url($url),
+                get_string('briefhint_guidance', 'block_my_assessments')
+            ));
+        }
+        return ['id' => $rowid . '-brief', 'link' => $link];
     }
 
     /**

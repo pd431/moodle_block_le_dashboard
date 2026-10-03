@@ -62,6 +62,15 @@ class Dashboard {
         root.addEventListener('click', e => this.click(e));
         root.addEventListener('input', e => this.input(e));
         root.addEventListener('change', e => this.change(e));
+        root.addEventListener('focusin', e => this.focusin(e));
+        root.addEventListener('focusout', e => this.focusout(e));
+        root.addEventListener('keydown', e => this.keydown(e));
+        // Like Moodle's help icons: a click anywhere else closes an open tip.
+        document.addEventListener('click', e => {
+            if (!e.target.closest || !e.target.closest('.ma-tip-wrap')) {
+                this.closeTips();
+            }
+        });
         this.apply();
     }
 
@@ -95,7 +104,11 @@ class Dashboard {
             return;
         }
         const action = target.dataset.action;
-        if (action === 'filter-type') {
+        if (action === 'tip') {
+            const open = target.getAttribute('aria-expanded') !== 'true';
+            this.closeTips(target);
+            this.setTip(target, open);
+        } else if (action === 'filter-type') {
             this.type = target.dataset.type;
             setUserPreference('block_my_assessments_type', this.type).catch(Notification.exception);
             this.apply();
@@ -126,6 +139,92 @@ class Dashboard {
             setUserPreference('block_my_assessments_view', target.dataset.view).catch(Notification.exception);
         } else if (action === 'refresh') {
             this.load('block_my_assessments_refresh', this.viewKey, this.yearId());
+        }
+    }
+
+    /**
+     * The tip a trigger controls.
+     *
+     * @param {HTMLElement} trigger
+     * @returns {HTMLElement|null}
+     */
+    tipFor(trigger) {
+        return document.getElementById(trigger.getAttribute('aria-controls'));
+    }
+
+    /**
+     * Opens or closes one tip.
+     *
+     * @param {HTMLElement} trigger
+     * @param {boolean} open
+     */
+    setTip(trigger, open) {
+        const tip = this.tipFor(trigger);
+        if (tip) {
+            tip.hidden = !open;
+            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+    }
+
+    /**
+     * Closes every open tip, except the one a trigger controls.
+     *
+     * @param {HTMLElement|null} except
+     */
+    closeTips(except = null) {
+        this.root.querySelectorAll('[data-action="tip"][aria-expanded="true"]').forEach(trigger => {
+            if (trigger !== except) {
+                this.setTip(trigger, false);
+            }
+        });
+    }
+
+    /**
+     * Keyboard focus on a tip trigger opens its tip (a mouse click is handled by click()).
+     *
+     * @param {FocusEvent} e
+     */
+    focusin(e) {
+        const trigger = e.target.closest('[data-action="tip"]');
+        if (trigger && trigger.matches(':focus-visible') && trigger !== this.escaped) {
+            this.closeTips(trigger);
+            this.setTip(trigger, true);
+        }
+    }
+
+    /**
+     * A tip closes when focus leaves both its trigger and the tip itself.
+     *
+     * @param {FocusEvent} e
+     */
+    focusout(e) {
+        const wrap = e.target.closest('.ma-tip-wrap');
+        if (wrap && !(e.relatedTarget && wrap.contains(e.relatedTarget))) {
+            const trigger = wrap.querySelector('[data-action="tip"]');
+            if (trigger) {
+                this.setTip(trigger, false);
+            }
+        }
+    }
+
+    /**
+     * Escape closes an open tip and returns focus to its trigger.
+     *
+     * @param {KeyboardEvent} e
+     */
+    keydown(e) {
+        if (e.key !== 'Escape') {
+            return;
+        }
+        const wrap = e.target.closest('.ma-tip-wrap');
+        const trigger = wrap ? wrap.querySelector('[data-action="tip"][aria-expanded="true"]') : null;
+        if (trigger) {
+            this.setTip(trigger, false);
+            // Focus goes back to the trigger without reopening the tip.
+            this.escaped = trigger;
+            trigger.focus();
+            this.escaped = null;
+            e.preventDefault();
         }
     }
 

@@ -80,5 +80,21 @@ function xmldb_block_my_assessments_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100200, 'my_assessments');
     }
 
+    if ($oldversion < 2026100300) {
+        // Brief hint (convenors) and mitigation modifier icons (students).
+        $table = new xmldb_table('block_my_assessments_cm');
+        $field = new xmldb_field('hasbrief', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'hasallocation');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table = new xmldb_table('block_my_assessments_stu');
+        $field = new xmldb_field('mitigation', XMLDB_TYPE_CHAR, '10', null, null, null, null, 'individual');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_my_assessments\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026100300, 'my_assessments');
+    }
+
     return true;
 }

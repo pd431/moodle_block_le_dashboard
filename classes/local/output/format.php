@@ -24,6 +24,17 @@ namespace block_my_assessments\local\output;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class format {
+    /** Font Awesome icon per activity type. Add a line here for a new adapter. */
+    const ICONS = [
+        'assign' => 'fa-file-arrow-up',
+        'quiz' => 'fa-clipboard-question',
+        'coursework' => 'fa-file-pen',
+        'peerwork' => 'fa-people-group',
+    ];
+
+    /** Icon for any other activity type. */
+    const ICON_FALLBACK = 'fa-file-lines';
+
     /**
      * A date and time, as rows show it.
      *
@@ -134,6 +145,17 @@ class format {
     }
 
     /**
+     * The activity icon's text: the activity type, then each part as its own sentence.
+     *
+     * @param string $modlabel
+     * @param string[] $parts Sentences, each with its own full stop.
+     * @return string
+     */
+    public static function tip(string $modlabel, array $parts): string {
+        return implode(' ', array_merge([get_string('tipsentence', 'block_my_assessments', $modlabel)], $parts));
+    }
+
+    /**
      * Shared fields of a row, from an index cm record.
      *
      * @param \stdClass $cm Index record (cmid, modname, name, assesstype, courseid, hiddenfromstudents).
@@ -142,7 +164,6 @@ class format {
      * @return array
      */
     public static function row(\stdClass $cm, string $courseshortname, string $view): array {
-        global $OUTPUT;
         $name = format_string($cm->name, true, ['context' => \context_course::instance($cm->courseid)]);
         $modname = get_string('modulename', $cm->modname);
         return [
@@ -153,7 +174,7 @@ class format {
             'course' => format_string($courseshortname),
             'modname' => $cm->modname,
             'modlabel' => $modname,
-            'icon' => $OUTPUT->image_url('monologo', $cm->modname)->out(false),
+            'faicon' => self::ICONS[$cm->modname] ?? self::ICON_FALLBACK,
             'assesstype' => $cm->assesstype,
             'typelabel' => get_string($cm->assesstype, 'block_my_assessments'),
             'typeline' => get_string('rowtype', 'block_my_assessments', [
@@ -161,6 +182,7 @@ class format {
                 'type' => get_string($cm->assesstype, 'block_my_assessments'),
             ]),
             'hidden' => !empty($cm->hiddenfromstudents),
+            'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_my_assessments')] : []),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),
         ];
     }

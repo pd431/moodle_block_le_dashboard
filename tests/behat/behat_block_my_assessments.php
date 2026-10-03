@@ -291,13 +291,18 @@ class behat_block_my_assessments extends behat_base {
         string $opts,
         ?int $due
     ): void {
-        global $CFG;
+        global $CFG, $DB;
         self::require_module($modname);
         $course = self::course($shortname);
         $gen = testing_util::get_data_generator();
         $allocation = str_contains($opts, 'marker allocation');
         $markingdue = preg_match('/marking deadline "([^"]*)"/', $opts, $m) ? self::time($m[1]) : 0;
         $record = ['course' => $course->id, 'name' => $name];
+        if (str_contains($opts, 'no description')) {
+            $record['intro'] = '';
+        } else if (preg_match('/description "([^"]*)"/', $opts, $m)) {
+            $record['intro'] = $m[1];
+        }
         switch ($modname) {
             case 'assign':
                 $record += ['duedate' => (int)$due, 'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1,
@@ -329,6 +334,15 @@ class behat_block_my_assessments extends behat_base {
                 $record += ['duedate' => (int)$due];
         }
         $instance = $gen->create_module($modname, $record);
+        if (isset($record['intro'])) {
+            // Module generators fill in an empty intro, so set it afterwards.
+            $DB->set_field($modname, 'intro', $record['intro'], ['id' => $instance->id]);
+        }
+        if (str_contains($opts, 'brief file')) {
+            get_file_storage()->create_file_from_string(['contextid' => context_module::instance($instance->cmid)->id,
+                'component' => 'mod_' . $modname, 'filearea' => 'intro', 'itemid' => 0, 'filepath' => '/',
+                'filename' => 'brief.pdf'], 'Brief');
+        }
         if ($modname === 'quiz') {
             self::add_essay($instance);
         }
@@ -558,16 +572,30 @@ class behat_block_my_assessments extends behat_base {
     }
 
     /**
-     * Adds a role to the block's student roles.
+     * Adds a role to one of the block's role settings.
      *
-     * @Given /^the My assessments block treats "(?P<name>[^"]*)" as a student role$/
-     * @param string $name
+     * @Given /^the My assessments block treats "(?P<name>[^"]*)" as a (?P<kind>student|staff|module convenor) role$/
+     * @param string $name Role name or shortname
+     * @param string $kind
      */
-    public function treats_as_student_role(string $name): void {
+    public function treats_as_role(string $name, string $kind): void {
         global $DB;
-        $shortname = $DB->get_field('role', 'shortname', ['name' => $name], MUST_EXIST);
-        $current = array_filter(explode(',', (string)get_config('block_my_assessments', 'studentrole')));
-        set_config('studentrole', implode(',', array_unique(array_merge($current, [$shortname]))), 'block_my_assessments');
+        $shortname = $DB->get_field('role', 'shortname', ['shortname' => $name])
+            ?: $DB->get_field('role', 'shortname', ['name' => $name], MUST_EXIST);
+        $setting = ['student' => 'studentrole', 'staff' => 'staffrole', 'module convenor' => 'moduleconvenorrole'][$kind];
+        $current = array_filter(explode(',', (string)get_config('block_my_assessments', $setting)));
+        set_config($setting, implode(',', array_unique(array_merge($current, [$shortname]))), 'block_my_assessments');
+    }
+
+    /**
+     * Saves the view a user last opened.
+     *
+     * @Given /^"(?P<user>[^"]*)" last opened the "(?P<view>[^"]*)"$/
+     * @param string $username
+     * @param string $view
+     */
+    public function last_opened(string $username, string $view): void {
+        set_user_preference('block_my_assessments_view', self::view_key($view), self::userid($username));
     }
 
     /**
@@ -638,6 +666,84 @@ class behat_block_my_assessments extends behat_base {
         foreach (array_filter([$u1, $u2]) as $username) {
             $this->submit($this->cm($name), self::userid($username));
         }
+    }
+
+    /**
+     * Submits an assessment at a given time.
+     *
+     * @Given /^"(?P<user>[^"]*)" submitted "(?P<name>[^"]*)" "(?P<when>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function submitted_at(string $username, string $name, string $when): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $userid = self::userid($username);
+        $this->submit($cm, $userid);
+        $time = self::time($when);
+        if ($cm->modname === 'assign') {
+            $DB->set_field('assign_submission', 'timemodified', $time, ['assignment' => $cm->instance, 'userid' => $userid]);
+        } else if ($cm->modname === 'coursework') {
+            $DB->set_field(
+                'coursework_submissions',
+                'timesubmitted',
+                $time,
+                ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user']
+            );
+        } else {
+            throw new coding_exception("Setting the submission time of {$cm->modname} is not supported");
+        }
+        self::queue($cm);
+    }
+
+    /**
+     * Grants an extension.
+     *
+     * @Given /^"(?P<user>[^"]*)" has an extension on "(?P<name>[^"]*)" to "(?P<when>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function has_an_extension(string $username, string $name, string $when): void {
+        global $CFG;
+        $cm = $this->cm($name);
+        if ($cm->modname !== 'assign') {
+            throw new coding_exception("Extensions on {$cm->modname} are not supported");
+        }
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $assign = new assign($cm->context, $cm, null);
+        $flags = $assign->get_user_flags(self::userid($username), true);
+        $flags->extensionduedate = self::time($when);
+        $assign->update_user_flags($flags);
+        self::queue($cm);
+    }
+
+    /**
+     * A self-certified extension on a coursework.
+     *
+     * @Given /^"(?P<user>[^"]*)" self-certified "(?P<name>[^"]*)" to "(?P<when>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function self_certified(string $username, string $name, string $when): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $record = ['courseworkid' => $cm->instance, 'allocatableid' => self::userid($username), 'allocatabletype' => 'user',
+            'extended_deadline' => self::time($when), 'type' => 'extension', 'selfcert' => 1,
+            'timecreated' => time(), 'timemodified' => time()];
+        $columns = $DB->get_columns('coursework_mitigations');
+        $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
+        self::queue($cm);
+    }
+
+    /**
+     * Does nothing, for scenario outlines where one example needs no event.
+     *
+     * @Given /^nothing happens$/
+     */
+    public function nothing_happens(): void {
     }
 
     /**
@@ -824,11 +930,8 @@ class behat_block_my_assessments extends behat_base {
     protected function allocate(cm_info $cm, int $userid, int $markerid): void {
         global $CFG;
         if ($cm->modname === 'assign') {
-            require_once($CFG->dirroot . '/mod/assign/locallib.php');
-            $assign = new assign($cm->context, $cm, null);
-            $flags = $assign->get_user_flags($userid, true);
-            $flags->allocatedmarker = $markerid;
-            $assign->update_user_flags($flags);
+            testing_util::get_data_generator()->get_plugin_generator('block_my_assessments')
+                ->allocate_assign($cm->id, $userid, $markerid);
         } else if ($cm->modname === 'coursework') {
             if ($markerid) {
                 testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_allocation([
@@ -1068,19 +1171,198 @@ class behat_block_my_assessments extends behat_base {
     }
 
     /**
-     * Whether a view can be opened.
+     * The key of a view from its tab label.
+     *
+     * @param string $label
+     * @return string
+     */
+    protected static function view_key(string $label): string {
+        foreach (['student', 'staff', 'convenor'] as $key) {
+            if (get_string('view_' . $key, 'block_my_assessments') === $label) {
+                return $key;
+            }
+        }
+        throw new coding_exception("Unknown view '$label'");
+    }
+
+    /**
+     * The key of the view on screen.
+     *
+     * @return string|null
+     */
+    protected function view_on_screen(): ?string {
+        $root = $this->getSession()->getPage()->find('css', self::BLOCK . ' [data-region="ma-view-root"]');
+        return $root ? $root->getAttribute('data-view') : null;
+    }
+
+    /**
+     * Whether a view can be opened: it has a tab, or it is the only view and is on screen.
      *
      * @Then /^I should (?P<not>not )?be able to open the "(?P<view>[^"]*)"$/
      * @param string $not
      * @param string $view
      */
     public function i_should_be_able_to_open(string $not, string $view): void {
-        $tab = $this->view_tab($view);
-        if ($not && $tab) {
+        $can = $this->view_tab($view) || $this->view_on_screen() === self::view_key($view);
+        if ($not && $can) {
             throw new ExpectationException("The '$view' can be opened", $this->getSession());
         }
-        if (!$not && !$tab) {
-            throw new ExpectationException("No '$view' tab", $this->getSession());
+        if (!$not && !$can) {
+            throw new ExpectationException("The '$view' can't be opened", $this->getSession());
+        }
+    }
+
+    /**
+     * Which view is on screen.
+     *
+     * @Then /^the "(?P<view>[^"]*)" should be open$/
+     * @param string $view
+     */
+    public function the_view_should_be_open(string $view): void {
+        $open = $this->view_on_screen();
+        if ($open !== self::view_key($view)) {
+            throw new ExpectationException("The '$view' is not open (open: '$open')", $this->getSession());
+        }
+    }
+
+    // Activity icons and tips.
+
+    /**
+     * A row's activity icon button.
+     *
+     * @param string $name
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function activity_icon(string $name): \Behat\Mink\Element\NodeElement {
+        return $this->row($name)->find('css', '.ma-row-iconbtn')
+            ?? throw new ExpectationException("'$name' has no activity icon", $this->getSession());
+    }
+
+    /**
+     * Clicks a row's activity icon.
+     *
+     * @When /^I click on the activity icon of "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_click_on_the_activity_icon(string $name): void {
+        $this->activity_icon($name)->click();
+    }
+
+    /**
+     * Hovers over a row's activity icon.
+     *
+     * @When /^I hover over the activity icon of "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_hover_over_the_activity_icon(string $name): void {
+        $this->activity_icon($name)->mouseOver();
+    }
+
+    /**
+     * Presses Tab until a row's activity icon has focus.
+     *
+     * @When /^I press the tab key until the activity icon of "(?P<name>[^"]*)" is focused$/
+     * @param string $name
+     */
+    public function i_tab_to_the_activity_icon(string $name): void {
+        $id = $this->activity_icon($name)->getAttribute('aria-controls');
+        $js = 'return document.activeElement && document.activeElement.getAttribute("aria-controls") === ' . json_encode($id);
+        for ($i = 0; $i < 100; $i++) {
+            if ($this->evaluate_script($js)) {
+                return;
+            }
+            $this->execute('behat_general::i_press_named_key', ['', 'tab']);
+        }
+        throw new ExpectationException("Tab never reached the activity icon of '$name'", $this->getSession());
+    }
+
+    /**
+     * A tip's text, or null when it is not shown.
+     *
+     * @param \Behat\Mink\Element\NodeElement $trigger
+     * @return string|null
+     */
+    protected function tip_text(\Behat\Mink\Element\NodeElement $trigger): ?string {
+        $tip = $this->getSession()->getPage()->find('css', '#' . $trigger->getAttribute('aria-controls'));
+        return $tip && $tip->isVisible() ? trim(preg_replace('/\s+/', ' ', $tip->getText())) : null;
+    }
+
+    /**
+     * What a row's activity icon tip says.
+     *
+     * @Then /^the activity icon tooltip of "(?P<name>[^"]*)" should say "(?P<text>[^"]*)"$/
+     * @param string $name
+     * @param string $text
+     */
+    public function the_activity_icon_tooltip_should_say(string $name, string $text): void {
+        $icon = $this->activity_icon($name);
+        $shown = $this->tip_text($icon);
+        if ($shown !== $text) {
+            throw new ExpectationException("The tip of '$name' says '" . ($shown ?? '(not shown)') . "'", $this->getSession());
+        }
+        if ($icon->getAttribute('aria-label') !== $text) {
+            throw new ExpectationException("The icon of '$name' is not named '$text'", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's activity icon tip is closed.
+     *
+     * @Then /^the activity icon tooltip of "(?P<name>[^"]*)" should not be visible$/
+     * @param string $name
+     */
+    public function the_activity_icon_tooltip_should_not_be_visible(string $name): void {
+        if ($this->tip_text($this->activity_icon($name)) !== null) {
+            throw new ExpectationException("The tip of '$name' is open", $this->getSession());
+        }
+    }
+
+    /**
+     * Which Font Awesome icon a row's activity icon is.
+     *
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should be the "(?P<icon>[^"]*)" icon$/
+     * @param string $name
+     * @param string $icon
+     */
+    public function the_activity_icon_should_be(string $name, string $icon): void {
+        if (!$this->activity_icon($name)->find('css', '.ma-row-faicon.' . $icon)) {
+            throw new ExpectationException("The icon of '$name' is not '$icon'", $this->getSession());
+        }
+    }
+
+    /**
+     * Sets the brief guidance link.
+     *
+     * @Given /^the My assessments block guidance link is "(?P<url>[^"]*)"$/
+     * @param string $url
+     */
+    public function the_guidance_link_is(string $url): void {
+        set_config('briefguidanceurl', $url, 'block_my_assessments');
+    }
+
+    /**
+     * Clicks a row's brief hint.
+     *
+     * @When /^I click on the brief hint of "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_click_on_the_brief_hint(string $name): void {
+        $hint = $this->row($name)->find('css', '.ma-btn--hint')
+            ?? throw new ExpectationException("'$name' has no brief hint", $this->getSession());
+        $hint->click();
+    }
+
+    /**
+     * Whether a row has the brief hint.
+     *
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have a brief hint$/
+     * @param string $name
+     * @param string $not
+     */
+    public function should_have_a_brief_hint(string $name, string $not): void {
+        $has = (bool)$this->row($name)->find('css', '.ma-btn--hint');
+        if ($has === (bool)$not) {
+            throw new ExpectationException("'$name' " . ($has ? 'has' : 'has no') . ' brief hint', $this->getSession());
         }
     }
 
