@@ -96,8 +96,8 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And the submission of "student1" for "A1" is allocated to "marker1"
     And "student1" has finished "Q1"
     When I log in as "marker1" and view my dashboard
-    Then "A1" should show "Marking due" with the date "in 10 days"
-    And "Q1" should not show "Marking due"
+    Then "A1" should show "Marking deadline" with the date "in 10 days"
+    And "Q1" should not show "Marking deadline"
 
   Scenario: A marker in a hidden course still sees their marking
     Given the course "M1" is hidden from students
@@ -142,3 +142,79 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And "student1" has submitted "A1"
     When I log in as "marker1" and view my dashboard
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
+
+  # ---------- Workflow gaps, beta7 (coordinator-approved scope, 2026-10-03) ----------
+
+  # G3: unallocated work falls to the module convenor's own marking; D6 still holds for other markers.
+  Scenario: Unallocated submissions count in the convenor's own marking, with a hint
+    Given the following "users" exist:
+      | username | firstname | lastname |
+      | convenor | Cara      | Convenor |
+    And the following "course enrolments" exist:
+      | user     | course | role           |
+      | convenor | M1     | editingteacher |
+      | convenor | M1     | moduleconvenor |
+    And a summative "assign" "A1" in "M1" with marker allocation was due "3 days ago"
+    And "student1" and "student2" have submitted "A1"
+    And the submission of "student1" for "A1" is allocated to "convenor"
+    And the submission of "student2" for "A1" is not allocated
+    When I log in as "convenor" and view the "My marking"
+    Then "A1" should appear in the "Marking in progress" section with "2" to mark
+    And "A1" should have an unallocated hint
+    When I click on the unallocated hint of "A1"
+    Then I should see "not yet allocated to a marker" in the "My assessments" block
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should not appear in the "Marking in progress" section
+
+  Scenario: A convenor whose marking is all allocated sees no unallocated hint
+    Given the following "users" exist:
+      | username | firstname | lastname |
+      | convenor | Cara      | Convenor |
+    And the following "course enrolments" exist:
+      | user     | course | role           |
+      | convenor | M1     | editingteacher |
+      | convenor | M1     | moduleconvenor |
+    And a summative "assign" "A1" in "M1" with marker allocation was due "3 days ago"
+    And "student1" has submitted "A1"
+    And the submission of "student1" for "A1" is allocated to "convenor"
+    When I log in as "convenor" and view the "My marking"
+    Then "A1" should not have an unallocated hint
+
+  # G6: work that arrives after I finished marking comes back, and says why.
+  Scenario: Work that arrives after I finished marking comes back with a hint
+    Given a summative "assign" "A1" in "M1" was due "5 days ago"
+    And "student2" has an extension on "A1" to "in 3 days"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And "student2" has submitted "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Marking in progress" section with "1" to mark
+    And "A1" should have a returned work hint
+
+  Scenario: Marking that has simply not started has no returned work hint
+    Given a summative "assign" "A1" in "M1" was due "5 days ago"
+    And "student1" has submitted "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Marking in progress" section with "1" to mark
+    And "A1" should not have a returned work hint
+
+  # G7, G8: Moodle 5.0+ only (the "2 markers" option skips the scenario on 4.5).
+  Scenario: Without allocation, a marker who has given their mark is done with that submission
+    Given a summative "assign" "A1" in "M1" with 2 markers was due "3 days ago"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Completed marking" section
+    When I log in as "marker2" and view my dashboard
+    Then "A1" should appear in the "Marking in progress" section with "1" to mark
+
+  Scenario: With allocation, agreement belongs to the first allocated marker
+    Given a summative "assign" "A1" in "M1" with 2 markers, manual agreement and marker allocation was due "3 days ago"
+    And "student1" has submitted "A1"
+    And the submission of "student1" for "A1" is allocated to "marker1" and "marker2"
+    And both markers have given feedback on the submission of "student1" for "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Marking in progress" section with "1" to mark
+    And "A1" should show an "Agreed" progress bar with "0" of "1"
+    When I log in as "marker2" and view my dashboard
+    Then "A1" should appear in the "Completed marking" section

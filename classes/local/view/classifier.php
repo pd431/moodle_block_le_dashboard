@@ -46,6 +46,8 @@ class classifier {
     const STATUS_DUE = 'due';
     /** Status: generic type past its deadline. */
     const STATUS_CLOSED = 'closed';
+    /** Status: a new attempt is open (assign "Allow another attempt"), whatever the deadline. */
+    const STATUS_REOPENED = 'reopened';
 
     /**
      * Where a student's assessment goes, and its status.
@@ -54,8 +56,9 @@ class classifier {
      * - Unsubmitted after the cut-off: Past, "Not submitted" (R2).
      * - Unsubmitted after the deadline: Overdue for the threshold, then Past.
      * - Submitted: Upcoming until the deadline, then Past (in marking, or released).
+     * - A reopened attempt not yet resubmitted: Upcoming, "Resubmission open" (G13).
      *
-     * @param \stdClass $row due, cutoff, submitted, timereleased
+     * @param \stdClass $row due, cutoff, submitted, timereleased, reopened
      * @param int $now
      * @param int $thresholddays
      * @return array [section, status]
@@ -77,6 +80,9 @@ class classifier {
                 return [self::UPCOMING, self::STATUS_SUBMITTED];
             }
             return [self::PAST, self::STATUS_INMARKING];
+        }
+        if (!empty($row->reopened)) {
+            return [self::UPCOMING, self::STATUS_REOPENED];
         }
         if ($due === null || $due >= $now) {
             return [self::UPCOMING, self::STATUS_PENDING];

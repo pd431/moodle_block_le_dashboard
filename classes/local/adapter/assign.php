@@ -238,6 +238,8 @@ class assign extends base {
         foreach ($this->submissions($cm, $a, array_keys($rows)) as $userid => $submission) {
             $rows[$userid]->submitted = $submission->status === 'submitted';
             $rows[$userid]->timesubmitted = $rows[$userid]->submitted ? (int)$submission->timemodified : null;
+            // A new, empty attempt ("Allow another attempt") the student can still submit (G13).
+            $rows[$userid]->reopened = $submission->status === 'reopened';
         }
         self::apply_gradebook_release($cm, $rows);
         // A resubmission after release is in marking again, whatever the gradebook still holds.
@@ -280,10 +282,11 @@ class assign extends base {
             }
             $allocated = $allocations[$userid] ?? [];
             $stages = [];
+            $submitted = (int)$s->timemodified ?: null;
             if ($markers === 1) {
                 $stages['marked'] = [$allocated[0] ?? null, true, $final,
                     $final && $grade ? ((int)$grade->grader ?: null) : null,
-                    $final && $grade ? (int)$grade->timemodified : null];
+                    $final && $grade ? (int)$grade->timemodified : null, $submitted];
             } else {
                 // Each marker's own mark; unallocated stages take marks in the order given.
                 $mine = array_filter($marks[$userid] ?? [], fn($m) => (int)$m->attemptnumber === (int)$s->attemptnumber);
@@ -292,15 +295,18 @@ class assign extends base {
                     $marker = $allocated[$i - 1] ?? null;
                     $mark = $marker !== null ? ($mine[$marker] ?? null) : array_shift($loose);
                     $stages['marker' . $i] = [$marker, true, $mark !== null,
-                        $mark ? (int)$mark->marker : null, $mark ? (int)$mark->timemodified : null];
+                        $mark ? (int)$mark->marker : null, $mark ? (int)$mark->timemodified : null, $submitted];
                 }
                 if (in_array('agreed', $cmrow->stages)) {
-                    $stages['agreed'] = [null, count($mine) >= $markers, $final,
+                    // Agreement goes to the first allocated marker, as coursework does (G8).
+                    $agreeable = count($mine) >= $markers;
+                    $stages['agreed'] = [$allocated[0] ?? null, $agreeable, $final,
                         $final && $grade ? ((int)$grade->grader ?: null) : null,
-                        $final && $grade ? (int)$grade->timemodified : null];
+                        $final && $grade ? (int)$grade->timemodified : null,
+                        $agreeable ? max(array_map(fn($m) => (int)$m->timemodified, $mine)) : null];
                 }
             }
-            foreach ($stages as $stage => [$allocatedto, $ready, $marked, $markedby, $timemarked]) {
+            foreach ($stages as $stage => [$allocatedto, $ready, $marked, $markedby, $timemarked, $timeready]) {
                 $key = ($isgroup ? 'g' . $s->groupid : 'u' . $userid) . '-' . $stage;
                 if (!isset($units[$key])) {
                     $units[$key] = new marking_row(
@@ -313,6 +319,7 @@ class assign extends base {
                         markedby: $markedby,
                         timemarked: $timemarked,
                         released: isset($released[$userid]),
+                        timeready: $timeready,
                     );
                     continue;
                 }
@@ -322,6 +329,7 @@ class assign extends base {
                 $unit->marked = $unit->marked || $marked;
                 $unit->released = $unit->released || isset($released[$userid]);
                 $unit->allocatedto = $unit->allocatedto ?? $allocatedto;
+                $unit->timeready = max((int)$unit->timeready, (int)$timeready) ?: null;
                 if ($marked && $timemarked > (int)$unit->timemarked) {
                     $unit->markedby = $markedby;
                     $unit->timemarked = $timemarked;

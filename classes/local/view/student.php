@@ -82,7 +82,7 @@ class student extends base {
         $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue,
                                                 c.hiddenfromstudents, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
-                                                s.timereleased, s.gradedisplay, s.mitigation
+                                                s.timereleased, s.gradedisplay, s.mitigation, s.reopened
                                            FROM {block_my_assessments_stu} s
                                            JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0
@@ -192,7 +192,10 @@ class student extends base {
             $parts[] = get_string('tip_' . $r->mitigation, 'block_my_assessments');
         }
         $state = null;
-        if ($section === classifier::OVERDUE) {
+        if ($status === classifier::STATUS_REOPENED) {
+            // Nothing was missed: no overdue or due-soon icon on a new attempt.
+            $state = null;
+        } else if ($section === classifier::OVERDUE) {
             // The red overlay is rc6's and only appears in the actionable Overdue section.
             $state = 'overdue';
         } else if (in_array($status, [classifier::STATUS_SUBMITTED, classifier::STATUS_INMARKING, classifier::STATUS_RELEASED])) {
@@ -207,6 +210,40 @@ class student extends base {
             $parts[] = get_string('tip_' . $state, 'block_my_assessments');
         }
         return [$state ? ['state' => $state, 'icon' => self::OVERLAY_ICONS[$state]] : null, $mitigation, $parts];
+    }
+
+    /**
+     * Plain lines under the dates (G5), each at the precision its size needs: how late
+     * the work was, the late note, time left to submit, and how soon it is due. Neutral
+     * text: lateness is information, never a warning colour.
+     *
+     * @param \stdClass $r
+     * @param string $section
+     * @param string $status
+     * @return string[]
+     */
+    protected function notes(\stdClass $r, string $section, string $status): array {
+        $notes = [];
+        $due = $r->due ? (int)$r->due : null;
+        $submitted = (int)$r->submitted === 1 && $r->timesubmitted ? (int)$r->timesubmitted : null;
+        if ($submitted && $due && $submitted > $due) {
+            // Against the effective deadline (D2), so extensions never read as late.
+            $notes[] = get_string('submittedlate', 'block_my_assessments', format::duration($submitted - $due));
+            $latenote = get_config('block_my_assessments', 'latenote');
+            // Unset until an admin saves the new setting: use its default.
+            $latenote = trim($latenote === false ? get_string('latenote_default', 'block_my_assessments') : $latenote);
+            if ($r->assesstype === 'summative' && $latenote !== '') {
+                $notes[] = format_string($latenote);
+            }
+        }
+        if ($section === classifier::OVERDUE && $r->cutoff && (int)$r->cutoff > $this->now) {
+            $notes[] = get_string('stillsubmit', 'block_my_assessments', format::duration((int)$r->cutoff - $this->now));
+        }
+        $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]);
+        if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
+            $notes[] = get_string('duein', 'block_my_assessments', format::duration($due - $this->now));
+        }
+        return $notes;
     }
 
     /**
@@ -236,9 +273,6 @@ class student extends base {
             $note = $r->individual ? get_string('individualdeadline', 'block_my_assessments') : null;
             $dates[] = format::date('due', (int)$r->due, $note);
         }
-        if ((int)$r->submitted === 1 && $r->timesubmitted) {
-            $dates[] = format::date('submitted', (int)$r->timesubmitted);
-        }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
             $dates[] = format::date('released', (int)$r->timereleased);
@@ -250,10 +284,11 @@ class student extends base {
             $dates[] = format::date('feedbackexpected', (int)$r->markingdue);
         }
         $row['dates'] = $dates;
+        $row['notes'] = $this->notes($r, $section, $status);
 
         $actions = [];
         if (
-            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_NOTSUBMITTED])
+            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_NOTSUBMITTED, classifier::STATUS_REOPENED])
                 && $section !== classifier::PAST
         ) {
             $actions[] = format::action('submit', $row['url']);

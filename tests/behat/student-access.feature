@@ -175,3 +175,97 @@ Feature: Students see only assessments they can actually access
     When I log in as "student1" and view my dashboard
     Then "A1" should show "In marking"
     And "A1" should not show "Feedback released"
+
+  # ---------- Workflow gaps, beta7 (coordinator-approved scope, 2026-10-03) ----------
+
+  # G13: a reopened attempt is open again, whatever the deadline, and nothing was missed.
+  Scenario: A reopened attempt can be resubmitted even after the overdue threshold
+    Given the following "users" exist:
+      | username | firstname | lastname |
+      | marker1  | Mo        | Marker   |
+    And the following "course enrolments" exist:
+      | user    | course | role           |
+      | marker1 | M1     | editingteacher |
+    And a summative "assign" "A1" in "M1" with reopened attempts was due "30 days ago"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And the submission of "student1" for "A1" is reopened
+    When I log in as "student1" and view my dashboard
+    Then "A1" should appear in the "Upcoming" section
+    And "A1" should show "Resubmission open"
+    And "A1" should show "Submit"
+    And I click on the activity icon of "A1"
+    And the activity icon tooltip of "A1" should say "Assignment."
+
+  # G5: lateness to the precision its size needs, rounded down, against the effective deadline.
+  Scenario Outline: Lateness is shown to the precision its size needs
+    Given a summative "assign" "A1" in "M1" was due "<due>"
+    And "student1" submitted "A1" "<submitted>"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "<text>"
+
+    Examples:
+      | due            | submitted      | text                              |
+      | 2 minutes ago  | 90 seconds ago | Submitted less than a minute late |
+      | 1 hour ago     | 48 minutes ago | Submitted 12 min late             |
+      | 8 hours ago    | 2 hours ago    | Submitted 6 h late                |
+      | 3 days ago     | 20 hours ago   | Submitted 2 days late             |
+
+  Scenario: On-time work says nothing about earliness or the time it was submitted
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
+    And "student1" submitted "A1" "3 days ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "In marking"
+    And "A1" should not show "Submitted"
+    And "A1" should not show "early"
+    And "A1" should not show "late"
+
+  Scenario: Late summative work carries the late note, late formative work does not
+    Given a summative "assign" "A1" in "M1" was due "2 days ago"
+    And a formative "assign" "F1" in "M1" was due "2 days ago"
+    And "student1" submitted "A1" "1 day ago"
+    And "student1" submitted "F1" "1 day ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Late submissions may have their mark capped."
+    And "F1" should not show "capped"
+
+  Scenario: Work submitted before an extended deadline is not late
+    Given a summative "assign" "A1" in "M1" was due "3 days ago"
+    And "student1" has an extension on "A1" to "tomorrow"
+    And "student1" submitted "A1" "1 day ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should not show "late"
+    And "A1" should not show "capped"
+
+  Scenario: An overdue assessment with a cut-off says how long is left to submit
+    Given a summative "assign" "A1" in "M1" with a cut-off "in 21 hours" was due "3 hours ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should appear in the "Overdue" section
+    And "A1" should show "You can still submit for 20 h"
+
+  Scenario Outline: Upcoming deadlines within a week show how soon
+    Given a summative "assign" "A1" in "M1" is due "<due>"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "<text>"
+
+    Examples:
+      | due           | text          |
+      | in 40 minutes | Due in 39 min |
+      | in 5 hours    | Due in 4 h    |
+      | in 3 days     | Due in 2 days |
+
+  # G14: the pill already says "Feedback released".
+  Scenario: A released row doesn't repeat "released"
+    Given the following "users" exist:
+      | username | firstname | lastname |
+      | marker1  | Mo        | Marker   |
+    And the following "course enrolments" exist:
+      | user    | course | role           |
+      | marker1 | M1     | editingteacher |
+    And a summative "assign" "A1" in "M1" was due "5 days ago"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And the grade of "student1" for "A1" is released
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Feedback released"
+    And "A1" should not show "Released"

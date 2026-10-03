@@ -140,6 +140,7 @@ class peerwork extends base {
                 markedby: $marked ? ((int)$s->gradedby ?: null) : null,
                 timemarked: $marked ? (int)$s->timegraded : null,
                 released: !empty($s->released),
+                timeready: (int)($s->timemodified ?: $s->timecreated) ?: null,
             );
         }
         return $rows;

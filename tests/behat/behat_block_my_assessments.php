@@ -240,7 +240,7 @@ class behat_block_my_assessments extends behat_base {
      *
      * Options after "with": marker allocation, a marking deadline "...", an essay question,
      * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation,
-     * marking workflow, reopened attempts.
+     * marking workflow, reopened attempts, a cut-off "...", manual agreement.
      *
      * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag
@@ -312,6 +312,16 @@ class behat_block_my_assessments extends behat_base {
                     'markingallocation' => $allocation ? 1 : 0];
                 if (str_contains($opts, 'reopened attempts')) {
                     $record += ['attemptreopenmethod' => 'manual', 'maxattempts' => -1];
+                }
+                if (preg_match('/cut-off "([^"]*)"/', $opts, $m)) {
+                    $record['cutoffdate'] = self::time($m[1]);
+                }
+                if (preg_match('/(\d+) markers/', $opts, $m)) {
+                    if (!$DB->get_manager()->field_exists('assign', 'markercount')) {
+                        throw new \Moodle\BehatExtension\Exception\SkippedException('Several assign markers need Moodle 5.0');
+                    }
+                    $record += ['markercount' => (int)$m[1],
+                        'multimarkmethod' => str_contains($opts, 'manual agreement') ? 'manual' : 'average'];
                 }
                 break;
             case 'quiz':
@@ -886,13 +896,21 @@ class behat_block_my_assessments extends behat_base {
     /**
      * Allocates a submission's marking.
      *
-     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is (?:allocated to "(?P<marker>[^"]*)"|not allocated)$/
+     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is (?:allocated to "(?P<marker>[^"]*)"(?: and "(?P<marker2>[^"]*)")?|not allocated)$/
      * @param string $student
      * @param string $name
      * @param string $marker
+     * @param string $marker2 A second marker (Moodle 5.0+ assign with several markers).
      */
-    public function the_submission_is_allocated(string $student, string $name, string $marker = ''): void {
-        $this->allocate($this->cm($name), self::userid($student), $marker ? self::userid($marker) : 0);
+    public function the_submission_is_allocated(string $student, string $name, string $marker = '', string $marker2 = ''): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $this->allocate($cm, self::userid($student), $marker ? self::userid($marker) : 0);
+        if ($marker2) {
+            $DB->insert_record('assign_allocated_marker', ['assignment' => $cm->instance, 'student' => self::userid($student),
+                'marker' => self::userid($marker2)]);
+            self::queue($cm);
+        }
     }
 
     /**
@@ -1047,8 +1065,22 @@ class behat_block_my_assessments extends behat_base {
      * @param string $name
      */
     public function both_markers_have_given_feedback(string $student, string $name): void {
+        global $DB;
         $cm = $this->cm($name);
         $userid = self::userid($student);
+        if ($cm->modname === 'assign') {
+            // Moodle 5.0+: each allocated marker gives their own mark.
+            $markers = $DB->get_fieldset_select(
+                'assign_allocated_marker',
+                'marker',
+                'assignment = :a AND student = :s',
+                ['a' => $cm->instance, 's' => $userid]
+            );
+            foreach ($markers as $markerid) {
+                $this->feedback($cm, $userid, (int)$markerid, 'assessor_1', false);
+            }
+            return;
+        }
         $this->feedback($cm, $userid, get_admin()->id, 'assessor_1', false);
         $this->feedback($cm, $userid, get_admin()->id, 'assessor_2', false);
     }
@@ -1083,6 +1115,13 @@ class behat_block_my_assessments extends behat_base {
             require_once($CFG->dirroot . '/mod/assign/locallib.php');
             $assign = new assign($cm->context, $cm, null);
             $grade = $assign->get_user_grade($userid, true);
+            if ((int)($assign->get_instance()->markercount ?? 1) > 1) {
+                // Moodle 5.0+ with several markers: a marker's own mark, not the final grade.
+                $grade->grader = $markerid;
+                $assign->update_mark($grade, 60);
+                self::queue($cm);
+                return;
+            }
             $grade->grade = 60;
             $grade->grader = $markerid;
             $assign->update_grade($grade);
@@ -1423,29 +1462,34 @@ class behat_block_my_assessments extends behat_base {
         set_config('briefguidanceurl', $url, 'block_my_assessments');
     }
 
+    /** Hint names in steps, to the hint keys rows carry. */
+    const HINTS = ['brief' => 'brief', 'unallocated' => 'unallocated', 'returned work' => 'returned'];
+
     /**
-     * Clicks a row's brief hint.
+     * Clicks a row's hint.
      *
-     * @When /^I click on the brief hint of "(?P<name>[^"]*)"$/
+     * @When /^I click on the (?P<hint>brief|unallocated|returned work) hint of "(?P<name>[^"]*)"$/
+     * @param string $hint
      * @param string $name
      */
-    public function i_click_on_the_brief_hint(string $name): void {
-        $hint = $this->row($name)->find('css', '.ma-btn--hint')
-            ?? throw new ExpectationException("'$name' has no brief hint", $this->getSession());
-        $hint->click();
+    public function i_click_on_the_hint(string $hint, string $name): void {
+        $button = $this->row($name)->find('css', '[data-hint="' . self::HINTS[$hint] . '"]')
+            ?? throw new ExpectationException("'$name' has no $hint hint", $this->getSession());
+        $button->click();
     }
 
     /**
-     * Whether a row has the brief hint.
+     * Whether a row has a hint.
      *
-     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have a brief hint$/
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>brief|unallocated|returned work) hint$/
      * @param string $name
      * @param string $not
+     * @param string $hint
      */
-    public function should_have_a_brief_hint(string $name, string $not): void {
-        $has = (bool)$this->row($name)->find('css', '.ma-btn--hint');
+    public function should_have_a_hint(string $name, string $not, string $hint): void {
+        $has = (bool)$this->row($name)->find('css', '[data-hint="' . self::HINTS[$hint] . '"]');
         if ($has === (bool)$not) {
-            throw new ExpectationException("'$name' " . ($has ? 'has' : 'has no') . ' brief hint', $this->getSession());
+            throw new ExpectationException("'$name' " . ($has ? 'has' : 'has no') . " $hint hint", $this->getSession());
         }
     }
 

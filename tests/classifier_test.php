@@ -52,6 +52,9 @@ final class classifier_test extends \basic_testcase {
             'generic, due ahead (R5)' => [[$now + $day, null, null, null], c::UPCOMING, c::STATUS_DUE],
             'generic, due passed is never overdue (R5)' => [[$now - $day, null, null, null], c::PAST, c::STATUS_CLOSED],
             'generic, graded' => [[$now - $day, null, null, $now - 60], c::PAST, c::STATUS_RELEASED],
+            'reopened long after the deadline (G13)' => [[$now - 30 * $day, null, 0, $now - 60, true], c::UPCOMING,
+                c::STATUS_REOPENED],
+            'reopened past the cut-off (G13)' => [[$now - 2 * $day, $now - $day, 0, null, true], c::UPCOMING, c::STATUS_REOPENED],
         ];
     }
 
@@ -59,13 +62,14 @@ final class classifier_test extends \basic_testcase {
      * Student sections and statuses.
      *
      * @dataProvider student_provider
-     * @param array $row due, cutoff, submitted, timereleased
+     * @param array $row due, cutoff, submitted, timereleased, reopened
      * @param string $section
      * @param string $status
      */
     public function test_student(array $row, string $section, string $status): void {
         [$due, $cutoff, $submitted, $released] = $row;
-        $record = (object)['due' => $due, 'cutoff' => $cutoff, 'submitted' => $submitted, 'timereleased' => $released];
+        $record = (object)['due' => $due, 'cutoff' => $cutoff, 'submitted' => $submitted, 'timereleased' => $released,
+            'reopened' => $row[4] ?? false];
         $this->assertSame([$section, $status], c::student($record, self::NOW, 90));
     }
 
@@ -99,5 +103,20 @@ final class classifier_test extends \basic_testcase {
         // Nothing submitted yet: still in progress for the threshold, then past.
         $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90));
         $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - 91 * DAYSECS, self::NOW, 0, 0, 90));
+    }
+
+    /**
+     * One unit, rounded down, switching before it would reach 0 (G5).
+     */
+    public function test_duration(): void {
+        $f = fn($s) => \block_my_assessments\local\output\format::duration($s);
+        $this->assertSame('less than a minute', $f(59));
+        $this->assertSame('1 min', $f(60));
+        $this->assertSame('59 min', $f(HOURSECS - 1));
+        $this->assertSame('1 h', $f(HOURSECS));
+        $this->assertSame('23 h', $f(DAYSECS - 1));
+        $this->assertSame('1 day', $f(DAYSECS));
+        $this->assertSame('2 days', $f(2 * DAYSECS + HOURSECS));
+        $this->assertSame('less than a minute', $f(-5));
     }
 }

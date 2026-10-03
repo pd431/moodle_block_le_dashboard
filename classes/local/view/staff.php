@@ -50,7 +50,8 @@ class staff extends base {
     }
 
     /**
-     * Courses in scope: [staff role courses, courses where I may have allocated work].
+     * Courses in scope: [staff role courses, courses where I may have allocated work,
+     * convenor role courses].
      *
      * @return array
      */
@@ -59,38 +60,120 @@ class staff extends base {
             $year = $this->year();
             $staff = scope::courses_with_roles($this->userid, config::role_ids('staffrole'), $year);
             $convenor = scope::courses_with_roles($this->userid, config::role_ids('moduleconvenorrole'), $year);
-            $this->courses = [$staff, array_values(array_unique(array_merge($staff, $convenor)))];
+            $this->courses = [$staff, array_values(array_unique(array_merge($staff, $convenor))), $convenor];
         }
         return $this->courses;
     }
 
     /**
-     * My marking, aggregated per assessment and stage in the database.
+     * My marking per assessment and stage: tomark, mine, marked, unallocated (units counted
+     * because they fall to me as convenor), isgroup (units are groups), lastready (latest
+     * time an unmarked unit became ready) and lastmarked (my latest mark here).
+     *
+     * Mine is: units allocated to me; unallocated units on activities with allocation in
+     * courses I convene (G3; other markers never see them, D6); every unit of single-marker
+     * activities without allocation in my staff courses; and my share of activities with
+     * several markers and no allocation (G7, see shared_marking()).
      *
      * @return \stdClass[]
      */
     protected function marking(): array {
         global $DB;
-        [$staff, $marker] = $this->courses();
+        [$staff, $marker, $convenor] = $this->courses();
         if (!$marker) {
             return [];
         }
         [$markersql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED, 'mc');
-        $where = "(m.allocatedto = :me AND c.courseid $markersql)";
+        $where = ["(m.allocatedto = :me AND c.courseid $markersql)"];
+        if ($convenor) {
+            [$convenorsql, $convenorparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'cc');
+            $where[] = "(m.allocatedto IS NULL AND c.hasallocation = 1 AND c.courseid $convenorsql)";
+            $params += $convenorparams;
+        }
+        $shared = [];
         if ($staff) {
             [$staffsql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sc');
-            $where .= " OR (c.hasallocation = 0 AND c.courseid $staffsql)";
-            $params += $staffparams;
+            $multi = $DB->sql_like('c.stages', ':multi');
+            $where[] = "(c.hasallocation = 0 AND NOT $multi AND c.courseid $staffsql)";
+            $params += $staffparams + ['multi' => '%marker%'];
+            $shared = $this->shared_marking($staff);
         }
-        $params['me'] = $this->userid;
-        return $DB->get_records_sql("SELECT " . $DB->sql_concat('m.cmid', "'-'", 'm.stage') . " AS id, m.cmid, m.stage,
+        $params += ['me' => $this->userid, 'me2' => $this->userid];
+        $records = $DB->get_records_sql("SELECT " . $DB->sql_concat('m.cmid', "'-'", 'm.stage') . " AS id, m.cmid, m.stage,
                                             SUM(CASE WHEN m.submitted = 1 AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
                                             SUM(CASE WHEN m.submitted = 1 THEN 1 ELSE 0 END) AS mine,
-                                            SUM(CASE WHEN m.submitted = 1 AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
+                                            SUM(CASE WHEN m.submitted = 1 AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
+                                            SUM(CASE WHEN m.submitted = 1 AND m.allocatedto IS NULL AND c.hasallocation = 1
+                                                     THEN 1 ELSE 0 END) AS unallocated,
+                                            MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
+                                            MAX(CASE WHEN m.submitted = 1 AND m.marked = 0 THEN m.timeready ELSE NULL END)
+                                                AS lastready,
+                                            MAX(CASE WHEN m.markedby = :me2 THEN m.timemarked ELSE NULL END) AS lastmarked
                                        FROM {block_my_assessments_mark} m
                                        JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
-                                      WHERE $where
+                                      WHERE " . implode(' OR ', $where) . "
                                    GROUP BY m.cmid, m.stage", $params);
+        return array_merge(array_values($records), array_values($shared));
+    }
+
+    /**
+     * My share of activities with several markers and no allocation (G7), in the same shape
+     * as marking(). Per unit: the marker stage I marked, otherwise the first open marker
+     * stage, otherwise nothing (others have given every mark). Agreement stays shared once
+     * it is ready. So a marker who has given their mark is done with that unit.
+     *
+     * @param int[] $staff Staff role courses.
+     * @return \stdClass[]
+     */
+    protected function shared_marking(array $staff): array {
+        global $DB;
+        [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sh');
+        $params['multi'] = '%marker%';
+        $rs = $DB->get_recordset_sql("SELECT m.id, m.cmid, m.unitid, m.unittype, m.stage, m.submitted, m.marked,
+                                             m.markedby, m.timemarked, m.timeready
+                                        FROM {block_my_assessments_mark} m
+                                        JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                       WHERE c.hasallocation = 0 AND " . $DB->sql_like('c.stages', ':multi') . "
+                                             AND c.courseid $insql
+                                    ORDER BY m.cmid, m.unittype, m.unitid, m.stage", $params);
+        $units = [];
+        foreach ($rs as $r) {
+            $units[(int)$r->cmid][$r->unittype . ':' . $r->unitid][$r->stage] = $r;
+        }
+        $rs->close();
+
+        $out = [];
+        foreach ($units as $cmid => $byunit) {
+            foreach ($byunit as $stages) {
+                $markerstages = array_filter($stages, fn($r) => str_starts_with($r->stage, 'marker'));
+                $mymark = array_filter($markerstages, fn($r) => $r->marked && (int)$r->markedby === $this->userid);
+                $open = array_filter($markerstages, fn($r) => $r->submitted && !$r->marked);
+                $share = array_slice($mymark ?: $open, 0, 1);
+                foreach ($stages as $r) {
+                    if (!str_starts_with($r->stage, 'marker') && $r->submitted) {
+                        $share[] = $r;
+                    }
+                }
+                foreach ($share as $r) {
+                    $key = $cmid . '-' . $r->stage;
+                    $o = $out[$key] ??= (object)['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
+                        'mine' => 0, 'marked' => 0, 'unallocated' => 0, 'isgroup' => 0, 'lastready' => null,
+                        'lastmarked' => null];
+                    $o->mine++;
+                    if ($r->marked) {
+                        $o->marked++;
+                    } else {
+                        $o->tomark++;
+                        $o->lastready = max((int)$o->lastready, (int)$r->timeready) ?: null;
+                    }
+                    $o->isgroup = $o->isgroup || $r->unittype === 'group' ? 1 : 0;
+                    if ($r->marked && (int)$r->markedby === $this->userid) {
+                        $o->lastmarked = max((int)$o->lastmarked, (int)$r->timemarked) ?: null;
+                    }
+                }
+            }
+        }
+        return $out;
     }
 
     /**
@@ -150,10 +233,13 @@ class staff extends base {
         $oldest = null;
         foreach ($bycm as $cmid => $stages) {
             $cm = $cms[$cmid];
-            $tomark = $mine = 0;
+            $tomark = $mine = $unallocated = $lastready = $lastmarked = 0;
             foreach ($stages as $s) {
                 $tomark += (int)$s->tomark;
                 $mine += (int)$s->mine;
+                $unallocated += (int)$s->unallocated;
+                $lastready = max($lastready, (int)$s->lastready);
+                $lastmarked = max($lastmarked, (int)$s->lastmarked);
             }
             $section = classifier::staff($tomark, $mine, $cm->due === null ? null : (int)$cm->due, $this->now);
             if (!$section) {
@@ -161,11 +247,27 @@ class staff extends base {
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
             $row['dates'] = array_values(array_filter([
-                $cm->due ? format::date('due', (int)$cm->due) : null,
+                $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
                 $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
             ]));
             $row['tomark'] = $tomark;
             $row['bars'] = $this->stage_bars($stages);
+            $row['hints'] = [];
+            if ($unallocated) {
+                $row['hints'][] = format::hint(
+                    $row['id'],
+                    'unallocated',
+                    get_string(
+                        $unallocated === 1 ? 'hint_unallocated_one' : 'hint_unallocated_many',
+                        'block_my_assessments',
+                        $unallocated
+                    )
+                );
+            }
+            // Work that arrived after I last marked here: the row came back (G6).
+            if ($tomark && $lastmarked && $lastready >= $lastmarked) {
+                $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_my_assessments'));
+            }
             $row['actions'] = [format::view_action($row['url'])];
             $sections[$section][] = $row + ['sortkey' => (int)($cm->markingdue ?: $cm->due)];
             if ($section === classifier::TOMARK) {
@@ -190,7 +292,7 @@ class staff extends base {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            $row['dates'] = [format::date('due', (int)$cm->due)];
+            $row['dates'] = [format::date('submissiondeadline', (int)$cm->due)];
             // Generic types can't know about submissions (R5).
             $row['bars'] = $cm->adapter === 'generic' ? [] : [format::bar(
                 'submitted',
@@ -245,14 +347,16 @@ class staff extends base {
         $kinds = [];
         foreach ($stages as $stage => $s) {
             $kind = in_array($stage, ['agreed', 'moderated']) ? $stage : 'marked';
-            $kinds[$kind] ??= [0, 0];
+            $kinds[$kind] ??= [0, 0, false];
             $kinds[$kind][0] += (int)$s->marked;
             $kinds[$kind][1] += (int)$s->mine;
+            $kinds[$kind][2] = $kinds[$kind][2] || !empty($s->isgroup);
         }
         $bars = [];
         foreach (['marked', 'agreed', 'moderated'] as $kind) {
             if (isset($kinds[$kind])) {
-                $bars[] = format::bar($kind, format::stage($kind), $kinds[$kind][0], $kinds[$kind][1]);
+                [$marked, $mine, $groups] = $kinds[$kind];
+                $bars[] = format::bar($kind, format::stage($kind), $marked, $mine, $groups);
             }
         }
         return $bars;

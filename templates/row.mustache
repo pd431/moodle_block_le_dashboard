@@ -37,7 +37,7 @@
         "overflow": false,
         "overlay": {"state": "duesoon", "icon": "fa-clock"},
         "mitigationoverlay": {"state": "extension", "icon": "fa-calendar-plus"},
-        "briefhint": null,
+        "hints": [],
         "status": {"key": "pending", "label": "Not submitted yet"},
         "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00", "note": null}],
         "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}]
@@ -60,27 +60,26 @@
             <span class="ma-row-course">{{course}}</span>
             <span class="ma-row-type">{{typeline}}</span>
             {{#hidden}}<span class="badge ma-pill ma-pill--hidden">{{#str}}hiddenfromstudents, block_my_assessments{{/str}}</span>{{/hidden}}
-            {{#briefhint}}
+            {{#hints}}
             <span class="ma-tip-wrap ma-tip-wrap--row">
-                <button type="button" class="btn btn-sm ma-btn ma-btn--hint" data-action="tip" aria-expanded="false"
-                        aria-controls="{{id}}">
-                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{#str}}briefhint, block_my_assessments{{/str}}
+                <button type="button" class="btn btn-sm ma-btn ma-btn--hint" data-action="tip" data-hint="{{key}}"
+                        aria-expanded="false" aria-controls="{{id}}">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{label}}
                 </button>
-                <span class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden>
-                    {{#str}}briefhint_text, block_my_assessments{{/str}}
-                    {{#link}} {{{link}}}{{/link}}
-                </span>
+                <span class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden>{{text}}{{#link}} {{{link}}}{{/link}}</span>
             </span>
-            {{/briefhint}}
+            {{/hints}}
         </div>
     </div>
     <div class="ma-row-dates">
         {{#dates}}
         <div class="ma-row-date ma-row-date--{{key}}" data-date="{{key}}">
-            <span class="ma-row-date-label">{{label}}</span> <time datetime="{{iso}}">{{text}}</time>
+            {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>
             {{#note}}<span class="ma-row-date-note">{{note}}</span>{{/note}}
         </div>
         {{/dates}}
+        {{#notes}}<div class="ma-row-note">{{.}}</div>{{/notes}}
+        {{#alert}}<div class="ma-row-alert" data-region="ma-alert">{{alert}}</div>{{/alert}}
     </div>
     <div class="ma-row-status">
         {{#status}}<span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{/status}}

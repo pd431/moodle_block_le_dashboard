@@ -56,6 +56,7 @@
         <FIELD NAME="cutoff" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Effective cut-off for this student"/>
         <FIELD NAME="individual" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when an override, personal deadline or extension applies"/>
         <FIELD NAME="mitigation" TYPE="char" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="extension or selfcert when one applies"/>
+        <FIELD NAME="reopened" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when a new attempt is open and not yet submitted"/>
         <FIELD NAME="canaccess" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Restrictions and groups, as of indexing"/>
         <FIELD NAME="submitted" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="NULL when the adapter cannot tell"/>
         <FIELD NAME="timesubmitted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
@@ -79,6 +80,7 @@
         <FIELD NAME="stage" TYPE="char" LENGTH="30" NOTNULL="true" SEQUENCE="false"/>
         <FIELD NAME="allocatedto" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="submitted" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timeready" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the unit became ready at this stage, when known"/>
         <FIELD NAME="marked" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="markedby" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timemarked" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>

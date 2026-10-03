@@ -85,6 +85,7 @@
 .block_my_assessments_dashboard .ma-row-meta,
 .block_my_assessments_dashboard .ma-row-date-label,
 .block_my_assessments_dashboard .ma-row-date-note,
+.block_my_assessments_dashboard .ma-row-note,
 .block_my_assessments_dashboard .ma-bar-label {
   color: var(--ma-text-muted);
 }
@@ -107,6 +108,9 @@
 .block_my_assessments_dashboard .ma-filter-btn:focus-visible,
 .block_my_assessments_dashboard .ma-row-iconbtn:focus-visible {
   box-shadow: var(--ma-focus-ring);
+}
+.block_my_assessments_dashboard .ma-tabs .nav-link:focus-visible {
+  box-shadow: inset var(--ma-focus-ring);
 }
 .block_my_assessments_dashboard .ma-tabs,
 .block_my_assessments_dashboard .ma-toolbar,
@@ -212,6 +216,7 @@
   color: var(--ma-on-solid);
 }
 .block_my_assessments_dashboard .ma-mitigate .dropdown-menu {
+  min-width: min(12rem, 100cqi);
   max-width: min(22rem, 100cqi);
 }
 .block_my_assessments_dashboard .ma-mitigate-item {
@@ -352,16 +357,33 @@
   gap: 0.25rem 0.75rem;
   padding: 0.5rem 0.75rem;
 }
+.block_my_assessments_dashboard .ma-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  grid-area: actions;
+}
 .block_my_assessments_dashboard .ma-view--staff .ma-row,
 .block_my_assessments_dashboard .ma-view--convenor .ma-row {
   --ma-row-columns: 2rem minmax(0, 1fr) minmax(13rem, 1.2fr) var(--ma-actions-width);
   --ma-row-areas: "icon info status actions" "icon dates status actions";
 }
 @container ma (width < 62rem) {
-  .block_my_assessments_dashboard .ma-row {
+  .block_my_assessments_dashboard .ma-view--student .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr) 11.5rem var(--ma-actions-width);
     --ma-row-areas: "icon info status actions" "icon info dates actions";
+    grid-template-rows: auto 1fr;
   }
+}
+@container ma (width < 44rem) {
+  .block_my_assessments_dashboard .ma-view--student .ma-row {
+    --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
+    --ma-row-areas: "icon info info actions" "icon dates status status";
+    grid-template-rows: none;
+  }
+}
+@container ma (width < 40rem) {
   .block_my_assessments_dashboard .ma-view--staff .ma-row,
   .block_my_assessments_dashboard .ma-view--convenor .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr) var(--ma-actions-width);
@@ -371,21 +393,8 @@
     --ma-marker-columns: minmax(0, 1fr);
   }
 }
-@container ma (width < 44rem) {
-  .block_my_assessments_dashboard .ma-row {
-    --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
-    --ma-row-areas: "icon info info actions" "icon dates status status";
-  }
-}
-@container ma (width < 40rem) {
-  .block_my_assessments_dashboard .ma-view--staff .ma-row,
-  .block_my_assessments_dashboard .ma-view--convenor .ma-row {
-    --ma-row-columns: 2rem minmax(0, 1fr);
-    --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
-  }
-}
 @container ma (width < 34rem) {
-  .block_my_assessments_dashboard .ma-row {
+  .block_my_assessments_dashboard .ma-view .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr);
     --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
   }
@@ -502,6 +511,10 @@
 .block_my_assessments_dashboard .ma-row-date-note {
   display: block;
 }
+.block_my_assessments_dashboard .ma-row-alert {
+  color: var(--ma-attention-ink);
+  font-weight: 600;
+}
 .block_my_assessments_dashboard .ma-row-status {
   display: flex;
   flex-direction: column;
@@ -515,13 +528,6 @@
 }
 .block_my_assessments_dashboard .ma-view--showgrades .ma-grade {
   display: block;
-}
-.block_my_assessments_dashboard .ma-row-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  grid-area: actions;
 }
 .block_my_assessments_dashboard .ma-markers {
   grid-column: 2/-1;
@@ -559,6 +565,15 @@
   white-space: normal;
 }
 .block_my_assessments_dashboard .ma-pill--pending {
+  --ma-fill: var(--ma-attention-fill);
+  --ma-hover: var(--ma-attention-hover);
+  --ma-border: var(--ma-attention-border);
+  --ma-ink: var(--ma-attention-ink);
+  --ma-solid: var(--ma-attention-solid);
+  --ma-on-solid: var(--ma-ink);
+  --ma-glyph: var(--ma-ink);
+}
+.block_my_assessments_dashboard .ma-pill--reopened {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);

@@ -1,4 +1,4 @@
-# My assessments (block_my_assessments) 5.0.0-beta6
+# My assessments (block_my_assessments) 5.0.0-beta7
 
 A dashboard block for Moodle 4.5 and 5.2. It shows students their assessments, markers their marking and
 module convenors the marking across their modules. This version is the plugin-agnostic remake: it

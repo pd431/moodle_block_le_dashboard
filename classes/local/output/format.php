@@ -55,19 +55,44 @@ class format {
     /**
      * A labelled date for a row.
      *
-     * @param string $key Lang string key for the label (due, submittedon...).
+     * @param string $key Date key; the label is the date_{key} string, if there is one.
      * @param int $time
      * @param string|null $note Optional note after the date.
      * @return array
      */
     public static function date(string $key, int $time, ?string $note = null): array {
+        $sm = get_string_manager();
         return [
             'key' => $key,
-            'label' => get_string('date_' . $key, 'block_my_assessments'),
+            'label' => $sm->string_exists('date_' . $key, 'block_my_assessments')
+                ? get_string('date_' . $key, 'block_my_assessments') : null,
             'text' => self::datetime($time),
             'iso' => date('c', $time),
             'note' => $note,
         ];
+    }
+
+    /**
+     * A length of time in one unit, rounded down: "less than a minute", "12 min", "6 h", "2 days".
+     * The unit changes before the number would reach 0, so "0 h" never appears.
+     *
+     * @param int $seconds
+     * @return string
+     */
+    public static function duration(int $seconds): string {
+        $seconds = max(0, $seconds);
+        if ($seconds < MINSECS) {
+            return get_string('duration_lessminute', 'block_my_assessments');
+        }
+        if ($seconds < HOURSECS) {
+            return get_string('duration_minutes', 'block_my_assessments', (int)floor($seconds / MINSECS));
+        }
+        if ($seconds < DAYSECS) {
+            return get_string('duration_hours', 'block_my_assessments', (int)floor($seconds / HOURSECS));
+        }
+        $days = (int)floor($seconds / DAYSECS);
+        return $days === 1 ? get_string('duration_day', 'block_my_assessments')
+            : get_string('duration_days', 'block_my_assessments', $days);
     }
 
     /**
@@ -116,9 +141,10 @@ class format {
      * @param string $label
      * @param int $value
      * @param int $max
+     * @param bool $groups The units are groups, not students: say so, as submissions count students (G15).
      * @return array
      */
-    public static function bar(string $key, string $label, int $value, int $max): array {
+    public static function bar(string $key, string $label, int $value, int $max, bool $groups = false): array {
         $percent = $max > 0 ? (int)round(100 * min($value, $max) / $max) : 0;
         return [
             'key' => $key,
@@ -126,7 +152,27 @@ class format {
             'value' => $value,
             'max' => $max,
             'percent' => $percent,
-            'text' => get_string('xofy', 'block_my_assessments', ['x' => $value, 'y' => $max]),
+            'text' => get_string($groups ? 'xofygroups' : 'xofy', 'block_my_assessments', ['x' => $value, 'y' => $max]),
+        ];
+    }
+
+    /**
+     * A hint on a row: a small button that opens a tip by click or focus, never hover.
+     * One component for every hint (no brief, unallocated work, returned work).
+     *
+     * @param string $rowid
+     * @param string $key brief, unallocated or returned; the button says the hint_{key} string.
+     * @param string $text The tip.
+     * @param string|null $link HTML link sentence after the tip, if any.
+     * @return array
+     */
+    public static function hint(string $rowid, string $key, string $text, ?string $link = null): array {
+        return [
+            'id' => $rowid . '-hint-' . $key,
+            'key' => $key,
+            'label' => get_string('hint_' . $key, 'block_my_assessments'),
+            'text' => $text,
+            'link' => $link,
         ];
     }
 

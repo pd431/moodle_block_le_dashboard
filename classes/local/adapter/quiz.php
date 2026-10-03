@@ -172,11 +172,13 @@ class quiz extends base {
             }
             $marked = true;
             $timemarked = 0;
+            $timeready = 0;
             foreach ($counted as $a) {
                 if ($a->sumgrades === null) {
                     $marked = false;
                 }
                 $timemarked = max($timemarked, (int)$a->timemodified);
+                $timeready = max($timeready, (int)$a->timefinish);
             }
             $rows[] = new marking_row(
                 unitid: $userid,
@@ -188,6 +190,7 @@ class quiz extends base {
                 markedby: null,
                 timemarked: $marked ? $timemarked : null,
                 released: isset($released[$userid]),
+                timeready: $timeready ?: null,
             );
         }
         return $rows;

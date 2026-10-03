@@ -93,6 +93,7 @@ $ma-state-tones: (
   "pill": (
     "default": "grey",
     "pending": "attention",
+    "reopened": "attention",
     "submitted": "success",
     "inmarking": "info",
     "released": "info",
@@ -223,6 +224,7 @@ $ma-dark-ink-on-solid: ("attention");
   .ma-row-meta,
   .ma-row-date-label,
   .ma-row-date-note,
+  .ma-row-note,
   .ma-bar-label {
     color: var(--ma-text-muted);
   }
@@ -250,6 +252,11 @@ $ma-dark-ink-on-solid: ("attention");
     &:focus-visible {
       box-shadow: var(--ma-focus-ring);
     }
+  }
+
+  // The tabs clip their overflow, so their ring goes inside the tab.
+  .ma-tabs .nav-link:focus-visible {
+    box-shadow: inset var(--ma-focus-ring);
   }
 
   .ma-tabs,
@@ -380,8 +387,10 @@ $ma-dark-ink-on-solid: ("attention");
   // stays on the hover step with tone ink (Lc 80.1) and adds an inset ring
   // in the border step to mark it as open.
   // The menu's links come from another plugin and can be long: wrap them,
-  // and never let the menu be wider than the block.
+  // and never let the menu be wider than the block, nor narrower than 12rem
+  // when the block has room.
   .ma-mitigate .dropdown-menu {
+    min-width: min(12rem, 100cqi);
     max-width: min(22rem, 100cqi);
   }
 
@@ -510,6 +519,14 @@ $ma-dark-ink-on-solid: ("attention");
     padding: 0.5rem 0.75rem;
   }
 
+  .ma-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    grid-area: actions;
+  }
+
   // Staff and convenor: a wider status column for the bars, with the dates
   // under the name.
   .ma-view--staff .ma-row,
@@ -519,15 +536,29 @@ $ma-dark-ink-on-solid: ("attention");
   }
 
   // Narrower blocks, by the block's own width. Student rows first put the
-  // pill over the dates so the name keeps its width, then split into two
-  // lines; staff and convenor rows move the bars under the name. Every row
-  // stacks on a phone-sized block.
+  // pill over the dates so the name keeps its width (the dates row takes the
+  // spare height, so the dates sit right under the pill), then split into
+  // two lines. Staff and convenor rows keep their layout down to 40rem, then
+  // move the bars under the name. Every row stacks on a phone-sized block.
   @container ma (width < 62rem) {
-    .ma-row {
+    .ma-view--student .ma-row {
       --ma-row-columns: 2rem minmax(0, 1fr) 11.5rem var(--ma-actions-width);
       --ma-row-areas: "icon info status actions" "icon info dates actions";
-    }
 
+      grid-template-rows: auto 1fr;
+    }
+  }
+
+  @container ma (width < 44rem) {
+    .ma-view--student .ma-row {
+      --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
+      --ma-row-areas: "icon info info actions" "icon dates status status";
+
+      grid-template-rows: none;
+    }
+  }
+
+  @container ma (width < 40rem) {
     .ma-view--staff .ma-row,
     .ma-view--convenor .ma-row {
       --ma-row-columns: 2rem minmax(0, 1fr) var(--ma-actions-width);
@@ -540,23 +571,8 @@ $ma-dark-ink-on-solid: ("attention");
     }
   }
 
-  @container ma (width < 44rem) {
-    .ma-row {
-      --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
-      --ma-row-areas: "icon info info actions" "icon dates status status";
-    }
-  }
-
-  @container ma (width < 40rem) {
-    .ma-view--staff .ma-row,
-    .ma-view--convenor .ma-row {
-      --ma-row-columns: 2rem minmax(0, 1fr);
-      --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
-    }
-  }
-
   @container ma (width < 34rem) {
-    .ma-row {
+    .ma-view .ma-row {
       --ma-row-columns: 2rem minmax(0, 1fr);
       --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
     }
@@ -650,6 +666,12 @@ $ma-dark-ink-on-solid: ("attention");
     display: block;
   }
 
+  // Staff only (G10), so the attention tone is allowed: its ink on the card.
+  .ma-row-alert {
+    color: var(--ma-attention-ink);
+    font-weight: 600;
+  }
+
   .ma-row-status {
     display: flex;
     flex-direction: column;
@@ -665,14 +687,6 @@ $ma-dark-ink-on-solid: ("attention");
 
   .ma-view--showgrades .ma-grade {
     display: block;
-  }
-
-  .ma-row-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 0.25rem;
-    grid-area: actions;
   }
 
   // Marker breakdown, under the row: a subgrid of the row, so each marker's

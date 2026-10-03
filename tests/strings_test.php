@@ -46,7 +46,7 @@ final class strings_test extends \advanced_testcase {
     ];
 
     /** Row date keys. */
-    const DATES = ['due', 'submitted', 'released', 'feedbackexpected', 'markingdue'];
+    const DATES = ['due', 'feedbackexpected', 'markingdue', 'submissiondeadline'];
 
     /** Marking stages with their own label (markerN uses stage_markern). */
     const STAGES = ['marked', 'markern', 'agreed', 'moderated'];

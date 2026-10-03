@@ -42,6 +42,8 @@ final class marking_row {
      * @param int|null $markedby Who marked it, when known.
      * @param int|null $timemarked When it was marked, when known.
      * @param bool $released Whether the agreed or final grade is published to the student (D4).
+     * @param int|null $timeready When the unit became ready at this stage (submission, or the previous
+     *                            stage finishing), when known.
      */
     public function __construct(
         /** @var int User or group id. */
@@ -62,6 +64,8 @@ final class marking_row {
         public ?int $timemarked = null,
         /** @var bool Final grade published. */
         public bool $released = false,
+        /** @var int|null When it became ready. */
+        public ?int $timeready = null,
     ) {
     }
 }

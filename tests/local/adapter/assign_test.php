@@ -290,7 +290,7 @@ final class assign_test extends \advanced_testcase {
         $this->assertFalse($units['marker1']->marked);
         $this->assertSame((int)$m2->id, $units['marker2']->allocatedto);
         $this->assertTrue($units['marker2']->marked);
-        $this->assertNull($units['agreed']->allocatedto);
+        $this->assertSame((int)$m1->id, $units['agreed']->allocatedto, 'G8: agreement goes to the first allocated marker');
         $this->assertFalse($units['agreed']->submitted, 'Agreement waits for every marker.');
     }
 }

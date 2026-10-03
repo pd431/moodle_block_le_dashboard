@@ -382,6 +382,7 @@ class coursework extends base {
             }
             [$type, $id] = explode(':', $key);
             $done = [];
+            $times = [];
             $released = !empty($s->lastpublished);
             foreach ($map as $stagekey => $identifier) {
                 $f = $feedback[(int)$s->id][$identifier] ?? null;
@@ -396,6 +397,14 @@ class coursework extends base {
                     $ready = (bool)end($done);
                 } else {
                     $ready = true;
+                }
+                // Ready since the submission, or since the stages it waits on finished.
+                if ($identifier === self::STAGE_AGREED) {
+                    $timeready = $ready && $times ? max($times) : null;
+                } else if ($identifier === self::STAGE_MODERATOR) {
+                    $timeready = $ready ? end($times) : null;
+                } else {
+                    $timeready = (int)$s->timesubmitted ?: null;
                 }
                 $allocated = $pairs[$key][$identifier] ?? null;
                 if ($allocated === null && $identifier === self::STAGE_AGREED) {
@@ -412,8 +421,10 @@ class coursework extends base {
                     markedby: $marked && $f ? ((int)$f->assessorid ?: null) : null,
                     timemarked: $marked && $f ? (int)$f->timemodified : null,
                     released: $released,
+                    timeready: $timeready ?: null,
                 );
                 $done[] = $marked;
+                $times[] = $marked && $f ? (int)$f->timemodified : 0;
             }
         }
         return $rows;

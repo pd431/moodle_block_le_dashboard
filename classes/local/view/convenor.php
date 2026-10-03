@@ -91,7 +91,11 @@ class convenor extends base {
                                              SUM(CASE WHEN m.submitted = 1 AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
                                              SUM(CASE WHEN m.submitted = 1 AND m.allocatedto IS NULL THEN 1 ELSE 0 END)
                                                  AS unallocated,
-                                             SUM(m.released) AS released
+                                             SUM(m.released) AS released,
+                                             MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
+                                             MAX(CASE WHEN m.submitted = 1 AND m.marked = 0 THEN m.timeready ELSE NULL END)
+                                                 AS lastready,
+                                             MAX(m.timemarked) AS lastmarked
                                         FROM {block_my_assessments_mark} m
                                         JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
                                        WHERE c.courseid $insql
@@ -100,6 +104,13 @@ class convenor extends base {
             $marking[(int)$r->cmid][$r->stage] = $r;
         }
         $rs->close();
+        // Units with marking outstanding at any stage, for the marking deadline call-out (G10).
+        $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
+        $unmarked = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
+                                                 FROM {block_my_assessments_mark} m
+                                                 JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                                WHERE c.courseid $insql AND m.submitted = 1 AND m.marked = 0
+                                             GROUP BY m.cmid", $params);
         // Per marker, per stage.
         $markers = [];
         $rs = $DB->get_recordset_sql("SELECT m.cmid, m.allocatedto, m.stage,
@@ -131,6 +142,7 @@ class convenor extends base {
             $first = $stages ? ($m[reset($stages)] ?? null) : null;
             $units = $first ? (int)$first->ready : 0;
             $released = $first ? (int)$first->released : 0;
+            $groups = $first && $first->isgroup;
 
             $bars = [];
             if ($cm->adapter !== 'generic') {
@@ -150,22 +162,23 @@ class convenor extends base {
                         'unallocated',
                         get_string('bar_unallocated', 'block_my_assessments'),
                         $first ? (int)$first->unallocated : 0,
-                        $units
+                        $units,
+                        $groups
                     );
                 }
                 foreach ($stages as $stage) {
                     $marked = isset($m[$stage]) ? (int)$m[$stage]->marked : 0;
-                    $bars[] = format::bar($stage, format::stage($stage), $marked, $units);
+                    $bars[] = format::bar($stage, format::stage($stage), $marked, $units, $groups);
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
-                $bars[] = format::bar('released', get_string('bar_released', 'block_my_assessments'), $released, $units);
+                $bars[] = format::bar('released', get_string('bar_released', 'block_my_assessments'), $released, $units, $groups);
                 $outstanding += $units - $released;
             }
 
             $section = classifier::convenor($cm->due === null ? null : (int)$cm->due, $this->now, $units, $outstanding, $threshold);
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
             $row['dates'] = array_values(array_filter([
-                $cm->due ? format::date('due', (int)$cm->due) : null,
+                $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
                 $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
             ]));
             // Marking starts after the deadline: before it, only submissions and allocation.
@@ -190,13 +203,32 @@ class convenor extends base {
             $row['hasmarkers'] = !empty($row['markers']);
             $row['markersid'] = $row['id'] . '-markers';
             $row['actions'] = [format::view_action($row['url'])];
+            $row['hints'] = [];
             if (empty($cm->hasbrief)) {
-                $row['briefhint'] = $this->brief_hint($row['id']);
+                $row['hints'][] = $this->brief_hint($row['id']);
             }
+            // Work that arrived after the latest mark brought this back to In progress (G6).
+            $lastready = $lastmarked = 0;
+            foreach ($m as $r) {
+                $lastready = max($lastready, (int)$r->lastready);
+                $lastmarked = max($lastmarked, (int)$r->lastmarked);
+            }
+            if ($section === classifier::INPROGRESS && $lastmarked && $lastready >= $lastmarked) {
+                $text = get_string('hint_returned_convenor', 'block_my_assessments');
+                $row['hints'][] = format::hint($row['id'], 'returned', $text);
+            }
+            // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
+            $late = (int)($unmarked[$cmid] ?? 0);
+            if ($cm->markingdue && (int)$cm->markingdue < $this->now && $late && !$upcoming) {
+                $row['alert'] = get_string('unmarkedafterdeadline', 'block_my_assessments', $late);
+            }
+            $row['sortkey'] = [(int)($cm->markingdue ?: PHP_INT_MAX), (int)$cm->due];
             $sections[$section][] = $row;
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
         $sections[classifier::CONVENOR_PAST] = array_reverse($sections[classifier::CONVENOR_PAST]);
+        // In progress by marking deadline, then deadline.
+        usort($sections[classifier::INPROGRESS], fn($a, $b) => $a['sortkey'] <=> $b['sortkey']);
         return $this->sections_context($sections, $oldest, $extra);
     }
 
@@ -215,7 +247,7 @@ class convenor extends base {
                 get_string('briefhint_guidance', 'block_my_assessments')
             ));
         }
-        return ['id' => $rowid . '-brief', 'link' => $link];
+        return format::hint($rowid, 'brief', get_string('briefhint_text', 'block_my_assessments'), $link);
     }
 
     /**

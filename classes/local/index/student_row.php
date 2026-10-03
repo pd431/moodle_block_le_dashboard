@@ -45,6 +45,7 @@ final class student_row {
      * @param int|null $timereleased When the grade is (or will be) visible to the student; null if not released.
      * @param string|null $gradedisplay The grade as the student should see it.
      * @param string|null $mitigation MITIGATION_EXTENSION or MITIGATION_SELFCERT when one applies.
+     * @param bool $reopened Whether a new attempt is open and not yet submitted.
      */
     public function __construct(
         /** @var int The student. */
@@ -65,6 +66,8 @@ final class student_row {
         public ?string $gradedisplay = null,
         /** @var string|null Mitigation that applies, if any. */
         public ?string $mitigation = null,
+        /** @var bool A new attempt is open. */
+        public bool $reopened = false,
     ) {
     }
 }

@@ -53,12 +53,14 @@ class provider implements
             'timereleased' => 'privacy:metadata:stu:timereleased',
             'gradedisplay' => 'privacy:metadata:stu:gradedisplay',
             'mitigation' => 'privacy:metadata:stu:mitigation',
+            'reopened' => 'privacy:metadata:stu:reopened',
         ], 'privacy:metadata:stu');
         $collection->add_database_table('block_my_assessments_mark', [
             'unitid' => 'privacy:metadata:mark:unitid',
             'allocatedto' => 'privacy:metadata:mark:allocatedto',
             'markedby' => 'privacy:metadata:mark:markedby',
             'timemarked' => 'privacy:metadata:mark:timemarked',
+            'timeready' => 'privacy:metadata:mark:timeready',
         ], 'privacy:metadata:mark');
         foreach (self::PREFERENCES as $name) {
             $collection->add_user_preference('block_my_assessments_' . $name, 'privacy:metadata:preference:' . $name);

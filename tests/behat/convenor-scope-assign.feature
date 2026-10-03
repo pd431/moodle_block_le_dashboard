@@ -132,3 +132,40 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     When I log in as "convenor" and view the "Convenor view"
     Then "A1" should appear in the "In progress" section
     And "A1" should show a "Released" progress bar with "0" of "1"
+
+  # ---------- Workflow gaps, beta7 (coordinator-approved scope, 2026-10-03) ----------
+
+  # G6
+  Scenario: Returned work moves the assessment back to In progress with a hint for the convenor
+    Given a summative "assign" "A1" in "M1" was due "5 days ago"
+    And "student2" has an extension on "A1" to "in 3 days"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And the grade of "student1" for "A1" is released
+    And "student2" has submitted "A1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "In progress" section
+    And "A1" should have a returned work hint
+
+  # G10
+  Scenario: Unmarked work past the marking deadline is called out for the convenor
+    Given a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
+    And "student1" and "student2" have submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should show "1 unmarked after the marking deadline"
+
+  Scenario: Before the marking deadline there is no call-out
+    Given a summative "assign" "A1" in "M1" with a marking deadline "in 5 days" was due "3 days ago"
+    And "student1" has submitted "A1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should not show "unmarked after the marking deadline"
+
+  # G11
+  Scenario: Staff rows name which deadline a date is
+    Given a summative "assign" "A1" in "M1" with a marking deadline "in 10 days" was due "3 days ago"
+    And "student1" has submitted "A1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should show "Submission deadline"
+    And "A1" should show "Marking deadline"
+    And "A1" should not show "Due"
