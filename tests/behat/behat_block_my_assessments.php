@@ -239,7 +239,8 @@ class behat_block_my_assessments extends behat_base {
      * Creates and tags an assessment.
      *
      * Options after "with": marker allocation, a marking deadline "...", an essay question,
-     * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation.
+     * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation,
+     * marking workflow, reopened attempts.
      *
      * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag
@@ -306,8 +307,12 @@ class behat_block_my_assessments extends behat_base {
         switch ($modname) {
             case 'assign':
                 $record += ['duedate' => (int)$due, 'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1,
-                    'gradingduedate' => $markingdue, 'markingworkflow' => $allocation ? 1 : 0,
+                    'gradingduedate' => $markingdue,
+                    'markingworkflow' => $allocation || str_contains($opts, 'marking workflow') ? 1 : 0,
                     'markingallocation' => $allocation ? 1 : 0];
+                if (str_contains($opts, 'reopened attempts')) {
+                    $record += ['attemptreopenmethod' => 'manual', 'maxattempts' => -1];
+                }
                 break;
             case 'quiz':
                 require_once($CFG->dirroot . '/mod/quiz/lib.php');
@@ -945,6 +950,30 @@ class behat_block_my_assessments extends behat_base {
     }
 
     /**
+     * Makes someone the moderator of every submission of a coursework.
+     *
+     * @Given /^"(?P<marker>[^"]*)" moderates "(?P<name>[^"]*)"$/
+     * @param string $marker
+     * @param string $name
+     */
+    public function moderates(string $marker, string $name): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $students = $DB->get_fieldset_select(
+            'coursework_submissions',
+            'allocatableid',
+            "courseworkid = :id AND allocatabletype = 'user'",
+            ['id' => $cm->instance]
+        );
+        foreach ($students as $userid) {
+            testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_allocation([
+                'courseworkid' => $cm->instance, 'allocatableid' => (int)$userid, 'allocatabletype' => 'user',
+                'assessorid' => self::userid($marker), 'stageidentifier' => 'moderator', 'ismanual' => 1]);
+        }
+        self::queue($cm);
+    }
+
+    /**
      * A marker marks a submission.
      *
      * @Given /^"(?P<marker>[^"]*)" marks the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)"$/
@@ -954,6 +983,60 @@ class behat_block_my_assessments extends behat_base {
      */
     public function marks_the_submission(string $marker, string $student, string $name): void {
         $this->feedback($this->cm($name), self::userid($student), self::userid($marker), 'assessor_1', false);
+    }
+
+    /**
+     * Releases an assign grade to the student, then moves what happened so far a minute or
+     * two into the past, so that anything later in the scenario is visibly newer.
+     *
+     * @Given /^the grade of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is released$/
+     * @param string $student
+     * @param string $name
+     */
+    public function the_grade_is_released(string $student, string $name): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        require_once($CFG->libdir . '/gradelib.php');
+        $cm = $this->cm($name);
+        $userid = self::userid($student);
+        $assign = new assign($cm->context, $cm, null);
+        if ($assign->get_instance()->markingworkflow) {
+            $flags = $assign->get_user_flags($userid, true);
+            $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_RELEASED;
+            $assign->update_user_flags($flags);
+            // Pushes the grade to the gradebook, now that its state allows it.
+            $assign->update_grade($assign->get_user_grade($userid, false));
+        }
+        $where = 'assignment = :id AND userid = :userid';
+        $params = ['id' => $cm->instance, 'userid' => $userid];
+        $DB->execute("UPDATE {assign_submission} SET timemodified = timemodified - 120 WHERE $where", $params);
+        $DB->execute("UPDATE {assign_grades} SET timemodified = timemodified - 60 WHERE $where", $params);
+        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'assign', 'iteminstance' => $cm->instance,
+            'itemnumber' => 0, 'courseid' => $cm->course]);
+        $DB->execute("UPDATE {grade_grades} SET timemodified = timemodified - 60, timecreated = timecreated - 60
+                       WHERE itemid = :itemid AND userid = :userid", ['itemid' => $item->id, 'userid' => $userid]);
+        self::queue($cm);
+    }
+
+    /**
+     * Reopens a student's assign submission as a new attempt, as a teacher would.
+     *
+     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is reopened$/
+     * @param string $student
+     * @param string $name
+     */
+    public function the_submission_is_reopened(string $student, string $name): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $cm = $this->cm($name);
+        $assign = new assign($cm->context, $cm, null);
+        // Core's add_attempt() is what "Allow another attempt" calls; it isn't public.
+        $method = new ReflectionMethod($assign, 'add_attempt');
+        $method->setAccessible(true);
+        if (!$method->invoke($assign, self::userid($student))) {
+            throw new coding_exception("Could not reopen the submission of $student for $name");
+        }
+        self::queue($cm);
     }
 
     /**
@@ -1442,8 +1525,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $count
      */
     public function should_show_to_mark(string $name, string $count): void {
-        $node = $this->row($name)->find('css', '[data-tomark]');
-        $actual = $node ? $node->getAttribute('data-tomark') : '0';
+        $actual = $this->row($name)->getAttribute('data-tomark') ?? '0';
         if ($actual !== $count) {
             throw new ExpectationException("'$name' shows $actual to mark, not $count", $this->getSession());
         }
@@ -1479,6 +1561,23 @@ class behat_block_my_assessments extends behat_base {
      */
     public function should_show_the_due_date(string $name, string $when): void {
         $this->row_date($this->row($name), $name, get_string('date_due', 'block_my_assessments'), $when);
+    }
+
+    /**
+     * Checks the order of the open view's sections, empty (hidden) ones included. A view with no
+     * assessments at all shows a message instead of sections.
+     *
+     * @Then /^the sections should be in the order "(?P<titles>[^"]*)"$/
+     * @param string $titles Comma-separated section titles.
+     */
+    public function the_sections_should_be_in_the_order(string $titles): void {
+        $actual = $this->evaluate_script("return Array.from(document.querySelectorAll(
+            '.block_my_assessments [data-region=\"ma-view-root\"] [data-region=\"ma-section\"] .ma-section-title'
+        )).map((e) => e.textContent.trim());");
+        $expected = array_map('trim', explode(',', $titles));
+        if ($actual !== $expected) {
+            throw new ExpectationException('Sections are in the order "' . implode(', ', $actual) . '"', $this->getSession());
+        }
     }
 
     /**

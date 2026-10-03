@@ -67,7 +67,7 @@ class student extends base {
         }
         // Active enrolments in courses the student can see (D9, P10).
         $courses = array_filter(
-            enrol_get_all_users_courses($this->userid, true, 'id, shortname, visible'),
+            enrol_get_all_users_courses($this->userid, true, 'id, shortname, fullname, visible'),
             fn($c) => $c->visible || has_capability(
                 'moodle/course:viewhiddencourses',
                 \context_course::instance($c->id),
@@ -96,6 +96,7 @@ class student extends base {
             }
             $r->instance = (int)$cm->instance;
             $r->courseshortname = $courses[$r->courseid]->shortname;
+            $r->coursefullname = $courses[$r->courseid]->fullname;
             $rows[(int)$r->cmid] = $r;
         }
         return $this->rows = $rows;
@@ -218,6 +219,14 @@ class student extends base {
      */
     protected function row(\stdClass $r, string $section, string $status): array {
         $row = format::row($r, $r->courseshortname, $this->key());
+        // Students get two lines: the module's full name, then "Summative assignment".
+        $row['course'] = format_string($r->coursefullname, true, ['context' => \context_course::instance($r->courseid)]);
+        $row['typeline'] = get_string('rowkind', 'block_my_assessments', [
+            'type' => $row['typelabel'],
+            'mod' => \core_text::strtolower($row['modlabel']),
+        ]);
+        $row['stacked'] = true;
+        $row['search'] .= ' ' . \core_text::strtolower($row['course']);
         $row['status'] = ['key' => $status, 'label' => get_string('status_' . $status, 'block_my_assessments')];
         [$row['overlay'], $row['mitigationoverlay'], $parts] = $this->modifiers($r, $section, $status);
         $row['tip'] = format::tip($row['modlabel'], $parts);
@@ -236,7 +245,8 @@ class student extends base {
             if ($r->gradedisplay !== null && $r->gradedisplay !== '') {
                 $row['grade'] = ['text' => $r->gradedisplay];
             }
-        } else if ($status === classifier::STATUS_INMARKING && $r->markingdue) {
+        } else if ($status === classifier::STATUS_INMARKING && $r->markingdue && (int)$r->markingdue > $this->now) {
+            // Only while it's still to come; once it has passed, the In marking pill says the rest.
             $dates[] = format::date('feedbackexpected', (int)$r->markingdue);
         }
         $row['dates'] = $dates;
@@ -246,11 +256,14 @@ class student extends base {
             in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_NOTSUBMITTED])
                 && $section !== classifier::PAST
         ) {
-            $actions[] = ['key' => 'submit', 'label' => get_string('action_submit', 'block_my_assessments'),
-                'url' => $row['url']];
+            $actions[] = format::action('submit', $row['url']);
             $links = mitigation::links($r->modname, $r->instance);
             if ($links) {
-                $row['mitigation'] = ['id' => $row['id'] . '-mitigate', 'links' => array_map(fn($h) => ['html' => $h], $links)];
+                $row['mitigation'] = [
+                    'id' => $row['id'] . '-mitigate',
+                    'icon' => format::ACTION_ICONS['mitigate'],
+                    'links' => array_map(fn($h) => ['html' => $h], $links),
+                ];
             }
         } else {
             $actions[] = format::view_action($row['url']);

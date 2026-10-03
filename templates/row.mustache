@@ -40,10 +40,10 @@
         "briefhint": null,
         "status": {"key": "pending", "label": "Not submitted yet"},
         "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00", "note": null}],
-        "actions": [{"key": "submit", "label": "Submit", "url": "https://example.com/mod/assign/view.php?id=12"}]
+        "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}]
     }
 }}
-<li class="list-group-item ma-row" id="{{id}}" data-region="ma-row" data-cmid="{{cmid}}" data-assesstype="{{assesstype}}"
+<li class="list-group-item ma-row" id="{{id}}" data-region="ma-row" data-cmid="{{cmid}}" data-assesstype="{{assesstype}}"{{#tomark}} data-tomark="{{tomark}}"{{/tomark}}
     data-search="{{search}}"{{#overflow}} data-overflow="1" hidden{{/overflow}}>
     <div class="ma-row-icon ma-tip-wrap">
         <button type="button" class="ma-row-iconbtn" data-action="tip" aria-expanded="false" aria-controls="{{id}}-tip"
@@ -56,7 +56,7 @@
     </div>
     <div class="ma-row-info">
         <a class="ma-row-name" href="{{url}}">{{name}}</a>
-        <div class="ma-row-meta">
+        <div class="ma-row-meta{{#stacked}} ma-row-meta--stacked{{/stacked}}">
             <span class="ma-row-course">{{course}}</span>
             <span class="ma-row-type">{{typeline}}</span>
             {{#hidden}}<span class="badge ma-pill ma-pill--hidden">{{#str}}hiddenfromstudents, block_my_assessments{{/str}}</span>{{/hidden}}
@@ -85,27 +85,22 @@
     <div class="ma-row-status">
         {{#status}}<span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{/status}}
         {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_my_assessments{{/str}} <strong>{{text}}</strong></span>{{/grade}}
-        {{#tomarklabel}}<span class="ma-tomark" data-tomark="{{tomark}}">{{tomarklabel}}</span>{{/tomarklabel}}
-        {{#hasstages}}
-        <ul class="list-unstyled ma-stages">
-            {{#stages}}<li>{{label}} <strong>{{count}}</strong></li>{{/stages}}
-        </ul>
-        {{/hasstages}}
         {{#bars}}{{> block_my_assessments/progress }}{{/bars}}
     </div>
     <div class="ma-row-actions">
-        {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}">{{label}}<span class="sr-only">: {{name}}</span></a>{{/actions}}
+        {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}"><i class="fa-solid {{icon}} mr-1" aria-hidden="true"></i>{{label}}<span class="sr-only">: {{name}}</span></a>{{/actions}}
         {{#mitigation}}
         <div class="dropdown ma-mitigate">
             <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
-                    data-toggle="dropdown" data-display="static" aria-haspopup="true" aria-expanded="false">{{#str}}action_mitigate, block_my_assessments{{/str}}</button>
-            <div class="dropdown-menu dropdown-menu-sm-right" aria-labelledby="{{id}}">
+                    data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} mr-1" aria-hidden="true"></i>{{#str}}action_mitigate, block_my_assessments{{/str}}</button>
+            <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
                 {{#links}}<div class="dropdown-item ma-mitigate-item">{{{html}}}</div>{{/links}}
             </div>
         </div>
         {{/mitigation}}
         {{#hasmarkers}}
-        <button type="button" class="btn btn-sm ma-btn ma-btn--markers" data-toggle="collapse" data-target="#{{markersid}}"
+        <button type="button" class="btn btn-sm ma-btn ma-btn--markers" data-toggle="collapse" data-bs-toggle="collapse"
+                data-target="#{{markersid}}" data-bs-target="#{{markersid}}"
                 aria-expanded="false" aria-controls="{{markersid}}">{{#str}}action_markers, block_my_assessments{{/str}}</button>
         {{/hasmarkers}}
     </div>

@@ -150,11 +150,10 @@ class staff extends base {
         $oldest = null;
         foreach ($bycm as $cmid => $stages) {
             $cm = $cms[$cmid];
-            $tomark = $mine = $marked = 0;
+            $tomark = $mine = 0;
             foreach ($stages as $s) {
                 $tomark += (int)$s->tomark;
                 $mine += (int)$s->mine;
-                $marked += (int)$s->marked;
             }
             $section = classifier::staff($tomark, $mine, $cm->due === null ? null : (int)$cm->due, $this->now);
             if (!$section) {
@@ -166,20 +165,7 @@ class staff extends base {
                 $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
             ]));
             $row['tomark'] = $tomark;
-            $row['tomarklabel'] = $tomark ? get_string('tomarkcount', 'block_my_assessments', $tomark) : null;
-            $row['bars'] = [format::bar('marked', get_string('bar_mymarking', 'block_my_assessments'), $marked, $mine)];
-            if (count($stages) > 1) {
-                $row['stages'] = [];
-                foreach ($stages as $key => $s) {
-                    if ((int)$s->tomark > 0) {
-                        $row['stages'][] = [
-                            'label' => get_string('labelled', 'block_my_assessments', format::stage($key)),
-                            'count' => (int)$s->tomark,
-                        ];
-                    }
-                }
-                $row['hasstages'] = !empty($row['stages']);
-            }
+            $row['bars'] = $this->stage_bars($stages);
             $row['actions'] = [format::view_action($row['url'])];
             $sections[$section][] = $row + ['sortkey' => (int)($cm->markingdue ?: $cm->due)];
             if ($section === classifier::TOMARK) {
@@ -241,10 +227,35 @@ class staff extends base {
             $this->box('marked', $this->marked_counts(), $rangeoptions, $range),
         ];
         return $this->context($summary, [
+            // What needs action, then what is coming, then what is done.
             $this->section(classifier::TOMARK, $sections[classifier::TOMARK]),
-            $this->section(classifier::COMPLETED, $sections[classifier::COMPLETED]),
             $this->section(classifier::STAFF_UPCOMING, $sections[classifier::STAFF_UPCOMING]),
+            $this->section(classifier::COMPLETED, $sections[classifier::COMPLETED]),
         ], $oldest, ['hasyears' => true, 'years' => $this->years()]);
+    }
+
+    /**
+     * One bar per kind of work I hold on an assessment, each with its own count:
+     * marking (any marker stage), then agreeing, then moderating.
+     *
+     * @param \stdClass[] $stages stage => my units at that stage
+     * @return array
+     */
+    protected function stage_bars(array $stages): array {
+        $kinds = [];
+        foreach ($stages as $stage => $s) {
+            $kind = in_array($stage, ['agreed', 'moderated']) ? $stage : 'marked';
+            $kinds[$kind] ??= [0, 0];
+            $kinds[$kind][0] += (int)$s->marked;
+            $kinds[$kind][1] += (int)$s->mine;
+        }
+        $bars = [];
+        foreach (['marked', 'agreed', 'moderated'] as $kind) {
+            if (isset($kinds[$kind])) {
+                $bars[] = format::bar($kind, format::stage($kind), $kinds[$kind][0], $kinds[$kind][1]);
+            }
+        }
+        return $bars;
     }
 
     /**

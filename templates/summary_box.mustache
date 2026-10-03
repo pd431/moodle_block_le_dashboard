@@ -32,7 +32,7 @@
         "note": null
     }
 }}
-<div class="card ma-box ma-box--{{key}}" data-region="ma-box" data-box="{{key}}" data-counts="{{counts}}">
+<div class="card ma-box ma-box--{{key}}{{#hasoptions}} ma-box--options{{/hasoptions}}" data-region="ma-box" data-box="{{key}}" data-counts="{{counts}}">
     <div class="card-body">
         <div class="ma-box-label" id="ma-box-{{view}}-{{key}}">{{label}}</div>
         {{^note}}<div class="ma-box-value" data-region="ma-box-value" aria-describedby="ma-box-{{view}}-{{key}}">{{value}}</div>{{/note}}

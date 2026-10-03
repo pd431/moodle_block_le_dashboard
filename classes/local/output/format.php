@@ -35,6 +35,13 @@ class format {
     /** Icon for any other activity type. */
     const ICON_FALLBACK = 'fa-file-lines';
 
+    /** Font Awesome icon per row action (Show markers has none, as in rc6). */
+    const ACTION_ICONS = [
+        'submit' => 'fa-upload',
+        'view' => 'fa-eye',
+        'mitigate' => 'fa-hand-holding-heart',
+    ];
+
     /**
      * A date and time, as rows show it.
      *
@@ -194,7 +201,23 @@ class format {
      * @return array
      */
     public static function view_action(string $url): array {
-        return ['key' => 'view', 'label' => get_string('action_view', 'block_my_assessments'), 'url' => $url];
+        return self::action('view', $url);
+    }
+
+    /**
+     * A row action button.
+     *
+     * @param string $key submit or view
+     * @param string $url
+     * @return array
+     */
+    public static function action(string $key, string $url): array {
+        return [
+            'key' => $key,
+            'label' => get_string('action_' . $key, 'block_my_assessments'),
+            'icon' => self::ACTION_ICONS[$key],
+            'url' => $url,
+        ];
     }
 
     /**

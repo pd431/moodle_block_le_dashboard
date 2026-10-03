@@ -163,7 +163,7 @@ class assign extends base {
             [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
             $params['assignid'] = $a->id;
             $params['assignid2'] = $a->id;
-            $rs = $DB->get_recordset_sql("SELECT m.id, g.userid, m.marker, m.mark, m.timemodified
+            $rs = $DB->get_recordset_sql("SELECT m.id, g.userid, g.attemptnumber, m.marker, m.mark, m.timemodified
                                             FROM {assign_mark} m
                                             JOIN {assign_grades} g ON g.id = m.gradeid
                                             JOIN (SELECT userid, MAX(attemptnumber) AS attemptnumber
@@ -240,6 +240,13 @@ class assign extends base {
             $rows[$userid]->timesubmitted = $rows[$userid]->submitted ? (int)$submission->timemodified : null;
         }
         self::apply_gradebook_release($cm, $rows);
+        // A resubmission after release is in marking again, whatever the gradebook still holds.
+        foreach ($rows as $row) {
+            if ($row->timereleased !== null && $row->timesubmitted !== null && $row->timesubmitted > $row->timereleased) {
+                $row->timereleased = null;
+                $row->gradedisplay = null;
+            }
+        }
         return $rows;
     }
 
@@ -252,7 +259,7 @@ class assign extends base {
         }
         $flags = $this->flags($a->id, $userids);
         $grades = $this->latest_grades($a->id, array_keys($submissions));
-        $released = self::released_now($cm, array_keys($submissions));
+        $released = self::released_since($cm, $submissions);
         $allocations = $cmrow->hasallocation ? $this->allocations($a, array_keys($submissions), $flags) : [];
         $markers = self::markercount($a);
         $marks = $markers > 1 ? $this->marks($a, array_keys($submissions)) : [];
@@ -261,13 +268,15 @@ class assign extends base {
         $units = [];
         foreach ($submissions as $userid => $s) {
             $isgroup = !empty($a->teamsubmission) && !empty($s->groupid);
+            // Only a grade on this attempt counts: a reopened attempt starts unmarked.
             $grade = $grades[$userid] ?? null;
+            $grade = $grade && (int)$grade->attemptnumber === (int)$s->attemptnumber ? $grade : null;
+            // Core's needs-grading rule: a grade on this attempt, no older than the submission.
+            // The workflow state alone isn't enough: a new attempt keeps the old state.
+            $final = $grade && $grade->grade !== null && (float)$grade->grade >= 0
+                && (int)$grade->timemodified >= (int)$s->timemodified;
             if ($a->markingworkflow) {
-                $final = in_array($flags[$userid]->workflowstate ?? '', self::MARKED_STATES);
-            } else {
-                // The assign needs-grading rule: a grade newer than the submission.
-                $final = $grade && $grade->grade !== null && (float)$grade->grade >= 0
-                    && (int)$grade->timemodified >= (int)$s->timemodified;
+                $final = $final && in_array($flags[$userid]->workflowstate ?? '', self::MARKED_STATES);
             }
             $allocated = $allocations[$userid] ?? [];
             $stages = [];
@@ -277,7 +286,7 @@ class assign extends base {
                     $final && $grade ? (int)$grade->timemodified : null];
             } else {
                 // Each marker's own mark; unallocated stages take marks in the order given.
-                $mine = $marks[$userid] ?? [];
+                $mine = array_filter($marks[$userid] ?? [], fn($m) => (int)$m->attemptnumber === (int)$s->attemptnumber);
                 $loose = array_values(array_diff_key($mine, array_flip($allocated)));
                 for ($i = 1; $i <= $markers; $i++) {
                     $marker = $allocated[$i - 1] ?? null;
@@ -347,7 +356,7 @@ class assign extends base {
      * @param \cm_info $cm
      * @param \stdClass $a The assign instance.
      * @param int[] $userids
-     * @return \stdClass[] Keyed by user id: status, timemodified, groupid.
+     * @return \stdClass[] Keyed by user id: status, timemodified, groupid, attemptnumber.
      */
     protected function submissions(\cm_info $cm, \stdClass $a, array $userids): array {
         global $DB;
@@ -358,7 +367,7 @@ class assign extends base {
             return self::chunked($userids, function ($chunk) use ($DB, $a) {
                 [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
                 $params['assignid'] = $a->id;
-                return $DB->get_records_sql("SELECT userid, status, timemodified, groupid
+                return $DB->get_records_sql("SELECT userid, status, timemodified, groupid, attemptnumber
                                                FROM {assign_submission}
                                               WHERE assignment = :assignid AND latest = 1 AND groupid = 0
                                                 AND userid $insql", $params);
@@ -372,7 +381,7 @@ class assign extends base {
             'assignment = :assignid AND latest = 1 AND userid = 0',
             ['assignid' => $a->id],
             '',
-            'groupid, status, timemodified'
+            'groupid, status, timemodified, attemptnumber'
         );
         $out = [];
         foreach ($userids as $userid) {
@@ -390,7 +399,7 @@ class assign extends base {
      *
      * @param int $assignid
      * @param int[] $userids
-     * @return \stdClass[] Keyed by user id: grade, grader, timemodified.
+     * @return \stdClass[] Keyed by user id: grade, grader, timemodified, attemptnumber.
      */
     protected function latest_grades(int $assignid, array $userids): array {
         global $DB;
@@ -398,7 +407,7 @@ class assign extends base {
             [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
             $params['assignid'] = $assignid;
             $params['assignid2'] = $assignid;
-            return $DB->get_records_sql("SELECT g.userid, g.grade, g.grader, g.timemodified
+            return $DB->get_records_sql("SELECT g.userid, g.grade, g.grader, g.timemodified, g.attemptnumber
                                            FROM {assign_grades} g
                                            JOIN (SELECT userid, MAX(attemptnumber) AS attemptnumber
                                                    FROM {assign_grades}

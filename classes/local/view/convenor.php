@@ -168,9 +168,14 @@ class convenor extends base {
                 $cm->due ? format::date('due', (int)$cm->due) : null,
                 $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
             ]));
+            // Marking starts after the deadline: before it, only submissions and allocation.
+            $upcoming = $section === classifier::STAFF_UPCOMING;
+            if ($upcoming) {
+                $bars = array_values(array_filter($bars, fn($b) => in_array($b['key'], ['submitted', 'unallocated'])));
+            }
             $row['bars'] = $bars;
             $row['markers'] = [];
-            foreach ($markers[$cmid] ?? [] as $markerid => $bystage) {
+            foreach ($upcoming ? [] : $markers[$cmid] ?? [] as $markerid => $bystage) {
                 $person = $people[$markerid] ?? null;
                 $name = $person ? fullname($person) : get_string('unknownuser', 'block_my_assessments');
                 $markerbars = [];
@@ -214,7 +219,7 @@ class convenor extends base {
     }
 
     /**
-     * The view context from the three sections.
+     * The view context from the three sections: what needs action, then what is coming, then what is done.
      *
      * @param array $sections
      * @param int|null $oldest
@@ -223,8 +228,8 @@ class convenor extends base {
      */
     protected function sections_context(array $sections, ?int $oldest, array $extra): array {
         return $this->context([], [
-            $this->section(classifier::STAFF_UPCOMING, $sections[classifier::STAFF_UPCOMING]),
             $this->section(classifier::INPROGRESS, $sections[classifier::INPROGRESS]),
+            $this->section(classifier::STAFF_UPCOMING, $sections[classifier::STAFF_UPCOMING]),
             $this->section(classifier::CONVENOR_PAST, $sections[classifier::CONVENOR_PAST]),
         ], $oldest, $extra);
     }

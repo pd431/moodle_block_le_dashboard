@@ -1,5 +1,6 @@
 /* block_my_assessments styles. Compiled from scss/styles.scss with Dart Sass; edit that file, not this one. */
 .block_my_assessments_dashboard {
+  container: ma/inline-size;
   box-sizing: border-box;
   --ma-text: #1d2125;
   --ma-text-muted: #5f6770;
@@ -130,12 +131,22 @@
   width: auto;
 }
 .block_my_assessments_dashboard .ma-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
+.block_my_assessments_dashboard .ma-box {
+  flex: 1 1 6rem;
+}
+.block_my_assessments_dashboard .ma-box--options {
+  flex-basis: 11rem;
+}
 .block_my_assessments_dashboard .ma-box .card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 0.5rem 0.75rem;
+  text-align: center;
 }
 .block_my_assessments_dashboard .ma-box-label {
   font-weight: 600;
@@ -151,10 +162,9 @@
 }
 .block_my_assessments_dashboard .ma-box-select {
   width: 100%;
-  margin-top: 0.25rem;
+  margin-top: auto;
 }
-.block_my_assessments_dashboard .ma-btn,
-.block_my_assessments_dashboard .ma-filter-btn {
+.block_my_assessments_dashboard .ma-btn {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
@@ -163,36 +173,49 @@
   background-color: var(--ma-fill);
   color: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-btn:hover, .block_my_assessments_dashboard .ma-btn:focus,
-.block_my_assessments_dashboard .ma-filter-btn:hover,
-.block_my_assessments_dashboard .ma-filter-btn:focus {
+.block_my_assessments_dashboard .ma-btn:hover, .block_my_assessments_dashboard .ma-btn:focus {
   background-color: var(--ma-hover);
   color: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-btn:active, .block_my_assessments_dashboard .ma-btn.active, .block_my_assessments_dashboard .ma-btn[aria-pressed=true], .block_my_assessments_dashboard .ma-btn[aria-expanded=true],
-.block_my_assessments_dashboard .ma-filter-btn:active,
-.block_my_assessments_dashboard .ma-filter-btn.active,
-.block_my_assessments_dashboard .ma-filter-btn[aria-pressed=true],
-.block_my_assessments_dashboard .ma-filter-btn[aria-expanded=true] {
+.block_my_assessments_dashboard .ma-btn:active, .block_my_assessments_dashboard .ma-btn.active, .block_my_assessments_dashboard .ma-btn[aria-pressed=true], .block_my_assessments_dashboard .ma-btn[aria-expanded=true] {
   background-color: var(--ma-solid);
   color: var(--ma-on-solid);
 }
-.block_my_assessments_dashboard .ma-btn:disabled, .block_my_assessments_dashboard .ma-btn.disabled,
-.block_my_assessments_dashboard .ma-filter-btn:disabled,
-.block_my_assessments_dashboard .ma-filter-btn.disabled {
+.block_my_assessments_dashboard .ma-btn:disabled, .block_my_assessments_dashboard .ma-btn.disabled {
   --ma-fill: var(--ma-grey-fill);
   --ma-hover: var(--ma-grey-hover);
   --ma-border: var(--ma-grey-border);
   --ma-ink: var(--ma-grey-ink);
   --ma-solid: var(--ma-grey-solid);
 }
-.block_my_assessments_dashboard .ma-btn--submit,
-.block_my_assessments_dashboard .ma-filter-btn {
+.block_my_assessments_dashboard .ma-btn--submit {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
+}
+.block_my_assessments_dashboard .ma-filter-btn {
+  border: 1px solid #8f959e;
+  background-color: transparent;
+  color: var(--ma-text);
+  font-weight: 400;
+}
+.block_my_assessments_dashboard .ma-filter-btn:hover {
+  background-color: #f8f9fa;
+  color: var(--ma-text);
+}
+.block_my_assessments_dashboard .ma-filter-btn.active, .block_my_assessments_dashboard .ma-filter-btn[aria-pressed=true] {
+  z-index: 1;
+  border-color: var(--ma-primary-solid);
+  background-color: var(--ma-primary-solid);
+  color: var(--ma-on-solid);
+}
+.block_my_assessments_dashboard .ma-mitigate .dropdown-menu {
+  max-width: min(22rem, 100cqi);
+}
+.block_my_assessments_dashboard .ma-mitigate-item {
+  white-space: normal;
 }
 .block_my_assessments_dashboard .ma-btn--mitigate {
   --ma-fill: var(--ma-attention-fill);
@@ -334,23 +357,40 @@
   --ma-row-columns: 2rem minmax(0, 1fr) minmax(13rem, 1.2fr) var(--ma-actions-width);
   --ma-row-areas: "icon info status actions" "icon dates status actions";
 }
-@media (max-width: 991.98px) {
+@container ma (width < 62rem) {
   .block_my_assessments_dashboard .ma-row {
-    --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
-    --ma-row-areas: "icon info info actions" "icon dates status status";
+    --ma-row-columns: 2rem minmax(0, 1fr) 11.5rem var(--ma-actions-width);
+    --ma-row-areas: "icon info status actions" "icon info dates actions";
   }
   .block_my_assessments_dashboard .ma-view--staff .ma-row,
   .block_my_assessments_dashboard .ma-view--convenor .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr) var(--ma-actions-width);
     --ma-row-areas: "icon info actions" "icon dates dates" "icon status status";
   }
+  .block_my_assessments_dashboard .ma-markers {
+    --ma-marker-columns: minmax(0, 1fr);
+  }
 }
-@media (max-width: 575.98px) {
-  .block_my_assessments_dashboard .ma-row,
+@container ma (width < 44rem) {
+  .block_my_assessments_dashboard .ma-row {
+    --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
+    --ma-row-areas: "icon info info actions" "icon dates status status";
+  }
+}
+@container ma (width < 40rem) {
   .block_my_assessments_dashboard .ma-view--staff .ma-row,
   .block_my_assessments_dashboard .ma-view--convenor .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr);
     --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
+  }
+}
+@container ma (width < 34rem) {
+  .block_my_assessments_dashboard .ma-row {
+    --ma-row-columns: 2rem minmax(0, 1fr);
+    --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
+  }
+  .block_my_assessments_dashboard .ma-row-actions {
+    justify-content: flex-start;
   }
 }
 .block_my_assessments_dashboard .ma-row-icon {
@@ -436,6 +476,13 @@
   top: -0.25rem;
   bottom: auto;
 }
+.block_my_assessments_dashboard .ma-row-meta > span {
+  white-space: nowrap;
+}
+.block_my_assessments_dashboard .ma-row-meta--stacked > span {
+  display: block;
+  white-space: normal;
+}
 .block_my_assessments_dashboard .ma-row-info {
   position: relative;
   grid-area: info;
@@ -463,9 +510,6 @@
   grid-area: status;
   min-width: 0;
 }
-.block_my_assessments_dashboard .ma-stages {
-  margin: 0;
-}
 .block_my_assessments_dashboard .ma-grade {
   display: none;
 }
@@ -479,29 +523,26 @@
   gap: 0.25rem;
   grid-area: actions;
 }
-@media (max-width: 575.98px) {
-  .block_my_assessments_dashboard .ma-row-actions {
-    justify-content: flex-start;
-  }
-}
 .block_my_assessments_dashboard .ma-markers {
   grid-column: 2/-1;
   margin: 0;
 }
+.block_my_assessments_dashboard .ma-markers.show, .block_my_assessments_dashboard .ma-markers.collapsing {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: info-start/status-end;
+}
 .block_my_assessments_dashboard .ma-marker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
+  display: grid;
+  grid-template-columns: var(--ma-marker-columns, subgrid);
+  grid-column: 1/-1;
+  align-items: start;
+  row-gap: 0.25rem;
   padding: 0.25rem 0;
   border-top: 1px solid var(--ma-rule);
 }
 .block_my_assessments_dashboard .ma-marker-name {
-  flex: 0 0 10rem;
   font-weight: 600;
-}
-.block_my_assessments_dashboard .ma-marker-bars {
-  flex: 1 1 13rem;
-  max-width: 24rem;
 }
 .block_my_assessments_dashboard .ma-pill {
   --ma-fill: var(--ma-grey-fill);

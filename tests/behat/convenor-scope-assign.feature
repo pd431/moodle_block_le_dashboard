@@ -96,3 +96,39 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     When I log in as "convenor" and view the "Convenor view"
     Then "A1" should show progress bars "Submitted"
     And "A2" should show progress bars "Submitted, Marked, Released"
+
+  # beta6 (Pierre, 2026-10-03): marking doesn't start before the deadline.
+  Scenario: Before the deadline the convenor sees submissions only
+    Given a summative "assign" "A1" in "M1" is due "tomorrow"
+    And "student1" has submitted "A1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "Upcoming" section
+    And "A1" should show progress bars "Submitted"
+
+  Scenario: Before the deadline an allocated assessment also shows what is unallocated
+    Given a summative "assign" "A1" in "M1" with marker allocation is due "tomorrow"
+    And "student1" and "student2" have submitted "A1"
+    And the submission of "student1" for "A1" is allocated to "marker1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should show progress bars "Submitted, Unallocated"
+    And "A1" should show an "Unallocated" progress bar with "1" of "2"
+    And I should not see "Show markers" in the "My assessments" block
+
+  Scenario: Once the deadline passes the marking bars appear
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
+    And "student1" has submitted "A1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "In progress" section
+    And "A1" should show progress bars "Submitted, Marked, Released"
+
+  # G1, G2 (workflow gaps, 2026-10-03).
+  Scenario: A resubmission under marking workflow comes back to the convenor, not released
+    Given a summative "assign" "A1" in "M1" with marking workflow and reopened attempts was due "5 days ago"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And the grade of "student1" for "A1" is released
+    And the submission of "student1" for "A1" is reopened
+    And "student1" has submitted "A1"
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "In progress" section
+    And "A1" should show a "Released" progress bar with "0" of "1"

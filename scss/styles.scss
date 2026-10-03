@@ -146,6 +146,9 @@ $ma-dark-ink-on-solid: ("attention");
 }
 
 .block_my_assessments_dashboard {
+  // Rows are laid out by the block's width, not the screen's: the block can
+  // sit in a narrow column or a side region.
+  container: ma / inline-size;
   box-sizing: border-box;
 
   // Text and rule colours. Body is Boost's; muted is one step darker than
@@ -275,15 +278,28 @@ $ma-dark-ink-on-solid: ("attention");
     width: auto;
   }
 
-  // Summary boxes: as many across as fit, two on phones.
+  // Summary boxes: centred, as many across as fit (three on a phone); a
+  // box with a dropdown needs more room and keeps it at the bottom.
   .ma-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.5rem;
   }
 
+  .ma-box {
+    flex: 1 1 6rem;
+  }
+
+  .ma-box--options {
+    flex-basis: 11rem;
+  }
+
   .ma-box .card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     padding: 0.5rem 0.75rem;
+    text-align: center;
   }
 
   .ma-box-label {
@@ -303,12 +319,11 @@ $ma-dark-ink-on-solid: ("attention");
 
   .ma-box-select {
     width: 100%;
-    margin-top: 0.25rem;
+    margin-top: auto;
   }
 
-  // Buttons: soft fills, never outlines. Pressed or open is the solid tone.
-  .ma-btn,
-  .ma-filter-btn {
+  // Buttons: soft fills. Pressed or open is the solid tone.
+  .ma-btn {
     @include ma-tone("info");
 
     background-color: var(--ma-fill);
@@ -334,14 +349,46 @@ $ma-dark-ink-on-solid: ("attention");
     }
   }
 
-  .ma-btn--submit,
-  .ma-filter-btn {
+  .ma-btn--submit {
     @include ma-tone("primary");
+  }
+
+  // Summative/formative filter: the one outlined control, like Boost's
+  // inputs (#8f959e border, 3:1 on white), so it reads as a setting rather
+  // than an action. Bootstrap's .btn-group joins the borders and corners.
+  .ma-filter-btn {
+    border: 1px solid #8f959e;
+    background-color: transparent;
+    color: var(--ma-text);
+    font-weight: 400;
+
+    &:hover {
+      background-color: #f8f9fa;
+      color: var(--ma-text);
+    }
+
+    &.active,
+    &[aria-pressed="true"] {
+      z-index: 1;
+      border-color: var(--ma-primary-solid);
+      background-color: var(--ma-primary-solid);
+      color: var(--ma-on-solid);
+    }
   }
 
   // No ink reaches Lc 75 on solid orange (black gets 63.7), so open Mitigate
   // stays on the hover step with tone ink (Lc 80.1) and adds an inset ring
   // in the border step to mark it as open.
+  // The menu's links come from another plugin and can be long: wrap them,
+  // and never let the menu be wider than the block.
+  .ma-mitigate .dropdown-menu {
+    max-width: min(22rem, 100cqi);
+  }
+
+  .ma-mitigate-item {
+    white-space: normal;
+  }
+
   .ma-btn--mitigate {
     @include ma-tone("attention");
 
@@ -471,10 +518,14 @@ $ma-dark-ink-on-solid: ("attention");
     --ma-row-areas: "icon info status actions" "icon dates status actions";
   }
 
-  @media (max-width: 991.98px) {
+  // Narrower blocks, by the block's own width. Student rows first put the
+  // pill over the dates so the name keeps its width, then split into two
+  // lines; staff and convenor rows move the bars under the name. Every row
+  // stacks on a phone-sized block.
+  @container ma (width < 62rem) {
     .ma-row {
-      --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
-      --ma-row-areas: "icon info info actions" "icon dates status status";
+      --ma-row-columns: 2rem minmax(0, 1fr) 11.5rem var(--ma-actions-width);
+      --ma-row-areas: "icon info status actions" "icon info dates actions";
     }
 
     .ma-view--staff .ma-row,
@@ -482,14 +533,36 @@ $ma-dark-ink-on-solid: ("attention");
       --ma-row-columns: 2rem minmax(0, 1fr) var(--ma-actions-width);
       --ma-row-areas: "icon info actions" "icon dates dates" "icon status status";
     }
+
+    // Bars are under the name now, so each marker's bars go under their name.
+    .ma-markers {
+      --ma-marker-columns: minmax(0, 1fr);
+    }
   }
 
-  @media (max-width: 575.98px) {
-    .ma-row,
+  @container ma (width < 44rem) {
+    .ma-row {
+      --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
+      --ma-row-areas: "icon info info actions" "icon dates status status";
+    }
+  }
+
+  @container ma (width < 40rem) {
     .ma-view--staff .ma-row,
     .ma-view--convenor .ma-row {
       --ma-row-columns: 2rem minmax(0, 1fr);
       --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
+    }
+  }
+
+  @container ma (width < 34rem) {
+    .ma-row {
+      --ma-row-columns: 2rem minmax(0, 1fr);
+      --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
+    }
+
+    .ma-row-actions {
+      justify-content: flex-start;
     }
   }
 
@@ -542,7 +615,17 @@ $ma-dark-ink-on-solid: ("attention");
     bottom: auto;
   }
 
-  // Row text.
+  // Row text. A meta item ("Assignment · Summative") wraps as one unit.
+  .ma-row-meta > span {
+    white-space: nowrap;
+  }
+
+  // Student rows: module full name, then the kind of activity, one per line.
+  .ma-row-meta--stacked > span {
+    display: block;
+    white-space: normal;
+  }
+
   .ma-row-info {
     position: relative;
     grid-area: info;
@@ -576,10 +659,6 @@ $ma-dark-ink-on-solid: ("attention");
     min-width: 0;
   }
 
-  .ma-stages {
-    margin: 0;
-  }
-
   .ma-grade {
     display: none;
   }
@@ -594,34 +673,37 @@ $ma-dark-ink-on-solid: ("attention");
     justify-content: flex-end;
     gap: 0.25rem;
     grid-area: actions;
-
-    @media (max-width: 575.98px) {
-      justify-content: flex-start;
-    }
   }
 
-  // Marker breakdown, under the row from the name column on.
+  // Marker breakdown, under the row: a subgrid of the row, so each marker's
+  // name sits under the assessment name and their bars under its bars. The
+  // grid applies only while open, so Bootstrap's collapse can still hide it.
   .ma-markers {
     grid-column: 2 / -1;
     margin: 0;
+
+    &.show,
+    &.collapsing {
+      display: grid;
+      grid-template-columns: subgrid;
+      grid-column: info-start / status-end;
+    }
   }
 
+  // Columns through a property, like the row's, so the container query
+  // above wins whatever the source order.
   .ma-marker {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem 0.75rem;
+    display: grid;
+    grid-template-columns: var(--ma-marker-columns, subgrid);
+    grid-column: 1 / -1;
+    align-items: start;
+    row-gap: 0.25rem;
     padding: 0.25rem 0;
     border-top: 1px solid var(--ma-rule);
   }
 
   .ma-marker-name {
-    flex: 0 0 10rem;
     font-weight: 600;
-  }
-
-  .ma-marker-bars {
-    flex: 1 1 13rem;
-    max-width: 24rem;
   }
 
   // Pills: tone fill with tone ink, at body size so APCA holds. Late or

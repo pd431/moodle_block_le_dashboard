@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'block_my_assessments';
-$plugin->version   = 2026100300;
+$plugin->version   = 2026100302;
 $plugin->requires  = 2024100700; // Moodle 4.5.
 $plugin->supported = [405, 405];
 $plugin->maturity  = MATURITY_BETA;
-$plugin->release   = '5.0.0-beta4 (plugin-agnostic remake)';
+$plugin->release   = '5.0.0-beta6 (plugin-agnostic remake)';

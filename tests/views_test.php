@@ -129,6 +129,8 @@ final class views_test extends \advanced_testcase {
         $tomark = self::rows($marker, 'tomark');
         $this->assertArrayHasKey('Overdue essay', $tomark);
         $this->assertSame(1, $tomark['Overdue essay']['tomark']);
+        $this->assertSame(['marked'], array_column($tomark['Overdue essay']['bars'], 'key'), 'one bar per kind of work');
+        $this->assertSame(['tomark', 'upcoming', 'completed'], array_column($marker['sections'], 'key'));
         $this->assertArrayHasKey('Upcoming report', $tomark, 'no allocation: every staff member may mark');
 
         $other = (new staff($this->u['other']->id))->export();
@@ -149,6 +151,8 @@ final class views_test extends \advanced_testcase {
         $upcoming = self::rows($export, 'upcoming');
         $bars = array_column($upcoming['Upcoming report']['bars'], null, 'key');
         $this->assertArrayNotHasKey('unallocated', $bars, 'only activities that allocate markers');
+        $this->assertSame([], array_diff(array_keys($bars), ['submitted', 'unallocated']), 'no marking before the deadline');
+        $this->assertSame(['inprogress', 'upcoming', 'past'], array_column($export['sections'], 'key'));
         $this->assertArrayHasKey('Discussion', $inprogress + self::rows($export, 'past'));
         $discussion = ($inprogress + self::rows($export, 'past'))['Discussion'];
         $this->assertNotContains('submitted', array_column($discussion['bars'], 'key'), 'generic: no submissions bar');

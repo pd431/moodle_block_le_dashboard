@@ -135,3 +135,43 @@ Feature: Students see only assessments they can actually access
     And I press "Formative" in the "My assessments" block
     Then the "Overdue" summary count should be "1"
     And I should not see "A1" in the "My assessments" block
+
+  # Added 2026-10-03 (F7, coordinator-approved): a passed date is not news; the In marking pill says the rest.
+  Scenario Outline: "Feedback expected" shows only while that date is still to come
+    Given a summative "assign" "A1" in "M1" with a marking deadline "<marking>" was due "10 days ago"
+    And "student1" has submitted "A1"
+    When I log in as "student1" and view my dashboard
+    Then "A1" <shows> "Feedback expected"
+
+    Examples:
+      | marking    | shows           |
+      | in 5 days  | should show     |
+      | 2 days ago | should not show |
+
+  # beta6 (Pierre, 2026-10-03): two lines, the module's full name, then the kind of activity.
+  Scenario: A student row names the module in full and the kind of activity
+    Given a summative "assign" "A1" in "M1" is due "tomorrow"
+    And a formative "quiz" "Q1" in "M1" is due "tomorrow"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Module 1"
+    And "A1" should show "Summative assignment"
+    And "A1" should not show "M1"
+    And "Q1" should show "Formative quiz"
+
+  # G2 (workflow gaps, 2026-10-03): the gradebook still holds the old attempt's grade.
+  Scenario: A student who resubmits sees "In marking", not the previous grade
+    Given the following "users" exist:
+      | username | firstname | lastname |
+      | marker1  | Mo        | Marker   |
+    And the following "course enrolments" exist:
+      | user    | course | role           |
+      | marker1 | M1     | editingteacher |
+    And a summative "assign" "A1" in "M1" with marking workflow and reopened attempts was due "5 days ago"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And the grade of "student1" for "A1" is released
+    And the submission of "student1" for "A1" is reopened
+    And "student1" has submitted "A1"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "In marking"
+    And "A1" should not show "Feedback released"

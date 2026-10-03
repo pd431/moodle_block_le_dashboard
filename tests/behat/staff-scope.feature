@@ -106,3 +106,39 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And the submission of "student1" for "A1" is allocated to "marker1"
     When I log in as "marker1" and view my dashboard
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
+
+  # beta6 (Pierre, 2026-10-03): one bar per kind of work, its count once beside it.
+  Scenario: My marking shows the count once, beside its bar
+    Given a summative "assign" "A1" in "M1" was due "3 days ago"
+    And "student1" and "student2" have submitted "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Marking in progress" section with "2" to mark
+    And "A1" should show progress bars "Marked"
+    And "A1" should show a "Marked" progress bar with "0" of "2"
+    And "A1" should not show "2 to mark"
+    And "A1" should not show "My marking"
+
+  # Coursework only: no core activity has a moderation stage.
+  @mod_coursework
+  Scenario: A moderator sees moderation progress alongside their own marking
+    Given a summative "coursework" "A1" in "M1" with marker allocation and moderation was due "3 days ago"
+    And "student1" and "student2" have submitted "A1"
+    And the submission of "student1" for "A1" is allocated to "marker1"
+    And "marker1" moderates "A1"
+    And both markers have given feedback on the submission of "student2" for "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should show progress bars "Marked, Moderated"
+    And "A1" should show a "Marked" progress bar with "0" of "1"
+    And "A1" should show a "Moderated" progress bar with "0" of "1"
+
+  # G1 (workflow gaps, 2026-10-03): a new attempt keeps the old workflow state, so only a grade
+  # on the same attempt counts as marked.
+  Scenario: A resubmission under marking workflow comes back to the marker
+    Given a summative "assign" "A1" in "M1" with marking workflow and reopened attempts was due "5 days ago"
+    And "student1" has submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And the grade of "student1" for "A1" is released
+    And the submission of "student1" for "A1" is reopened
+    And "student1" has submitted "A1"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should appear in the "Marking in progress" section with "1" to mark

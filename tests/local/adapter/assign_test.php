@@ -175,8 +175,75 @@ final class assign_test extends \advanced_testcase {
             ASSIGN_MARKING_WORKFLOW_STATE_READYFORRELEASE
         );
         [$m] = $adapter->marking_rows($cm, $cmrow, [$s1->id]);
+        $this->assertFalse($m->marked, 'a workflow state without a grade is not marked');
+
+        $assign = new \assign(\context_module::instance($a->cmid), null, null);
+        $grade = $assign->get_user_grade($s1->id, true);
+        $grade->grade = 60;
+        $grade->grader = $marker->id;
+        $grade->timemodified = time() + 1;
+        $assign->update_grade($grade);
+        [$m] = $adapter->marking_rows($cm, $cmrow, [$s1->id]);
         $this->assertTrue($m->marked);
         $this->assertFalse($m->released);
+    }
+
+    /**
+     * G1, G2: a reopened attempt that is resubmitted after release is unmarked and unreleased,
+     * even though the workflow state and the gradebook still describe the old attempt.
+     */
+    public function test_resubmission_after_release(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $agen = $gen->get_plugin_generator('mod_assign');
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+        $a = $agen->create_instance(['course' => $course->id, 'duedate' => time() - DAYSECS, 'submissiondrafts' => 0,
+            'assignsubmission_onlinetext_enabled' => 1, 'markingworkflow' => 1,
+            'attemptreopenmethod' => 'manual', 'maxattempts' => -1]);
+        $agen->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid, 'onlinetext' => 'First']);
+        $DB->set_field('assign_submission', 'timemodified', time() - 600, ['assignment' => $a->id]);
+
+        $this->setUser($teacher);
+        $assign = new \assign(\context_module::instance($a->cmid), null, null);
+        $grade = $assign->get_user_grade($s1->id, true);
+        $grade->grade = 40;
+        $grade->grader = $teacher->id;
+        $grade->timemodified = time() - 300;
+        $assign->update_grade($grade);
+        $flags = $assign->get_user_flags($s1->id, true);
+        $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_RELEASED;
+        $assign->update_user_flags($flags);
+        $assign->update_grade($assign->get_user_grade($s1->id, false));
+        $DB->execute(
+            'UPDATE {grade_grades} SET timemodified = :t, timecreated = :t2 WHERE userid = :u',
+            ['t' => time() - 300, 't2' => time() - 300, 'u' => $s1->id]
+        );
+
+        $cm = get_fast_modinfo($course->id)->cms[$a->cmid];
+        $adapter = new assign();
+        $cmrow = $adapter->cm_row($cm);
+        [$m] = $adapter->marking_rows($cm, $cmrow, [$s1->id]);
+        $this->assertTrue($m->marked);
+        $this->assertTrue($m->released);
+
+        // Reopen ("Allow another attempt") and resubmit.
+        $method = new \ReflectionMethod($assign, 'add_attempt');
+        $method->setAccessible(true);
+        $this->assertTrue($method->invoke($assign, $s1->id));
+        $this->setUser($s1);
+        $agen->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid, 'onlinetext' => 'Second']);
+
+        [$m] = $adapter->marking_rows($cm, $cmrow, [$s1->id]);
+        $this->assertFalse($m->marked, 'G1: the new attempt has no grade yet');
+        $this->assertFalse($m->released, 'G2: released before the resubmission');
+        $rows = $adapter->student_rows($cm, $cmrow, [$s1->id]);
+        $this->assertTrue($rows[$s1->id]->submitted);
+        $this->assertNull($rows[$s1->id]->timereleased, 'G2: in marking again');
+        $this->assertNull($rows[$s1->id]->gradedisplay);
     }
 
     /**

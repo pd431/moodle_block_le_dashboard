@@ -159,7 +159,10 @@ abstract class base implements adapter {
                 if ((int)$g->hidden === 1) {
                     continue;
                 }
-                $time = max((int)$g->timemodified, (int)$g->timecreated, (int)$g->hidden, $itemhiddenuntil);
+                // Modules store the date graded in timemodified and the date submitted in
+                // timecreated, so only timemodified says when the grade arrived.
+                $graded = (int)$g->timemodified ?: (int)$g->timecreated;
+                $time = max($graded, (int)$g->hidden, $itemhiddenuntil);
                 $out[(int)$g->userid] = (object)[
                     'timereleased' => $time ?: time(),
                     'display' => grade_format_gradevalue($g->finalgrade, $item, true),
@@ -181,6 +184,24 @@ abstract class base implements adapter {
         $out = [];
         foreach (self::gradebook_release($cm, $userids) as $userid => $release) {
             if ($release->timereleased <= $now) {
+                $out[$userid] = true;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Users whose grade is visible now and was released after their latest submission.
+     *
+     * @param \cm_info $cm
+     * @param \stdClass[] $submissions Keyed by user id, with timemodified.
+     * @return bool[] userid => true
+     */
+    protected static function released_since(\cm_info $cm, array $submissions): array {
+        $now = time();
+        $out = [];
+        foreach (self::gradebook_release($cm, array_keys($submissions)) as $userid => $release) {
+            if ($release->timereleased <= $now && $release->timereleased >= (int)$submissions[$userid]->timemodified) {
                 $out[$userid] = true;
             }
         }

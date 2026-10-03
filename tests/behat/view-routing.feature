@@ -70,3 +70,18 @@ Feature: Staff see only the staff views, everyone else sees the student view
     And "staff1" is enrolled in "M2" as "editingteacher"
     When I log in as "staff1" and view my dashboard
     Then the "My marking" should be open
+
+  # beta6 (Pierre, 2026-10-03): what needs action, then what is coming, then what is done.
+  # Empty sections are hidden but keep their place, so one upcoming assessment is enough.
+  Scenario Outline: Sections are ordered by what needs action first
+    Given "staff1" is enrolled in "M1" as "<role>"
+    And a summative "assign" "A1" in "M1" is due "tomorrow"
+    When I log in as "staff1" and view my dashboard
+    Then the "<view>" should be open
+    And the sections should be in the order "<order>"
+
+    Examples:
+      | role           | view          | order                                                      |
+      | student        | Student view  | Overdue, Upcoming, Past                                    |
+      | editingteacher | My marking    | Marking in progress, Upcoming deadlines, Completed marking |
+      | moduleconvenor | Convenor view | In progress, Upcoming, Past                                |
