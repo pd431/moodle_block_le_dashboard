@@ -85,9 +85,9 @@ $ma-state-tones: (
   // Section headers, per view: (view: (section: tone)).
   "section": (
     "default": "grey",
-    "student": ("overdue": "attention", "upcoming": "primary"),
-    "staff": ("tomark": "primary", "upcoming": "info"),
-    "convenor": ("upcoming": "primary", "inprogress": "primary"),
+    "student": ("overdue": "attention", "upcoming": "primary", "undated": "info"),
+    "staff": ("tomark": "primary", "upcoming": "info", "undated": "info"),
+    "convenor": ("upcoming": "primary", "inprogress": "primary", "undated": "info"),
   ),
   // Student status pills.
   "pill": (

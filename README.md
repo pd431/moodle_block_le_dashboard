@@ -20,8 +20,8 @@ works without mod_coursework and reads each activity type through its own adapte
 1. Unzip into `blocks/my_assessments` and visit Site administration > Notifications.
 2. In Site administration > Plugins > Blocks > My assessments > Settings, set the summative and
    formative tags and the student, staff and module convenor roles.
-3. Tag activities `summative` or `formative` (or the tags you chose). Only tagged activities that
-   have a due date are listed.
+3. Tag activities `summative` or `formative` (or the tags you chose). Only tagged activities are
+   listed. Those without a due date appear under Undated, and convenors get a hint to add one.
 4. Activity types lets you choose which types appear. Academic years sets the year filter for staff
    and convenors.
 

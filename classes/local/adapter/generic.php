@@ -23,8 +23,8 @@ use block_my_assessments\local\index\cm_row;
  * from the module's calendar event, the grade and its release from the
  * gradebook. Submission is unknown (NULL), so these assessments are
  * bucketed by date only: Upcoming before the deadline, Past after it,
- * never Overdue. An activity with no due date in the calendar is not
- * listed (R8).
+ * never Overdue. An activity with no due date in the calendar is listed
+ * as Undated (EC2).
  *
  * @package    block_my_assessments
  * @copyright  2026 onwards block_my_assessments contributors
@@ -86,9 +86,7 @@ class generic extends base {
                 }
             }
         }
-        if ($due === null) {
-            return null;
-        }
+        // No deadline event: listed as Undated (EC2).
         return new cm_row(due: $due, stages: []);
     }
 

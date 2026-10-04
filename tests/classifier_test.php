@@ -55,6 +55,12 @@ final class classifier_test extends \basic_testcase {
             'reopened long after the deadline (G13)' => [[$now - 30 * $day, null, 0, $now - 60, true], c::UPCOMING,
                 c::STATUS_REOPENED],
             'reopened past the cut-off (G13)' => [[$now - 2 * $day, $now - $day, 0, null, true], c::UPCOMING, c::STATUS_REOPENED],
+            'no deadline, not submitted (EC2)' => [[null, null, 0, null], c::UNDATED, c::STATUS_PENDING],
+            'no deadline, submitted (EC2)' => [[null, null, 1, null], c::UNDATED, c::STATUS_SUBMITTED],
+            'no deadline, released (EC2)' => [[null, null, 1, $now - 60], c::PAST, c::STATUS_RELEASED],
+            'no deadline, reopened stays actionable (EC2)' => [[null, null, 0, null, true], c::UPCOMING, c::STATUS_REOPENED],
+            'generic, no deadline (EC2)' => [[null, null, null, null], c::UNDATED, c::STATUS_OPEN],
+            'generic, no deadline, graded (EC2)' => [[null, null, null, $now - 60], c::PAST, c::STATUS_RELEASED],
         ];
     }
 
@@ -83,6 +89,26 @@ final class classifier_test extends \basic_testcase {
     }
 
     /**
+     * A student who joined after the deadline (EC10): Overdue inside the grace period, then
+     * Past and not submitted at once, not after the overdue threshold. An extension makes it Upcoming.
+     */
+    public function test_student_late_joiner(): void {
+        $grace = 4 * HOURSECS;
+        $row = (object)['due' => self::NOW - 3 * DAYSECS, 'cutoff' => null, 'submitted' => 0, 'timereleased' => null,
+            'enrolstart' => self::NOW - DAYSECS];
+        $this->assertSame([c::PAST, c::STATUS_NOTSUBMITTED], c::student($row, self::NOW, 90, $grace));
+        $row->due = self::NOW - 2 * HOURSECS;
+        $row->enrolstart = self::NOW - HOURSECS;
+        $this->assertSame([c::OVERDUE, c::STATUS_NOTSUBMITTED], c::student($row, self::NOW, 90, $grace));
+        $row->due = self::NOW + 5 * DAYSECS;
+        $this->assertSame([c::UPCOMING, c::STATUS_PENDING], c::student($row, self::NOW, 90, $grace));
+        // Enrolled before the deadline: Overdue as before.
+        $row->due = self::NOW - 3 * DAYSECS;
+        $row->enrolstart = self::NOW - 10 * DAYSECS;
+        $this->assertSame([c::OVERDUE, c::STATUS_NOTSUBMITTED], c::student($row, self::NOW, 90, $grace));
+    }
+
+    /**
      * Marker sections.
      */
     public function test_staff(): void {
@@ -96,6 +122,10 @@ final class classifier_test extends \basic_testcase {
         $this->assertSame(c::STAFF_UPCOMING, c::staff(0, 2, self::NOW - DAYSECS, self::NOW, true));
         $this->assertSame(c::TOMARK, c::staff(1, 2, self::NOW - DAYSECS, self::NOW, true));
         $this->assertNull(c::staff(0, 0, self::NOW + DAYSECS, self::NOW, true));
+        // EC2: no deadline and nothing to mark is Undated; work to mark still wins.
+        $this->assertSame(c::UNDATED, c::staff(0, 0, null, self::NOW));
+        $this->assertSame(c::UNDATED, c::staff(0, 3, null, self::NOW));
+        $this->assertSame(c::TOMARK, c::staff(1, 3, null, self::NOW));
     }
 
     /**
@@ -108,6 +138,12 @@ final class classifier_test extends \basic_testcase {
         // Nothing submitted yet: still in progress for the threshold, then past.
         $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90));
         $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - 91 * DAYSECS, self::NOW, 0, 0, 90));
+        // EC4: with every student gone, nothing more can arrive.
+        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90, 0));
+        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90, 2));
+        // EC2: no deadline is Undated unless something is outstanding.
+        $this->assertSame(c::UNDATED, c::convenor(null, self::NOW, 0, 0, 90, 2));
+        $this->assertSame(c::INPROGRESS, c::convenor(null, self::NOW, 2, 1, 90, 2));
     }
 
     /**

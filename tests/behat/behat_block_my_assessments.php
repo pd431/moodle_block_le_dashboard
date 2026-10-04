@@ -386,7 +386,29 @@ class behat_block_my_assessments extends behat_base {
         if ($modname === 'quiz') {
             self::add_essay($instance);
         }
+        if ($due) {
+            self::joined_before($course->id, $due);
+        }
         core_tag_tag::set_item_tags('core', 'course_modules', $instance->cmid, context_module::instance($instance->cmid), [$tag]);
+    }
+
+    /**
+     * Dates the enrolments already in a course before a deadline: students on the module when an
+     * assessment is set were there before its deadline. Students enrolled later in a scenario are
+     * late joiners (EC10).
+     *
+     * @param int $courseid
+     * @param int $due
+     */
+    protected static function joined_before(int $courseid, int $due): void {
+        global $DB;
+        $before = $due - DAYSECS;
+        $DB->execute(
+            "UPDATE {user_enrolments}
+                         SET timecreated = :t1, timestart = CASE WHEN timestart > :t2 THEN :t3 ELSE timestart END
+                       WHERE timecreated > :t4 AND enrolid IN (SELECT id FROM {enrol} WHERE courseid = :courseid)",
+            ['t1' => $before, 't2' => $before, 't3' => $before, 't4' => $before, 'courseid' => $courseid]
+        );
     }
 
     /**
@@ -1827,6 +1849,45 @@ class behat_block_my_assessments extends behat_base {
     }
 
     /**
+     * Which modifier a row's activity icon carries (overdue, notsubmitted, submitted, late, duesoon,
+     * selfcert, extension).
+     *
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should (?P<not>not )?have the "(?P<state>[a-z]+)" modifier$/
+     * @param string $name
+     * @param string $not
+     * @param string $state
+     */
+    public function the_activity_icon_should_have_modifier(string $name, string $not, string $state): void {
+        $has = (bool)$this->row($name)->find('css', '.ma-row-overlay--' . $state);
+        if ($has === ($not !== '')) {
+            throw new ExpectationException(
+                "The icon of '$name' " . ($has ? 'has' : 'has no') . " $state modifier",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Switches off an activity's due date, as unticking Enable in its settings does.
+     *
+     * @When /^the due date of "(?P<name>[^"]*)" is switched off$/
+     * @param string $name
+     */
+    public function the_due_date_is_switched_off(string $name): void {
+        global $CFG, $DB;
+        $cm = $this->cm($name);
+        $field = ['quiz' => 'timeclose', 'workshop' => 'submissionend', 'coursework' => 'deadline'][$cm->modname] ?? 'duedate';
+        $DB->set_field($cm->modname, $field, 0, ['id' => $cm->instance]);
+        if ($cm->modname === 'assign') {
+            require_once($CFG->dirroot . '/mod/assign/locallib.php');
+            $assign = new assign(context_module::instance($cm->id), null, null);
+            $assign->update_calendar($cm->id);
+        }
+        rebuild_course_cache($cm->course, true);
+        \core\event\course_module_updated::create_from_cm(get_fast_modinfo($cm->course)->get_cm($cm->id))->trigger();
+    }
+
+    /**
      * Sets the brief guidance link.
      *
      * @Given /^the My assessments block guidance link is "(?P<url>[^"]*)"$/
@@ -1876,14 +1937,26 @@ class behat_block_my_assessments extends behat_base {
         throw new ExpectationException("No visible '$text' link to '$url' in the block", $this->getSession());
     }
 
+    /**
+     * A link in the block to an activity's settings page.
+     *
+     * @Then /^I should see "(?P<text>[^"]*)" linking to the settings page of "(?P<name>[^"]*)"$/
+     * @param string $text
+     * @param string $name
+     */
+    public function i_should_see_linking_to_settings(string $text, string $name): void {
+        $url = (new moodle_url('/course/modedit.php', ['update' => $this->cm($name)->id]))->out(false);
+        $this->i_should_see_linking_to($text, $url);
+    }
+
     /** Hint names in steps, to the hint keys rows carry. */
     const HINTS = ['brief' => 'brief', 'unallocated' => 'unallocated', 'returned work' => 'returned',
-        'feedback contact' => 'feedbackcontact', 'extension' => 'extensions'];
+        'feedback contact' => 'feedbackcontact', 'extension' => 'extensions', 'no deadline' => 'nodeadline'];
 
     /**
      * Clicks a row's hint.
      *
-     * @When /^I click on the (?P<hint>brief|unallocated|returned work|feedback contact|extension) hint of "(?P<name>[^"]*)"$/
+     * @When /^I click on the (?P<hint>brief|unallocated|returned work|feedback contact|extension|no deadline) hint of "(?P<name>[^"]*)"$/
      * @param string $hint
      * @param string $name
      */
@@ -1896,7 +1969,7 @@ class behat_block_my_assessments extends behat_base {
     /**
      * Whether a row has a hint.
      *
-     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>brief|unallocated|returned work|feedback contact|extension) hint$/
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>brief|unallocated|returned work|feedback contact|extension|no deadline) hint$/
      * @param string $name
      * @param string $not
      * @param string $hint

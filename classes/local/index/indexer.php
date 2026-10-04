@@ -54,19 +54,21 @@ class indexer {
     }
 
     /**
-     * Students of a course: active enrolment and one of the configured student roles.
+     * Students of a course: enrolled, suspended or ended enrolments included, with one of the
+     * configured student roles. Submitted work of students who left still gets marked (EC4).
      *
      * @param int $courseid
+     * @param bool $onlyactive Only students whose enrolment is active now.
      * @return int[]
      */
-    public static function students(int $courseid): array {
+    public static function students(int $courseid, bool $onlyactive = false): array {
         global $DB;
         $roleids = config::role_ids('studentrole');
         if (!$roleids) {
             return [];
         }
         $context = \context_course::instance($courseid);
-        [$esql, $params] = get_enrolled_sql($context, '', 0, true);
+        [$esql, $params] = get_enrolled_sql($context, '', 0, $onlyactive);
         [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'r');
         [$ctxsql, $ctxparams] = $DB->get_in_or_equal($context->get_parent_context_ids(true), SQL_PARAMS_NAMED, 'ctx');
         $sql = "SELECT DISTINCT u.id
@@ -75,6 +77,30 @@ class indexer {
                   JOIN {role_assignments} ra ON ra.userid = u.id
                  WHERE u.deleted = 0 AND ra.roleid $rolesql AND ra.contextid $ctxsql";
         return array_map('intval', $DB->get_fieldset_sql($sql, $params + $roleparams + $ctxparams));
+    }
+
+    /**
+     * When each student joined the course: the start of their earliest enrolment there, or when
+     * it was made if it has no start date (EC10).
+     *
+     * @param int $courseid
+     * @param int[] $userids
+     * @return int[] userid => time
+     */
+    public static function enrol_starts(int $courseid, array $userids): array {
+        global $DB;
+        if (!$userids) {
+            return [];
+        }
+        [$usql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
+        $params['courseid'] = $courseid;
+        return array_map('intval', $DB->get_records_sql_menu("SELECT ue.userid,
+                                                                     MIN(CASE WHEN ue.timestart > 0 THEN ue.timestart
+                                                                              ELSE ue.timecreated END)
+                                                                FROM {user_enrolments} ue
+                                                                JOIN {enrol} e ON e.id = ue.enrolid
+                                                               WHERE e.courseid = :courseid AND ue.userid $usql
+                                                            GROUP BY ue.userid", $params));
     }
 
     /**
@@ -188,8 +214,7 @@ class indexer {
         try {
             registry::check_test_failure($cm->modname);
             $cmrow = $adapter->cm_row($cm);
-            if (!$cmrow || $cmrow->due === null) {
-                // Nothing to bucket it by (R8).
+            if (!$cmrow) {
                 $this->drop_rows($cmid);
                 registry::clear_error($cm->modname);
                 return false;
@@ -201,6 +226,8 @@ class indexer {
                 $students = array_values(array_intersect($students, $only));
             }
             $students = $this->accessible($cm, $students);
+            $active = array_flip(self::students($courseid, true));
+            $starts = self::enrol_starts($courseid, array_keys($students));
             $sturows = $adapter->student_rows($cm, $cmrow, array_keys($students));
             $markrows = $adapter->marking_rows($cm, $cmrow, array_keys($students));
         } catch (\Throwable $e) {
@@ -259,6 +286,8 @@ class indexer {
                 'reopened' => $row->reopened ? 1 : 0,
                 'allocatedto' => $allocated ? ',' . implode(',', $allocated) . ',' : null,
                 'canaccess' => $canaccess ? 1 : 0,
+                'active' => isset($active[$userid]) ? 1 : 0,
+                'enrolstart' => $starts[$userid] ?? null,
                 'submitted' => $row->submitted === null ? null : ($row->submitted ? 1 : 0),
                 'timesubmitted' => $row->timesubmitted,
                 'timereleased' => $row->timereleased,
@@ -588,8 +617,8 @@ class indexer {
      * The nightly reconcile: courses with tagged assessments or index rows are re-indexed,
      * which also catches missed events, direct database edits and restores.
      *
-     * Only live courses (F5): those with an indexed deadline within the live window or ahead,
-     * or with tagged assessments not yet indexed. Older courses keep their rows; events and
+     * Only live courses (F5): those with an indexed deadline within the live window or ahead, or
+     * none (EC2), or with tagged assessments not yet indexed. Older courses keep their rows; events and
      * Refresh still update them. One course or assessment failing doesn't stop the run; failures
      * are recorded for the activity types admin page.
      *
@@ -636,7 +665,7 @@ class indexer {
     }
 
     /**
-     * Courses the reconcile re-indexes: an indexed deadline within the live window or ahead, or a
+     * Courses the reconcile re-indexes: an indexed deadline within the live window, ahead or unset, or a
      * tagged assessment not in the index yet. Null when the window is off (0 months): every course.
      *
      * @return array|null courseid => true
@@ -649,7 +678,7 @@ class indexer {
         }
         $since = ($this->now ?? time()) - $months * 30 * DAYSECS;
         $live = $DB->get_fieldset_sql(
-            "SELECT DISTINCT courseid FROM {" . self::CM . "} WHERE due >= :since",
+            "SELECT DISTINCT courseid FROM {" . self::CM . "} WHERE due >= :since OR due IS NULL",
             ['since' => $since]
         );
         $new = $DB->get_fieldset_sql("SELECT DISTINCT cm.course

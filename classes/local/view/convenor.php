@@ -73,7 +73,8 @@ class convenor extends base {
     public function export(): array {
         global $DB;
         $extra = ['hasyears' => true, 'years' => $this->years()];
-        $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::CONVENOR_PAST => []];
+        $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::UNDATED => [],
+            classifier::CONVENOR_PAST => []];
         // In progress shows whatever its year; Upcoming and Past follow the year picker (EC3).
         if (!$this->courses(true)) {
             return $this->sections_context($sections, null, $extra);
@@ -90,10 +91,12 @@ class convenor extends base {
         }
         $cms = array_column(array_values($cms), null, 'cmid');
 
-        // Students who can access, and how many submitted (R4: as of indexing).
+        // Students who can access, and how many submitted (R4: as of indexing). Students who left
+        // are not counted here, though their submitted work is still marked (EC4).
         $students = $DB->get_records_sql("SELECT s.cmid,
-                                                 SUM(s.canaccess) AS total,
-                                                 SUM(CASE WHEN s.canaccess = 1 AND s.submitted = 1 THEN 1 ELSE 0 END) AS submitted
+                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
+                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
+                                                          THEN 1 ELSE 0 END) AS submitted
                                             FROM {block_my_assessments_stu} s
                                             JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
                                            WHERE c.courseid $insql
@@ -168,8 +171,8 @@ class convenor extends base {
             $groups = $first && $first->isgroup;
 
             $bars = [];
+            $s = $students[$cmid] ?? null;
             if ($cm->adapter !== 'generic') {
-                $s = $students[$cmid] ?? null;
                 $bars[] = format::bar(
                     'submitted',
                     get_string('bar_submitted', 'block_my_assessments'),
@@ -205,7 +208,8 @@ class convenor extends base {
                 $this->now,
                 $units,
                 $outstanding + (int)($pending[$cmid]->students ?? 0),
-                $threshold
+                $threshold,
+                (int)($s->total ?? 0)
             );
             $otheryear = !isset($inyear[(int)$cm->courseid]);
             // Only with marking or release actually outstanding: that is the work needing action.
@@ -248,6 +252,9 @@ class convenor extends base {
             $row['markersid'] = $row['id'] . '-markers';
             $row['actions'] = [format::view_action($row['url'])];
             $row['hints'] = [];
+            if ($cm->due === null) {
+                $row['hints'][] = $this->nodeadline_hint($row['id'], (int)$cmid);
+            }
             if (empty($cm->hasbrief)) {
                 $row['hints'][] = $this->brief_hint($row['id']);
             }
@@ -274,9 +281,31 @@ class convenor extends base {
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
         $sections[classifier::CONVENOR_PAST] = array_reverse($sections[classifier::CONVENOR_PAST]);
+        usort($sections[classifier::UNDATED], fn($a, $b) => strcmp($a['search'], $b['search']));
         // In progress by marking deadline, then deadline.
         usort($sections[classifier::INPROGRESS], fn($a, $b) => $a['sortkey'] <=> $b['sortkey']);
         return $this->sections_context($sections, $oldest, $extra);
+    }
+
+    /**
+     * The hint shown on an assessment with no deadline, wherever it sits (EC2): students can't
+     * see when it is due, and it can't move through the sections by date.
+     *
+     * @param string $rowid
+     * @param int $cmid
+     * @return array
+     */
+    protected function nodeadline_hint(string $rowid, int $cmid): array {
+        $link = \html_writer::link(
+            new \moodle_url('/course/modedit.php', ['update' => $cmid]),
+            get_string('hint_nodeadline_settings', 'block_my_assessments')
+        );
+        return format::hint(
+            $rowid,
+            'nodeadline',
+            get_string('hint_nodeadline_text', 'block_my_assessments'),
+            get_string('hint_nodeadline_link', 'block_my_assessments', $link)
+        );
     }
 
     /**
@@ -298,7 +327,8 @@ class convenor extends base {
     }
 
     /**
-     * The view context from the three sections: what needs action, then what is coming, then what is done.
+     * The view context from the sections: what needs action, then what is coming, then what has
+     * no date (only when there is some), then what is done.
      *
      * @param array $sections
      * @param int|null $oldest
@@ -306,10 +336,11 @@ class convenor extends base {
      * @return array
      */
     protected function sections_context(array $sections, ?int $oldest, array $extra): array {
-        return $this->context([], [
+        return $this->context([], array_filter([
             $this->section(classifier::INPROGRESS, $sections[classifier::INPROGRESS]),
             $this->section(classifier::STAFF_UPCOMING, $sections[classifier::STAFF_UPCOMING]),
+            $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::CONVENOR_PAST, $sections[classifier::CONVENOR_PAST]),
-        ], $oldest, $extra);
+        ]), $oldest, $extra);
     }
 }

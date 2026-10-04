@@ -140,5 +140,21 @@ function xmldb_block_my_assessments_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100600, 'my_assessments');
     }
 
+    if ($oldversion < 2026100800) {
+        // Students who left keep their submitted work in marking (EC4); late joiners (EC10);
+        // tagged activities without a deadline are listed as Undated (EC2).
+        $table = new xmldb_table('block_my_assessments_stu');
+        $field = new xmldb_field('active', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'canaccess');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('enrolstart', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'active');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_my_assessments\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026100800, 'my_assessments');
+    }
+
     return true;
 }

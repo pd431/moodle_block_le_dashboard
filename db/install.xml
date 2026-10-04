@@ -59,6 +59,8 @@
         <FIELD NAME="reopened" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when a new attempt is open and not yet submitted"/>
         <FIELD NAME="allocatedto" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Markers allocated to the student, as ,id,id, (activities with allocation)"/>
         <FIELD NAME="canaccess" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="Restrictions and groups, as of indexing"/>
+        <FIELD NAME="active" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="1" SEQUENCE="false" COMMENT="0 when the enrolment is suspended or ended: their work is still marked, but they leave the submission counts"/>
+        <FIELD NAME="enrolstart" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the student joined the course, for late joiners"/>
         <FIELD NAME="submitted" TYPE="int" LENGTH="1" NOTNULL="false" SEQUENCE="false" COMMENT="NULL when the adapter cannot tell"/>
         <FIELD NAME="timesubmitted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="timereleased" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="When the grade is or will be visible to the student; NULL if not released"/>

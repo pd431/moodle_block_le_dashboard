@@ -120,6 +120,16 @@ abstract class base {
     }
 
     /**
+     * The Undated section, only when it has rows (EC2).
+     *
+     * @param array $rows
+     * @return array|null
+     */
+    protected function undated(array $rows): ?array {
+        return $rows ? $this->section(classifier::UNDATED, $rows) : null;
+    }
+
+    /**
      * SQL joining the assessment index (alias c) to activities not being deleted: deleting from
      * the course page only flags the activity until core's task removes it (EC7).
      */
@@ -245,6 +255,7 @@ abstract class base {
         foreach ($sections as $s) {
             $hasrows = $hasrows || $s['hasrows'];
         }
+        $sections = array_values($sections);
         return $extra + [
             'key' => $this->key(),
             'uniqid' => \html_writer::random_id('ma'),

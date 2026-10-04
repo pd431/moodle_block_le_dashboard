@@ -161,7 +161,7 @@ class format {
      * One component for every hint (no brief, unallocated work, returned work).
      *
      * @param string $rowid
-     * @param string $key brief, unallocated, returned, feedbackcontact or extensions.
+     * @param string $key brief, unallocated, returned, feedbackcontact, extensions or nodeadline.
      * @param string $text The tip.
      * @param string|null $link HTML link sentence after the tip, if any.
      * @param string|null $label The button's text, when it isn't the hint_{key} string (a count, say).

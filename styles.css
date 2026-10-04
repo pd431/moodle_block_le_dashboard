@@ -269,6 +269,13 @@
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
 }
+.block_my_assessments_dashboard .ma-view--student .ma-section--undated {
+  --ma-fill: var(--ma-info-fill);
+  --ma-hover: var(--ma-info-hover);
+  --ma-border: var(--ma-info-border);
+  --ma-ink: var(--ma-info-ink);
+  --ma-solid: var(--ma-info-solid);
+}
 .block_my_assessments_dashboard .ma-view--staff .ma-section--tomark {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
@@ -277,6 +284,13 @@
   --ma-solid: var(--ma-primary-solid);
 }
 .block_my_assessments_dashboard .ma-view--staff .ma-section--upcoming {
+  --ma-fill: var(--ma-info-fill);
+  --ma-hover: var(--ma-info-hover);
+  --ma-border: var(--ma-info-border);
+  --ma-ink: var(--ma-info-ink);
+  --ma-solid: var(--ma-info-solid);
+}
+.block_my_assessments_dashboard .ma-view--staff .ma-section--undated {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
@@ -296,6 +310,13 @@
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
+}
+.block_my_assessments_dashboard .ma-view--convenor .ma-section--undated {
+  --ma-fill: var(--ma-info-fill);
+  --ma-hover: var(--ma-info-hover);
+  --ma-border: var(--ma-info-border);
+  --ma-ink: var(--ma-info-ink);
+  --ma-solid: var(--ma-info-solid);
 }
 .block_my_assessments_dashboard .ma-section-header {
   display: flex;

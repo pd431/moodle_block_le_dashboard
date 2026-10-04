@@ -31,6 +31,8 @@ class classifier {
     const UPCOMING = 'upcoming';
     /** Student section: everything else. */
     const PAST = 'past';
+    /** Section in every view: no deadline and nothing needing action now (EC2). */
+    const UNDATED = 'undated';
 
     /** Status: not submitted yet, deadline ahead. */
     const STATUS_PENDING = 'pending';
@@ -48,6 +50,8 @@ class classifier {
     const STATUS_CLOSED = 'closed';
     /** Status: a new attempt is open (assign "Allow another attempt"), whatever the deadline. */
     const STATUS_REOPENED = 'reopened';
+    /** Status: generic type with no deadline (EC2). */
+    const STATUS_OPEN = 'open';
 
     /**
      * Where a student's assessment goes, and its status.
@@ -57,17 +61,24 @@ class classifier {
      * - Unsubmitted after the deadline: Overdue for the threshold, then Past.
      * - Submitted: Upcoming until the deadline, then Past (in marking, or released).
      * - A reopened attempt not yet resubmitted: Upcoming, "Resubmission open" (G13).
+     * - No deadline (EC2): Undated until released, then Past; a reopened attempt stays in Upcoming.
+     * - Joined the course after the deadline (EC10): once the deadline plus the grace period has
+     *   passed, Past and "Not submitted" at once; inside the grace period, Overdue as anyone else.
      *
-     * @param \stdClass $row due, cutoff, submitted, timereleased, reopened
+     * @param \stdClass $row due, cutoff, submitted, timereleased, reopened, enrolstart
      * @param int $now
      * @param int $thresholddays
+     * @param int $grace Grace period in seconds.
      * @return array [section, status]
      */
-    public static function student(\stdClass $row, int $now, int $thresholddays): array {
+    public static function student(\stdClass $row, int $now, int $thresholddays, int $grace = 0): array {
         $due = $row->due === null ? null : (int)$row->due;
         $released = $row->timereleased !== null && (int)$row->timereleased <= $now;
         if ($row->submitted === null) {
-            if ($due === null || $due >= $now) {
+            if ($due === null) {
+                return $released ? [self::PAST, self::STATUS_RELEASED] : [self::UNDATED, self::STATUS_OPEN];
+            }
+            if ($due >= $now) {
                 return [self::UPCOMING, $released ? self::STATUS_RELEASED : self::STATUS_DUE];
             }
             return [self::PAST, $released ? self::STATUS_RELEASED : self::STATUS_CLOSED];
@@ -76,7 +87,10 @@ class classifier {
             if ($released) {
                 return [($due !== null && $due >= $now) ? self::UPCOMING : self::PAST, self::STATUS_RELEASED];
             }
-            if ($due === null || $due >= $now) {
+            if ($due === null) {
+                return [self::UNDATED, self::STATUS_SUBMITTED];
+            }
+            if ($due >= $now) {
                 return [self::UPCOMING, self::STATUS_SUBMITTED];
             }
             return [self::PAST, self::STATUS_INMARKING];
@@ -84,10 +98,17 @@ class classifier {
         if (!empty($row->reopened)) {
             return [self::UPCOMING, self::STATUS_REOPENED];
         }
-        if ($due === null || $due >= $now) {
+        if ($due === null) {
+            return [self::UNDATED, self::STATUS_PENDING];
+        }
+        if ($due >= $now) {
             return [self::UPCOMING, self::STATUS_PENDING];
         }
         if ($row->cutoff !== null && (int)$row->cutoff < $now) {
+            return [self::PAST, self::STATUS_NOTSUBMITTED];
+        }
+        $joined = isset($row->enrolstart) ? (int)$row->enrolstart : 0;
+        if ($joined > $due && $now >= $due + $grace) {
             return [self::PAST, self::STATUS_NOTSUBMITTED];
         }
         if ($due >= $now - $thresholddays * DAYSECS) {
@@ -124,10 +145,14 @@ class classifier {
         if ($tomark > 0) {
             return self::TOMARK;
         }
+        if ($due === null) {
+            // Nothing to mark and no deadline: more work may still arrive (EC2).
+            return self::UNDATED;
+        }
         if ($pending && $due !== null && $due < $now) {
             return self::STAFF_UPCOMING;
         }
-        if ($mine > 0 && ($due === null || $due < $now)) {
+        if ($mine > 0 && $due < $now) {
             return self::COMPLETED;
         }
         return null;
@@ -141,16 +166,27 @@ class classifier {
      * @param int $submitted Submitted units.
      * @param int $outstanding Ready units not marked at some stage, plus marked units not released.
      * @param int $thresholddays Days after the deadline an assessment with no submissions stays in progress.
+     * @param int|null $students Students who can take it now, if known: with none left, nothing more can arrive (EC4).
      * @return string
      */
-    public static function convenor(?int $due, int $now, int $submitted, int $outstanding, int $thresholddays): string {
+    public static function convenor(
+        ?int $due,
+        int $now,
+        int $submitted,
+        int $outstanding,
+        int $thresholddays,
+        ?int $students = null
+    ): string {
         if ($due !== null && $due >= $now) {
             return self::STAFF_UPCOMING;
         }
         if ($outstanding > 0) {
             return self::INPROGRESS;
         }
-        if ($submitted === 0 && $due !== null && $due >= $now - $thresholddays * DAYSECS) {
+        if ($due === null) {
+            return self::UNDATED;
+        }
+        if ($submitted === 0 && $students !== 0 && $due >= $now - $thresholddays * DAYSECS) {
             return self::INPROGRESS;
         }
         return self::CONVENOR_PAST;

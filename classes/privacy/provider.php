@@ -55,6 +55,8 @@ class provider implements
             'mitigation' => 'privacy:metadata:stu:mitigation',
             'reopened' => 'privacy:metadata:stu:reopened',
             'allocatedto' => 'privacy:metadata:stu:allocatedto',
+            'active' => 'privacy:metadata:stu:active',
+            'enrolstart' => 'privacy:metadata:stu:enrolstart',
         ], 'privacy:metadata:stu');
         $collection->add_database_table('block_my_assessments_mark', [
             'unitid' => 'privacy:metadata:mark:unitid',

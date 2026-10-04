@@ -62,11 +62,12 @@ Feature: The dashboard works with whichever assessment plugins are installed
     And I navigate to "Plugins > Blocks > My assessments > Activity types" in site administration
     Then I should not see "External tool (LTI)"
 
-  Scenario: A tagged generic activity with no due date is not listed
+  # EC2 (Pierre, 2026-10-04): tagging is explicit, so a tagged activity without a date is listed as Undated.
+  Scenario: A tagged generic activity with no due date is listed as Undated
     Given the "Workshop" activity type is enabled in My assessments
     And a summative "workshop" "W2" in "M1" with no due date exists
     When I log in as "student1" and view my dashboard
-    Then I should not see "W2" in the "My assessments" block
+    Then "W2" should appear in the "Undated" section
 
   Scenario: An activity type with its own adapter uses it in preference to the generic one
     Given a summative "assign" "A1" in "M1" was due "yesterday"

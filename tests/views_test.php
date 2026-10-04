@@ -38,6 +38,7 @@ final class views_test extends \advanced_testcase {
 
     #[\Override]
     protected function setUp(): void {
+        global $DB;
         parent::setUp();
         $this->resetAfterTest();
         // Index writers observe events after commit, and some tests roll back a write: no test transaction.
@@ -71,6 +72,8 @@ final class views_test extends \advanced_testcase {
         // Student s1 submits the upcoming report, unallocated (no allocation on that one).
         $agen->create_submission(['userid' => $this->u['s1']->id, 'cmid' => $this->a['upcoming']->cmid, 'onlinetext' => 'x']);
 
+        // Everyone was on the module before the deadlines, so nobody is a late joiner (EC10).
+        $DB->set_field('user_enrolments', 'timecreated', $now - 30 * DAYSECS);
         $ma->tag($this->a['overdue']->cmid, 'summative');
         $ma->tag($this->a['upcoming']->cmid, 'formative');
         $ma->tag($this->a['forum']->cmid, 'summative');

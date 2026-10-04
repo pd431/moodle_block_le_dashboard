@@ -85,7 +85,7 @@ class student extends base {
         $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue,
                                                 c.hiddenfromstudents, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
-                                                s.timereleased, s.gradedisplay, s.mitigation, s.reopened
+                                                s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.enrolstart
                                            FROM {block_my_assessments_stu} s
                                            JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0
@@ -125,7 +125,8 @@ class student extends base {
     #[\Override]
     public function export(): array {
         $threshold = config::overdue_threshold_days();
-        $sections = [classifier::OVERDUE => [], classifier::UPCOMING => [], classifier::PAST => []];
+        $grace = config::grace();
+        $sections = [classifier::OVERDUE => [], classifier::UPCOMING => [], classifier::UNDATED => [], classifier::PAST => []];
         $counts = [
             'overdue' => format::zero_counts(),
             'upcoming' => format::zero_counts(),
@@ -134,11 +135,11 @@ class student extends base {
         $oldest = null;
         $hasgrades = false;
         foreach ($this->rows() as $r) {
-            [$section, $status] = classifier::student($r, $this->now, $threshold);
+            [$section, $status] = classifier::student($r, $this->now, $threshold, $grace);
             $row = $this->row($r, $section, $status);
             $hasgrades = $hasgrades || !empty($row['grade']);
             $sections[$section][] = $row + ['sortkey' => (int)$r->due];
-            if ($section !== classifier::PAST) {
+            if (isset($counts[$section])) {
                 format::count($counts[$section], $r->assesstype);
             }
             if ((int)$r->submitted === 1) {
@@ -146,10 +147,10 @@ class student extends base {
             }
             $oldest = $oldest === null ? (int)$r->timeindexed : min($oldest, (int)$r->timeindexed);
         }
-        // Soonest first, except Past: most recent first.
+        // Soonest first, except Past: most recent first. Undated rows by name.
         foreach ($sections as $key => &$rows) {
             $order = $key === classifier::PAST ? -1 : 1;
-            usort($rows, fn($a, $b) => $order * ($a['sortkey'] <=> $b['sortkey']));
+            usort($rows, fn($a, $b) => $order * ($a['sortkey'] <=> $b['sortkey']) ?: strcmp($a['search'], $b['search']));
         }
         unset($rows);
 
@@ -175,11 +176,12 @@ class student extends base {
             $summary[] = $box;
         }
 
-        return $this->context($summary, [
+        return $this->context($summary, array_filter([
             $this->section(classifier::OVERDUE, $sections[classifier::OVERDUE]),
             $this->section(classifier::UPCOMING, $sections[classifier::UPCOMING]),
+            $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::PAST, $sections[classifier::PAST]),
-        ], $oldest, [
+        ]), $oldest, [
             'hasgradestoggle' => $hasgrades,
             'showgrades' => (bool)get_user_preferences('block_my_assessments_showgrades', false, $this->userid),
         ]);

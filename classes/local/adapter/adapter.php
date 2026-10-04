@@ -55,7 +55,7 @@ interface adapter {
      * Dates and features of one assessment.
      *
      * @param \cm_info $cm
-     * @return cm_row|null Null when the assessment cannot be listed (for example, it has no due date).
+     * @return cm_row|null Null when the assessment cannot be listed. A null due date lists it as Undated (EC2).
      */
     public function cm_row(\cm_info $cm): ?cm_row;
 

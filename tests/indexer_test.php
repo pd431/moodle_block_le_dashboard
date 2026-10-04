@@ -84,7 +84,8 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
-     * R8: no due date means not listed; LTI is never listed. R3: hidden activities are flagged.
+     * EC2: a tagged activity with no due date is listed, with no date; LTI is never listed (R8).
+     * R3: hidden activities are flagged.
      */
     public function test_listing_rules(): void {
         global $DB;
@@ -100,8 +101,10 @@ final class indexer_test extends \advanced_testcase {
             $this->ma->tag($cm->cmid);
         }
         $indexed = $DB->get_records_menu('block_my_assessments_cm', null, '', 'cmid, adapter');
-        $this->assertArrayNotHasKey($nodue->cmid, $indexed);
-        $this->assertArrayNotHasKey($forumnodue->cmid, $indexed);
+        $this->assertArrayHasKey($nodue->cmid, $indexed);
+        $this->assertSame('generic', $indexed[$forumnodue->cmid]);
+        $this->assertNull($DB->get_field('block_my_assessments_cm', 'due', ['cmid' => $nodue->cmid]));
+        $this->assertNull($DB->get_field('block_my_assessments_cm', 'due', ['cmid' => $forumnodue->cmid]));
         $this->assertArrayNotHasKey($lti->cmid, $indexed);
         $this->assertSame('generic', $indexed[$forum->cmid]);
         $this->assertNull(
@@ -109,6 +112,37 @@ final class indexer_test extends \advanced_testcase {
             'generic types do not know about submissions'
         );
         $this->assertEquals(1, $DB->get_field('block_my_assessments_cm', 'hiddenfromstudents', ['cmid' => $hidden->cmid]));
+    }
+
+    /**
+     * EC4: a suspended student keeps their rows, flagged inactive, so their submitted work is
+     * still marked; an unenrolled one leaves. EC10: each row records when the student joined.
+     */
+    public function test_students_who_leave(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() - DAYSECS,
+            'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1]);
+        $this->ma->tag($a->cmid);
+        foreach ([$s1, $s2] as $s) {
+            $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $s->id, 'cmid' => $a->cmid,
+                'onlinetext' => 'Done']);
+        }
+        $enrol = $DB->get_record('enrol', ['courseid' => $course->id, 'enrol' => 'manual']);
+        $plugin = enrol_get_plugin('manual');
+        $plugin->update_user_enrol($enrol, $s1->id, ENROL_USER_SUSPENDED);
+        $plugin->unenrol_user($enrol, $s2->id);
+        (new indexer())->index_cm($a->cmid);
+
+        $rows = $DB->get_records('block_my_assessments_stu', ['cmid' => $a->cmid], '', 'userid, active, submitted, enrolstart');
+        $this->assertSame([(int)$s1->id], array_map('intval', array_keys($rows)));
+        $this->assertEquals(0, $rows[$s1->id]->active);
+        $this->assertEquals(1, $rows[$s1->id]->submitted);
+        $this->assertNotEmpty($rows[$s1->id]->enrolstart);
+        $this->assertEquals(1, $DB->count_records('block_my_assessments_mark', ['cmid' => $a->cmid, 'submitted' => 1]));
     }
 
     /**

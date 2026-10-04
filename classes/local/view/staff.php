@@ -196,7 +196,7 @@ class staff extends base {
                                            FROM {block_my_assessments_stu} s
                                            JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
                                            " . base::LIVE . "
-                                          WHERE s.canaccess = 1 AND s.due > c.due
+                                          WHERE s.canaccess = 1 AND s.active = 1 AND s.due > c.due
                                                 AND ((s.submitted = 1 AND s.due >= :now1)
                                                      OR (s.submitted = 0 AND s.due >= :now2))
                                                 AND $where
@@ -285,8 +285,8 @@ class staff extends base {
     }
 
     /**
-     * Assessments in my staff courses whose deadline is ahead, and those past it whose only
-     * work still to come is extensions (G9).
+     * Assessments in my staff courses whose deadline is ahead or unset (EC2), and those past it
+     * whose only work still to come is extensions (G9). Students who left are not counted (EC4).
      *
      * @param int[] $later Cmids past their deadline that stay in Upcoming deadlines.
      * @return \stdClass[] Keyed by cmid.
@@ -301,7 +301,7 @@ class staff extends base {
         $params = ['now' => $this->now];
         if ($staff) {
             [$insql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
-            $where[] = "(c.courseid $insql AND c.due >= :now)";
+            $where[] = "(c.courseid $insql AND (c.due >= :now OR c.due IS NULL))";
             $params += $staffparams;
         }
         if ($later) {
@@ -311,9 +311,10 @@ class staff extends base {
         }
         $records = $DB->get_records_sql("SELECT c.*,
                                             (SELECT COUNT(1) FROM {block_my_assessments_stu} s
-                                              WHERE s.cmid = c.cmid AND s.canaccess = 1) AS students,
+                                              WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1) AS students,
                                             (SELECT COUNT(1) FROM {block_my_assessments_stu} s
-                                              WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.submitted = 1) AS submissions
+                                              WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1
+                                                    AND s.submitted = 1) AS submissions
                                        FROM {block_my_assessments_cm} c
                                        " . base::LIVE . "
                                       WHERE " . implode(' OR ', $where) . "
@@ -354,7 +355,8 @@ class staff extends base {
         }
         $names = format::course_names(array_column($cms, 'courseid'));
 
-        $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::STAFF_UPCOMING => []];
+        $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::STAFF_UPCOMING => [],
+            classifier::UNDATED => []];
         $tomarkcounts = format::zero_counts();
         $oldest = null;
         // Marking still to do shows whatever its year; the rest follows the year picker (EC3).
@@ -377,7 +379,11 @@ class staff extends base {
                 isset($pending[$cmid])
             );
             $otheryear = !isset($inyear[(int)$cm->courseid]);
-            if (!$section || $section === classifier::STAFF_UPCOMING || ($otheryear && $section !== classifier::TOMARK)) {
+            // Upcoming and Undated rows come from upcoming(), for every assessment in my staff courses.
+            if (
+                !$section || in_array($section, [classifier::STAFF_UPCOMING, classifier::UNDATED])
+                    || ($otheryear && $section !== classifier::TOMARK)
+            ) {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
@@ -446,7 +452,7 @@ class staff extends base {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            $row['dates'] = [format::date('submissiondeadline', (int)$cm->due)];
+            $row['dates'] = $cm->due === null ? [] : [format::date('submissiondeadline', (int)$cm->due)];
             // Held here past its deadline by extensions: say when the last one ends (D10).
             if ((int)$cm->due < $this->now && isset($pending[$cmid])) {
                 $row['dates'][] = format::date('extendeddeadline', (int)$pending[$cmid]->latest);
@@ -460,11 +466,12 @@ class staff extends base {
             )];
             $row['hints'] = isset($pending[$cmid]) ? [self::extensions_hint($row['id'], $pending[$cmid])] : [];
             $row['actions'] = [format::view_action($row['url'])];
-            $sections[classifier::STAFF_UPCOMING][] = $row + ['sortkey' => (int)$cm->due];
+            $section = $cm->due === null ? classifier::UNDATED : classifier::STAFF_UPCOMING;
+            $sections[$section][] = $row + ['sortkey' => (int)$cm->due];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
         foreach ($sections as &$rows) {
-            usort($rows, fn($a, $b) => $a['sortkey'] <=> $b['sortkey']);
+            usort($rows, fn($a, $b) => ($a['sortkey'] <=> $b['sortkey']) ?: strcmp($a['search'], $b['search']));
         }
         unset($rows);
 
@@ -487,12 +494,13 @@ class staff extends base {
             $this->box('duesoon', $windowcounts, $windowoptions, (string)$window),
             $this->box('marked', $this->marked_counts(), $rangeoptions, $range),
         ];
-        return $this->context($summary, [
-            // What needs action, then what is coming, then what is done.
+        return $this->context($summary, array_filter([
+            // What needs action, then what is coming, then what has no date, then what is done.
             $this->section(classifier::TOMARK, $sections[classifier::TOMARK]),
             $this->section(classifier::STAFF_UPCOMING, $sections[classifier::STAFF_UPCOMING]),
+            $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::COMPLETED, $sections[classifier::COMPLETED]),
-        ], $oldest, ['hasyears' => true, 'years' => $this->years()]);
+        ]), $oldest, ['hasyears' => true, 'years' => $this->years()]);
     }
 
     /**
