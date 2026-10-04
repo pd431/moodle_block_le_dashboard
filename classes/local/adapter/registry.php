@@ -136,37 +136,79 @@ class registry {
     }
 
     /**
-     * Records an indexing error for an activity type, for the admin page.
+     * Behat and PHPUnit only: whether writing the index for this assessment should fail, once,
+     * because the testfailwrite setting names it. The setting is cleared here, outside the write's
+     * transaction, so the rollback doesn't bring it back.
+     *
+     * @param int $cmid
+     * @return bool
+     */
+    public static function take_test_write_failure(int $cmid): bool {
+        $testing = (defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('BEHAT_TEST') && BEHAT_TEST)
+            || (defined('PHPUNIT_TEST') && PHPUNIT_TEST);
+        if ($testing && (int)get_config('block_my_assessments', 'testfailwrite') === $cmid) {
+            unset_config('testfailwrite', 'block_my_assessments');
+            return true;
+        }
+        return false;
+    }
+
+    /** @var array Errors recorded in this run, by activity type, written once when the run ends (PR14). */
+    protected static $errors = [];
+
+    /**
+     * Records an indexing error for an activity type, for the admin page. A run (a task, a
+     * Refresh) keeps them in memory and stores one entry per type, with a count, when it ends.
+     * Scheduled and ad hoc tasks also print it to the task log.
      *
      * @param string $modname
      * @param \Throwable $e
      */
     public static function record_error(string $modname, \Throwable $e): void {
-        set_config(
-            'lasterror_' . $modname,
-            json_encode(['time' => time(), 'message' => $e->getMessage()]),
-            'block_my_assessments'
-        );
+        if (!self::$errors) {
+            \core_shutdown_manager::register_function([self::class, 'flush_errors']);
+        }
+        self::$errors[$modname] = (object)[
+            'time' => time(),
+            'message' => $e->getMessage(),
+            'count' => (self::$errors[$modname]->count ?? 0) + 1,
+        ];
+        if (CLI_SCRIPT && !(defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+            mtrace("block_my_assessments: indexing $modname failed: " . $e->getMessage());
+        }
     }
 
     /**
-     * Clears the recorded error once a type indexes cleanly again.
+     * Stores the errors recorded in this run: one config write per failing type.
+     */
+    public static function flush_errors(): void {
+        foreach (self::$errors as $modname => $error) {
+            set_config('lasterror_' . $modname, json_encode($error), 'block_my_assessments');
+        }
+        self::$errors = [];
+    }
+
+    /**
+     * Clears the recorded error once a type indexes cleanly again, unless it also failed in this run.
      *
      * @param string $modname
      */
     public static function clear_error(string $modname): void {
-        if (get_config('block_my_assessments', 'lasterror_' . $modname) !== false) {
+        if (!isset(self::$errors[$modname]) && get_config('block_my_assessments', 'lasterror_' . $modname) !== false) {
             unset_config('lasterror_' . $modname, 'block_my_assessments');
         }
     }
 
     /**
-     * The last indexing error for an activity type.
+     * The last indexing error for an activity type: this run's, or the stored one.
      *
      * @param string $modname
-     * @return \stdClass|null time and message
+     * @return \stdClass|null time, message and count
      */
     public static function last_error(string $modname): ?\stdClass {
+        if (isset(self::$errors[$modname])) {
+            return self::$errors[$modname];
+        }
         $value = get_config('block_my_assessments', 'lasterror_' . $modname);
         return $value ? json_decode($value) : null;
     }

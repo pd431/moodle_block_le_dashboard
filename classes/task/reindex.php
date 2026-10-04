@@ -16,6 +16,7 @@
 
 namespace block_my_assessments\task;
 
+use block_my_assessments\local\adapter\registry;
 use block_my_assessments\local\index\indexer;
 
 /**
@@ -37,17 +38,22 @@ class reindex extends \core\task\adhoc_task {
     public function execute() {
         $data = (array)$this->get_custom_data();
         $indexer = new indexer();
-        if (!empty($data['cmid'])) {
-            $indexer->index_cm((int)$data['cmid']);
-        }
-        if (!empty($data['courseid'])) {
-            $indexer->index_course((int)$data['courseid']);
-        }
-        if (!empty($data['cmids'])) {
-            $indexer->index_cms(array_map('intval', (array)$data['cmids']));
-        }
-        if (!empty($data['userid'])) {
-            unset_user_preference('block_my_assessments_refreshing', (int)$data['userid']);
+        try {
+            if (!empty($data['cmid'])) {
+                $indexer->index_cm((int)$data['cmid']);
+            }
+            if (!empty($data['courseid'])) {
+                $indexer->index_course((int)$data['courseid']);
+            }
+            if (!empty($data['cmids'])) {
+                $indexer->index_cms(array_map('intval', (array)$data['cmids']));
+            }
+        } finally {
+            // Refresh is over whether or not every activity indexed: the button comes back (PR7).
+            if (!empty($data['userid'])) {
+                unset_user_preference('block_my_assessments_refreshing', (int)$data['userid']);
+            }
+            registry::flush_errors();
         }
     }
 }

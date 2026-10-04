@@ -1,4 +1,4 @@
-# My assessments (block_my_assessments) 5.0.0-beta7
+# My assessments (block_my_assessments) 5.0.0-beta10
 
 A dashboard block for Moodle 4.5 and 5.2. It shows students their assessments, markers their marking and
 module convenors the marking across their modules. This version is the plugin-agnostic remake: it
@@ -6,7 +6,8 @@ works without mod_coursework and reads each activity type through its own adapte
 
 ## Requirements
 
-- Moodle 4.5 (2024100700 or later) or 5.x, tested on 4.5.14 and 5.2.4. One codebase: where Moodle
+- Moodle 4.5 (2024100700 or later) to 5.2, tested on 4.5.14 with PostgreSQL 16 and MariaDB 10.11,
+  and on 5.2.4 with PostgreSQL 16. One codebase: where Moodle
   changed (assignment marker allocation and multiple markers in 5.0), the adapter checks the
   database schema, not the version.
 - No other plugins are required. Assignment and Quiz have full support. Peer work and Coursework
@@ -24,7 +25,8 @@ works without mod_coursework and reads each activity type through its own adapte
 4. Activity types lets you choose which types appear. Academic years sets the year filter for staff
    and convenors.
 
-When the block is installed or upgraded it queues a backfill of the index. Until that finishes the
+When the block is installed or upgraded it queues a backfill of the index. Saving the tag or role
+settings queues another, so steps 2 and 3 can come in either order. Until a backfill finishes the
 dashboard says it is being prepared.
 
 ## How it works
@@ -33,7 +35,11 @@ dashboard says it is being prepared.
   assessment (`_stu`) and marking units per stage (`_mark`). Each type's adapter fills them through
   that plugin's own rules (`classes/local/adapter/`).
 - The index is updated by events, by the Refresh button (inline for small scopes, queued for large
-  ones) and by a nightly reconcile that catches anything events missed.
+  ones) and by a nightly reconcile that catches anything events missed. Refresh also looks for
+  tagged activities in the viewer's courses that the index doesn't have yet. One re-index of an
+  activity runs at a time (a lock per activity), and one failing activity doesn't stop the others.
+- Indexing failures are printed in the task log and shown, one per activity type with a count, in
+  Activity types.
 - Sections are worked out on page load from the stored dates and the time, so an assessment becomes
   overdue at its deadline without re-indexing (`classes/local/view/classifier.php`).
 - Views follow rc6: anyone with a staff or module convenor role (where they have an active
@@ -59,5 +65,7 @@ custom properties at the top of the file. Which state gets which colour is one m
 ## Tests
 
 - PHPUnit: `vendor/bin/phpunit --filter block_my_assessments`.
+- CI: `.github/workflows/ci.yml` runs moodle-plugin-ci on Moodle 4.5 and 5.2 with PostgreSQL and
+  MariaDB.
 - Behat: `--tags @block_my_assessments`. Scenarios that need mod_coursework skip on sites without
   it. The `*-assign.feature` files run the same coursework rules with Assignment instead.

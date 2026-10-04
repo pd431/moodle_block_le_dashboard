@@ -27,8 +27,11 @@ class config {
     /** Default days after which an unsubmitted assessment moves from Overdue to Past. */
     const DEFAULT_THRESHOLD = 90;
 
-    /** Number settings and their defaults: grace period (hours), Mitigate window (days before, hours after). */
-    const NUMBERS = ['graceperiod' => 24, 'mitigationopens' => 90, 'mitigationcloses' => 24];
+    /**
+     * Number settings and their defaults: grace period (hours), Mitigate window (days before, hours
+     * after), and the nightly reconcile's live window (months, 0 for every course).
+     */
+    const NUMBERS = ['graceperiod' => 24, 'mitigationopens' => 90, 'mitigationcloses' => 24, 'reconcilemonths' => 13];
 
     /**
      * A whole-number setting, or its default when unset.
@@ -104,6 +107,16 @@ class config {
      * @return int[]
      */
     public static function role_ids(string $setting): array {
+        return memo::get('roles:' . $setting, fn() => self::lookup_role_ids($setting));
+    }
+
+    /**
+     * Role ids for a role setting, from the database.
+     *
+     * @param string $setting
+     * @return int[]
+     */
+    protected static function lookup_role_ids(string $setting): array {
         global $DB;
         $shortnames = self::csv($setting);
         if (!$shortnames) {

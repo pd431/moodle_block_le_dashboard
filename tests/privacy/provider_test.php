@@ -60,4 +60,34 @@ final class provider_test extends provider_testcase {
         $this->assertFalse($DB->record_exists('block_my_assessments_stu', ['userid' => $student->id]));
         $this->assertTrue($DB->record_exists('block_my_assessments_stu', ['userid' => $other->id]));
     }
+
+    /**
+     * PR13: a marker allocated on students' rows is found, exported and scrubbed.
+     */
+    public function test_allocated_marker(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $student = $gen->create_and_enrol($course, 'student');
+        $marker = $gen->create_user();
+        $keep = $gen->create_user();
+        $DB->insert_record('block_my_assessments_stu', (object)['cmid' => 5, 'userid' => $student->id,
+            'allocatedto' => ",{$marker->id},{$keep->id},", 'canaccess' => 1, 'individual' => 0, 'reopened' => 0]);
+        $DB->insert_record('block_my_assessments_stu', (object)['cmid' => 6, 'userid' => $student->id,
+            'allocatedto' => ",{$marker->id},", 'canaccess' => 1, 'individual' => 0, 'reopened' => 0]);
+
+        $context = \context_user::instance($marker->id);
+        $this->assertEquals([$context->id], provider::get_contexts_for_userid($marker->id)->get_contextids());
+        provider::export_user_data(new approved_contextlist($marker, 'block_my_assessments', [$context->id]));
+        $data = writer::with_context($context)->get_data([get_string('pluginname', 'block_my_assessments')]);
+        $this->assertCount(2, $data->allocated);
+
+        provider::delete_data_for_user(new approved_contextlist($marker, 'block_my_assessments', [$context->id]));
+        $this->assertEquals(
+            [5 => ",{$keep->id},", 6 => null],
+            $DB->get_records_menu('block_my_assessments_stu', ['userid' => $student->id], 'cmid', 'cmid, allocatedto')
+        );
+        $this->assertEmpty(provider::get_contexts_for_userid($marker->id)->get_contextids());
+    }
 }

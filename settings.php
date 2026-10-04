@@ -45,14 +45,18 @@ if ($ADMIN->fulltree) {
         new lang_string('tagsheading', 'block_my_assessments'),
         new lang_string('tagsheading_desc', 'block_my_assessments')
     ));
+    // Changing what is indexed re-indexes everything in the background, with the Preparing banner (PR5).
+    $reindex = 'block_my_assessments\\task\\backfill::setting_changed';
     foreach (['certaintags' => 'summativetags', 'formativetags' => 'formativetags'] as $name => $string) {
-        $settings->add(new admin_setting_configtext(
+        $setting = new admin_setting_configtext(
             'block_my_assessments/' . $name,
             new lang_string($string, 'block_my_assessments'),
             new lang_string($string . '_desc', 'block_my_assessments'),
             '',
             PARAM_TEXT
-        ));
+        );
+        $setting->set_updatedcallback($reindex);
+        $settings->add($setting);
     }
 
     $settings->add(new admin_setting_heading(
@@ -66,13 +70,15 @@ if ($ADMIN->fulltree) {
     }
     $roledefaults = ['studentrole' => ['student'], 'staffrole' => ['editingteacher', 'teacher'], 'moduleconvenorrole' => []];
     foreach ($roledefaults as $name => $defaults) {
-        $settings->add(new admin_setting_configmultiselect(
+        $setting = new admin_setting_configmultiselect(
             'block_my_assessments/' . $name,
             new lang_string($name, 'block_my_assessments'),
             new lang_string($name . '_desc', 'block_my_assessments'),
             array_values(array_intersect($defaults, array_keys($roles))),
             $roles
-        ));
+        );
+        $setting->set_updatedcallback($reindex);
+        $settings->add($setting);
     }
 
     $settings->add(new admin_setting_heading(
@@ -145,7 +151,7 @@ if ($ADMIN->fulltree) {
     $years = [0 => new lang_string('defaultacademicyear_current', 'block_my_assessments')];
     if (during_initial_install() === false && $DB->get_manager()->table_exists('block_my_assessments_year')) {
         foreach (\block_my_assessments\local\years::all() as $year) {
-            $years[$year->id] = format_string($year->label);
+            $years[$year->id] = format_string($year->label, true, ['escape' => false]);
         }
     }
     $settings->add(new admin_setting_configselect(

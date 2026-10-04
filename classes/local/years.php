@@ -44,8 +44,18 @@ class years {
      * @return int Year id, or 0 for all years.
      */
     public static function default_id(?int $now = null): int {
-        global $DB;
         $now = $now ?? time();
+        return memo::get('year:' . intdiv($now, HOURSECS), fn() => self::lookup_default_id($now));
+    }
+
+    /**
+     * The default year, from the database.
+     *
+     * @param int $now
+     * @return int
+     */
+    protected static function lookup_default_id(int $now): int {
+        global $DB;
         $configured = (int)get_config('block_my_assessments', 'defaultacademicyear');
         if ($configured && $DB->record_exists(self::TABLE, ['id' => $configured])) {
             return $configured;

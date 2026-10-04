@@ -17,6 +17,7 @@
 namespace block_my_assessments\local\view;
 
 use block_my_assessments\local\config;
+use block_my_assessments\local\index\indexer;
 use block_my_assessments\local\output\format;
 use block_my_assessments\local\scope;
 
@@ -30,8 +31,8 @@ use block_my_assessments\local\scope;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class convenor extends base {
-    /** @var int[]|null Course ids, once loaded. */
-    protected ?array $courses = null;
+    /** @var array Course ids once loaded, for the selected year and for all years. */
+    protected array $courses = [];
 
     #[\Override]
     public function key(): string {
@@ -39,15 +40,18 @@ class convenor extends base {
     }
 
     /**
-     * Courses where I am convenor, in the selected year.
+     * Courses where I am convenor, in the selected year or in every year.
      *
+     * @param bool $allyears
      * @return int[]
      */
-    protected function courses(): array {
-        if ($this->courses === null) {
-            $this->courses = scope::courses_with_roles($this->userid, config::role_ids('moduleconvenorrole'), $this->year());
+    protected function courses(bool $allyears = false): array {
+        $key = $allyears ? 'all' : 'year';
+        if (!isset($this->courses[$key])) {
+            $year = $allyears ? null : $this->year();
+            $this->courses[$key] = scope::courses_with_roles($this->userid, config::role_ids('moduleconvenorrole'), $year);
         }
-        return $this->courses;
+        return $this->courses[$key];
     }
 
     #[\Override]
@@ -61,15 +65,26 @@ class convenor extends base {
     }
 
     #[\Override]
+    protected function scope_courses(): array {
+        return $this->courses();
+    }
+
+    #[\Override]
     public function export(): array {
         global $DB;
         $extra = ['hasyears' => true, 'years' => $this->years()];
         $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::CONVENOR_PAST => []];
-        if (!$this->courses()) {
+        // In progress shows whatever its year; Upcoming and Past follow the year picker (EC3).
+        if (!$this->courses(true)) {
             return $this->sections_context($sections, null, $extra);
         }
-        [$insql, $params] = $DB->get_in_or_equal($this->courses(), SQL_PARAMS_NAMED);
-        $cms = $DB->get_records_select('block_my_assessments_cm', "courseid $insql", $params, 'due ASC');
+        $inyear = array_flip($this->courses());
+        [$insql, $params] = $DB->get_in_or_equal($this->courses(true), SQL_PARAMS_NAMED);
+        $cms = $DB->get_records_sql("SELECT c.*
+                                       FROM {block_my_assessments_cm} c
+                                       " . self::LIVE . "
+                                      WHERE c.courseid $insql
+                                   ORDER BY c.due ASC", $params);
         if (!$cms) {
             return $this->sections_context($sections, null, $extra);
         }
@@ -115,13 +130,15 @@ class convenor extends base {
                                              GROUP BY m.cmid", $params);
         // Per marker, per stage.
         $markers = [];
-        $rs = $DB->get_recordset_sql("SELECT m.cmid, m.allocatedto, m.stage,
+        // Marked work is credited to whoever marked it (EC8).
+        $marker = staff::MARKER_SQL;
+        $rs = $DB->get_recordset_sql("SELECT m.cmid, $marker AS allocatedto, m.stage,
                                              SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS ready,
                                              SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
                                         FROM {block_my_assessments_mark} m
                                         JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
                                        WHERE c.courseid $insql AND m.allocatedto IS NOT NULL
-                                    GROUP BY m.cmid, m.allocatedto, m.stage", $params);
+                                    GROUP BY m.cmid, $marker, m.stage", $params);
         $markerids = [];
         foreach ($rs as $r) {
             $markers[(int)$r->cmid][(int)$r->allocatedto][$r->stage] = $r;
@@ -141,6 +158,7 @@ class convenor extends base {
         $names = format::course_names(array_column($cms, 'courseid'));
         $threshold = config::overdue_threshold_days();
         $oldest = null;
+        $active = [];
         foreach ($cms as $cmid => $cm) {
             $stages = array_filter(explode(',', $cm->stages));
             $m = $marking[$cmid] ?? [];
@@ -189,7 +207,15 @@ class convenor extends base {
                 $outstanding + (int)($pending[$cmid]->students ?? 0),
                 $threshold
             );
+            $otheryear = !isset($inyear[(int)$cm->courseid]);
+            // Only with marking or release actually outstanding: that is the work needing action.
+            if ($otheryear && ($section !== classifier::INPROGRESS || $outstanding + (int)($pending[$cmid]->students ?? 0) === 0)) {
+                continue;
+            }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
+            if ($otheryear) {
+                $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
+            }
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
                 $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
@@ -204,6 +230,11 @@ class convenor extends base {
             foreach ($upcoming ? [] : $markers[$cmid] ?? [] as $markerid => $bystage) {
                 $person = $people[$markerid] ?? null;
                 $name = $person ? fullname($person) : get_string('unknownuser', 'block_my_assessments');
+                // Someone who marked here and has since left the module (EC1).
+                $active[$cm->courseid] ??= array_flip(indexer::markers((int)$cm->courseid));
+                if ($person && !isset($active[$cm->courseid][$markerid])) {
+                    $name = get_string('formermarker', 'block_my_assessments', $name);
+                }
                 $markerbars = [];
                 foreach ($bystage as $stage => $r) {
                     $markerbars[] = format::bar($stage, format::stage($stage), (int)$r->marked, (int)$r->ready);

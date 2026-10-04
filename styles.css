@@ -7,12 +7,12 @@
   --ma-rule: #dee2e6;
   --ma-surface: #fff;
   --ma-on-solid: #fff;
-  --ma-primary-solid: var(--primary, #003c3c);
+  --ma-primary-solid: var(--bs-primary, var(--primary, #003c3c));
   --ma-primary-fill: oklch(from var(--ma-primary-solid) 0.93 calc(c * 0.35) h);
   --ma-primary-hover: oklch(from var(--ma-primary-solid) 0.9 calc(c * 0.45) h);
   --ma-primary-border: oklch(from var(--ma-primary-solid) 0.76 calc(c * 0.8) h);
   --ma-primary-ink: oklch(from var(--ma-primary-solid) 0.33 calc(c * 0.75) h);
-  --ma-info-solid: var(--info, #008196);
+  --ma-info-solid: var(--bs-info, var(--info, #008196));
   --ma-info-fill: oklch(from var(--ma-info-solid) 0.93 calc(c * 0.35) h);
   --ma-info-hover: oklch(from var(--ma-info-solid) 0.9 calc(c * 0.45) h);
   --ma-info-border: oklch(from var(--ma-info-solid) 0.76 calc(c * 0.8) h);
@@ -27,12 +27,12 @@
   --ma-grey-hover: oklch(from var(--ma-grey-solid) 0.9 calc(c * 0.45) h);
   --ma-grey-border: oklch(from var(--ma-grey-solid) 0.76 calc(c * 0.8) h);
   --ma-grey-ink: oklch(from var(--ma-grey-solid) 0.33 calc(c * 0.75) h);
-  --ma-success-solid: var(--success, #357a32);
+  --ma-success-solid: var(--bs-success, var(--success, #357a32));
   --ma-success-fill: oklch(from var(--ma-success-solid) 0.93 calc(c * 0.35) h);
   --ma-success-hover: oklch(from var(--ma-success-solid) 0.9 calc(c * 0.45) h);
   --ma-success-border: oklch(from var(--ma-success-solid) 0.76 calc(c * 0.8) h);
   --ma-success-ink: oklch(from var(--ma-success-solid) 0.33 calc(c * 0.75) h);
-  --ma-danger-solid: var(--danger, #ca3120);
+  --ma-danger-solid: var(--bs-danger, var(--danger, #ca3120));
   --ma-danger-fill: oklch(from var(--ma-danger-solid) 0.93 calc(c * 0.35) h);
   --ma-danger-hover: oklch(from var(--ma-danger-solid) 0.9 calc(c * 0.45) h);
   --ma-danger-border: oklch(from var(--ma-danger-solid) 0.76 calc(c * 0.8) h);
@@ -134,6 +134,13 @@
 .block_my_assessments_dashboard .ma-search {
   flex: 1 1 12rem;
   width: auto;
+}
+.block_my_assessments_dashboard .ma-search .input-group-text {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.block_my_assessments_dashboard .ma-icon {
+  margin-inline-end: 0.25rem;
 }
 .block_my_assessments_dashboard .ma-summary {
   display: flex;
@@ -693,4 +700,8 @@
   left: 0;
   width: auto;
   max-width: 24rem;
+}
+
+.ma-gap {
+  margin-inline-end: 1rem;
 }

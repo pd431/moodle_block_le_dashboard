@@ -22,6 +22,7 @@ use core_external\external_single_structure;
 use core_external\external_value;
 use block_my_assessments\local\config;
 use block_my_assessments\local\index\indexer;
+use block_my_assessments\local\scope;
 use block_my_assessments\local\view\factory;
 
 /**
@@ -34,6 +35,9 @@ use block_my_assessments\local\view\factory;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class refresh extends external_api {
+    /** Seconds within which a second Refresh re-indexes nothing (F9). */
+    const MIN_INTERVAL = 60;
+
     /**
      * Parameters.
      *
@@ -60,11 +64,25 @@ class refresh extends external_api {
         self::validate_context($context);
         $year = $yearid < 0 ? null : $yearid;
         $object = factory::make($view, (int)$USER->id, $year);
-        $cmids = $object->scope_cmids();
-        if (count($cmids) <= config::inline_refresh_limit()) {
+        $cmids = $object->refresh_cmids();
+        $last = (int)get_user_preferences('block_my_assessments_lastrefresh', 0, $USER->id);
+        if ($last > time() - self::MIN_INTERVAL) {
+            // Pressed again within the minute: the index is as fresh as it gets (F9).
+            $status = 'done';
+        } else if ($view === scope::STUDENT) {
+            // A student's Refresh rewrites only their own rows (F4).
+            set_user_preference('block_my_assessments_lastrefresh', time());
+            $indexer = new indexer();
+            foreach ($cmids as $cmid) {
+                $indexer->index_users($cmid, [(int)$USER->id]);
+            }
+            $status = 'done';
+        } else if (count($cmids) <= config::inline_refresh_limit()) {
+            set_user_preference('block_my_assessments_lastrefresh', time());
             (new indexer())->index_cms($cmids);
             $status = 'done';
         } else {
+            set_user_preference('block_my_assessments_lastrefresh', time());
             set_user_preference('block_my_assessments_refreshing', time());
             $task = new \block_my_assessments\task\reindex();
             $task->set_custom_data(['cmids' => array_values($cmids), 'userid' => (int)$USER->id]);

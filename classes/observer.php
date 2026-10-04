@@ -18,12 +18,14 @@ namespace block_my_assessments;
 
 use block_my_assessments\local\adapter\registry;
 use block_my_assessments\local\index\indexer;
+use block_my_assessments\local\memo;
 
 /**
  * Event observers: queue a re-index of whatever an event changed.
  *
- * Observers only queue work (or delete rows), so they stay cheap on the
- * request that fired the event. The adapters' own events are listed in
+ * Observers queue work (or delete rows), so they stay cheap on the request
+ * that fired the event. The one exception is a student's own action on an
+ * activity, whose rows are updated at once (F4). The adapters' own events are listed in
  * db/events.php from each adapter's events() list.
  *
  * @package    block_my_assessments
@@ -46,9 +48,21 @@ class observer {
      * @param \core\event\base $event
      */
     public static function module_event(\core\event\base $event): void {
-        if (self::active() && $event->contextlevel == CONTEXT_MODULE) {
-            indexer::queue_cm((int)$event->contextinstanceid);
+        global $DB;
+        if (!self::active() || $event->contextlevel != CONTEXT_MODULE) {
+            return;
         }
+        $cmid = (int)$event->contextinstanceid;
+        // A student's own action (a submission, say) shows on their dashboard at once (F4): their
+        // rows now, everyone else's in the queued task.
+        if ($event->userid && $DB->record_exists('block_my_assessments_stu', ['cmid' => $cmid, 'userid' => $event->userid])) {
+            try {
+                (new indexer())->index_users($cmid, [(int)$event->userid]);
+            } catch (\Throwable $e) {
+                debugging('block_my_assessments: updating the student\'s own rows failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+            }
+        }
+        indexer::queue_cm($cmid);
     }
 
     /**
@@ -68,7 +82,12 @@ class observer {
      * @param \core\event\course_module_deleted $event
      */
     public static function course_module_deleted(\core\event\course_module_deleted $event): void {
-        (new indexer())->remove_cm((int)$event->objectid);
+        try {
+            (new indexer())->remove_cm((int)$event->objectid);
+        } catch (\moodle_exception $e) {
+            // A re-index held the lock too long: the queued one finds the activity gone and removes it.
+            indexer::queue_cm((int)$event->objectid);
+        }
     }
 
     /**
@@ -110,7 +129,11 @@ class observer {
      * @param \core\event\course_deleted $event
      */
     public static function course_deleted(\core\event\course_deleted $event): void {
-        (new indexer())->remove_course((int)$event->objectid);
+        try {
+            (new indexer())->remove_course((int)$event->objectid);
+        } catch (\moodle_exception $e) {
+            indexer::queue_course((int)$event->objectid);
+        }
     }
 
     /**
@@ -128,22 +151,43 @@ class observer {
      * @param \core\event\user_graded $event
      */
     public static function user_graded(\core\event\user_graded $event): void {
+        if (self::active() && ($cmid = self::cm_for_grade_item((int)($event->other['itemid'] ?? 0)))) {
+            indexer::queue_cm($cmid);
+        }
+    }
+
+    /**
+     * A grade item changed: showing a hidden one releases its grades (F3).
+     *
+     * @param \core\event\grade_item_updated $event
+     */
+    public static function grade_item_updated(\core\event\grade_item_updated $event): void {
+        if (self::active() && ($cmid = self::cm_for_grade_item((int)$event->objectid))) {
+            indexer::queue_cm($cmid);
+        }
+    }
+
+    /**
+     * The indexed activity a grade item belongs to, if any. Looked up once per item per request,
+     * since a regrade fires user_graded for every student on every item (F6).
+     *
+     * @param int $itemid
+     * @return int|null
+     */
+    protected static function cm_for_grade_item(int $itemid): ?int {
         global $DB;
-        if (!self::active()) {
-            return;
-        }
-        $cmid = $DB->get_field_sql(
-            "SELECT i.cmid
-                                      FROM {grade_items} gi
-                                      JOIN {modules} m ON m.name = gi.itemmodule
-                                      JOIN {course_modules} cm ON cm.module = m.id AND cm.instance = gi.iteminstance
-                                      JOIN {block_my_assessments_cm} i ON i.cmid = cm.id
-                                     WHERE gi.id = :itemid AND gi.itemtype = 'mod'",
-            ['itemid' => $event->other['itemid'] ?? 0]
-        );
-        if ($cmid) {
-            indexer::queue_cm((int)$cmid);
-        }
+        return memo::get('gradeitem:' . $itemid, function () use ($DB, $itemid) {
+            $cmid = $DB->get_field_sql(
+                "SELECT i.cmid
+                   FROM {grade_items} gi
+                   JOIN {modules} m ON m.name = gi.itemmodule
+                   JOIN {course_modules} cm ON cm.module = m.id AND cm.instance = gi.iteminstance
+                   JOIN {block_my_assessments_cm} i ON i.cmid = cm.id
+                  WHERE gi.id = :itemid AND gi.itemtype = 'mod'",
+                ['itemid' => $itemid]
+            );
+            return $cmid ? (int)$cmid : null;
+        });
     }
 
     /**

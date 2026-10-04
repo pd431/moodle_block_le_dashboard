@@ -43,18 +43,31 @@ class scope {
      * @return int[]
      */
     public static function courses_with_roles(int $userid, array $roleids, ?\stdClass $year = null): array {
-        global $DB;
         if (!$roleids) {
             return [];
         }
+        $key = 'scope:' . $userid . ':' . implode(',', $roleids) . ':' . ($year ? $year->timestart . '-' . $year->timeend : '');
+        return memo::get($key, fn() => self::lookup_courses_with_roles($userid, $roleids, $year));
+    }
+
+    /**
+     * Courses where a user holds a role, from the database.
+     *
+     * @param int $userid
+     * @param int[] $roleids
+     * @param \stdClass|null $year
+     * @return int[]
+     */
+    protected static function lookup_courses_with_roles(int $userid, array $roleids, ?\stdClass $year): array {
+        global $DB;
         $now = time();
         [$rolesql, $params] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'r');
         $params += ['userid1' => $userid, 'userid2' => $userid, 'now1' => $now, 'now2' => $now,
             'courselevel' => CONTEXT_COURSE, 'siteid' => SITEID];
         $yearsql = '';
         if ($year) {
-            $yearsql = 'AND c.startdate >= :ystart AND c.startdate < :yend';
-            $params += ['ystart' => $year->timestart, 'yend' => $year->timeend];
+            $yearsql = 'AND ' . self::year_sql('c');
+            $params += self::year_params($year);
         }
         // Role at course level, or at a category or system context above it.
         $sql = "SELECT DISTINCT c.id
@@ -114,5 +127,35 @@ class scope {
             }
         }
         return self::STUDENT;
+    }
+
+    /**
+     * SQL for a course (by alias) belonging to an academic year (EC3b, Pierre): every year its
+     * start-to-end span overlaps; with only a start date, its start year; with only an end date,
+     * its end year; with neither, no year (it shows under All years only).
+     *
+     * @param string $alias
+     * @return string
+     */
+    public static function year_sql(string $alias): string {
+        $c = $alias;
+        return "(($c.startdate > 0 AND $c.enddate > 0 AND $c.startdate < :yend1 AND $c.enddate >= :ystart1)
+                 OR ($c.startdate > 0 AND $c.enddate = 0 AND $c.startdate >= :ystart2 AND $c.startdate < :yend2)
+                 OR ($c.startdate = 0 AND $c.enddate > 0 AND $c.enddate >= :ystart3 AND $c.enddate < :yend3))";
+    }
+
+    /**
+     * Parameters for year_sql().
+     *
+     * @param \stdClass $year timestart, timeend
+     * @return array
+     */
+    public static function year_params(\stdClass $year): array {
+        $params = [];
+        foreach ([1, 2, 3] as $i) {
+            $params['ystart' . $i] = (int)$year->timestart;
+            $params['yend' . $i] = (int)$year->timeend;
+        }
+        return $params;
     }
 }

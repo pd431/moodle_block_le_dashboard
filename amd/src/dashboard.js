@@ -59,6 +59,9 @@ class Dashboard {
         this.search = '';
         this.expanded = new Set();
         this.collapsed = new Set();
+        // Each load gets a number; a response from a load that a later one superseded is dropped.
+        this.seq = 0;
+        this.refreshing = false;
         root.addEventListener('click', e => this.click(e));
         root.addEventListener('input', e => this.input(e));
         root.addEventListener('change', e => this.change(e));
@@ -278,6 +281,13 @@ class Dashboard {
      * @param {number} yearid
      */
     async load(methodname, view, yearid = -1) {
+        const isrefresh = methodname === 'block_my_assessments_refresh';
+        if (isrefresh && this.refreshing) {
+            // A second press while the first is running would only re-index the same again.
+            return;
+        }
+        const seq = ++this.seq;
+        this.refreshing = this.refreshing || isrefresh;
         const loading = this.root.querySelector(SELECTORS.loading);
         const status = this.root.querySelector(SELECTORS.status);
         const container = this.root.querySelector(SELECTORS.view);
@@ -287,9 +297,16 @@ class Dashboard {
         status.textContent = '';
         loading.hidden = false;
         container.setAttribute('aria-busy', 'true');
+        this.root.querySelectorAll('[data-action="refresh"]').forEach(button => {
+            button.disabled = true;
+        });
         try {
             const [result] = Ajax.call([{methodname, args: {view, yearid}}]);
             const response = await result;
+            if (seq !== this.seq) {
+                // A later tab, year or Refresh has replaced this one.
+                return;
+            }
             container.innerHTML = response.html;
             this.root.dataset.view = view;
             let label = '';
@@ -314,14 +331,22 @@ class Dashboard {
                 this.restoreFocus(action);
             }
             // A short message for screen readers, not the whole view.
-            status.textContent = methodname === 'block_my_assessments_refresh'
+            status.textContent = isrefresh
                 ? await getString('statusrefreshed', 'block_my_assessments')
                 : await getString('statusloaded', 'block_my_assessments', label || this.viewKey);
         } catch (error) {
             Notification.exception(error);
         } finally {
-            loading.hidden = true;
-            container.removeAttribute('aria-busy');
+            if (isrefresh) {
+                this.refreshing = false;
+            }
+            if (seq === this.seq) {
+                loading.hidden = true;
+                container.removeAttribute('aria-busy');
+                this.root.querySelectorAll('[data-action="refresh"]').forEach(button => {
+                    button.disabled = false;
+                });
+            }
         }
     }
 

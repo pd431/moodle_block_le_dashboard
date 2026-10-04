@@ -16,6 +16,7 @@
 
 namespace block_my_assessments\task;
 
+use block_my_assessments\local\adapter\registry;
 use block_my_assessments\local\index\indexer;
 
 /**
@@ -33,7 +34,11 @@ class reconcile extends \core\task\scheduled_task {
 
     #[\Override]
     public function execute() {
-        (new indexer())->reconcile(fn($line) => mtrace($line));
+        try {
+            (new indexer())->reconcile(fn($line) => mtrace($line));
+        } finally {
+            registry::flush_errors();
+        }
         unset_config('backfillpending', 'block_my_assessments');
         set_config('backfilldone', time(), 'block_my_assessments');
     }

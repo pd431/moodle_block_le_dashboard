@@ -32,21 +32,25 @@ class tags {
     /**
      * Assessment type of tagged course modules (summative wins when both tags are present).
      *
-     * @param int|null $courseid Limit to one course.
+     * @param int|int[]|null $courseid Limit to one course, or to these courses.
      * @param int[]|null $cmids Limit to these course modules.
      * @return string[] cmid => summative or formative
      */
-    public static function types(?int $courseid = null, ?array $cmids = null): array {
+    public static function types(int|array|null $courseid = null, ?array $cmids = null): array {
         global $DB;
         $summative = config::summative_tags();
         $formative = config::formative_tags();
         $all = array_merge($summative, $formative);
-        if (!$all || ($cmids !== null && !$cmids)) {
+        if (!$all || ($cmids !== null && !$cmids) || $courseid === []) {
             return [];
         }
         [$tagsql, $params] = $DB->get_in_or_equal($all, SQL_PARAMS_NAMED, 't');
         $where = '';
-        if ($courseid) {
+        if (is_array($courseid)) {
+            [$coursesql, $courseparams] = $DB->get_in_or_equal($courseid, SQL_PARAMS_NAMED, 'c');
+            $where .= " AND cm.course $coursesql";
+            $params += $courseparams;
+        } else if ($courseid) {
             $where .= ' AND cm.course = :courseid';
             $params['courseid'] = $courseid;
         }

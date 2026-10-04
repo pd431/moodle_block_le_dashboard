@@ -18,6 +18,7 @@ namespace block_my_assessments\local\view;
 
 use block_my_assessments\local\config;
 use block_my_assessments\local\output\format;
+use block_my_assessments\local\tags;
 use block_my_assessments\local\years;
 
 /**
@@ -70,6 +71,24 @@ abstract class base {
     abstract public function scope_cmids(): array;
 
     /**
+     * The courses this view covers, for Refresh.
+     *
+     * @return int[]
+     */
+    abstract protected function scope_courses(): array;
+
+    /**
+     * What Refresh re-indexes: the indexed assessments of this view, plus every tagged one in its
+     * courses, so assessments the index missed (a dropped event, tags set later) are found (PR4).
+     *
+     * @return int[] cmids
+     */
+    public function refresh_cmids(): array {
+        $tagged = array_keys(tags::types($this->scope_courses()));
+        return array_values(array_unique(array_merge($this->scope_cmids(), $tagged)));
+    }
+
+    /**
      * Builds the template context.
      *
      * @return array
@@ -101,13 +120,24 @@ abstract class base {
     }
 
     /**
+     * SQL joining the assessment index (alias c) to activities not being deleted: deleting from
+     * the course page only flags the activity until core's task removes it (EC7).
+     */
+    const LIVE = "JOIN {course_modules} lcm ON lcm.id = c.cmid AND lcm.deletioninprogress = 0";
+
+    /** Seconds after which a queued Refresh no longer shows "Refreshing". */
+    const REFRESHING_EXPIRES = 600;
+
+    /**
      * The "Updated N min ago · Refresh" line.
      *
      * @param int|null $oldest The oldest timeindexed among the view's assessments.
      * @return array
      */
     protected function freshness(?int $oldest): array {
-        $refreshing = (bool)get_user_preferences('block_my_assessments_refreshing', false, $this->userid);
+        // A queued Refresh that never finished stops showing after a while, so the button comes back (PR7).
+        $since = (int)get_user_preferences('block_my_assessments_refreshing', 0, $this->userid);
+        $refreshing = $since > $this->now - self::REFRESHING_EXPIRES;
         return [
             'text' => format::updated($oldest, $this->now),
             'refreshing' => $refreshing,
@@ -125,10 +155,34 @@ abstract class base {
     protected function years(): array {
         $options = [['id' => 0, 'label' => get_string('allyears', 'block_my_assessments'), 'selected' => $this->yearid === 0]];
         foreach (years::all() as $year) {
-            $options[] = ['id' => (int)$year->id, 'label' => format_string($year->label),
+            $options[] = ['id' => (int)$year->id, 'label' => format_string($year->label, true, ['escape' => false]),
                 'selected' => (int)$year->id === $this->yearid];
         }
         return $options;
+    }
+
+    /**
+     * A course name with its academic year, for a row shown outside the selected year (EC3).
+     *
+     * @param string $course
+     * @param int $courseid
+     * @return string
+     */
+    protected function with_year(string $course, int $courseid): string {
+        global $DB;
+        $course = $DB->get_record('course', ['id' => $courseid], 'startdate, enddate');
+        // The year it starts in, or ends in when it has no start date (EC3b).
+        $date = (int)($course->startdate ?: $course->enddate);
+        foreach (years::all() as $year) {
+            if ($date && $date >= $year->timestart && $date < $year->timeend) {
+                return get_string(
+                    'courseinyear',
+                    'block_my_assessments',
+                    ['course' => $course, 'year' => format_string($year->label, true, ['escape' => false])]
+                );
+            }
+        }
+        return $course;
     }
 
     /**
@@ -194,6 +248,7 @@ abstract class base {
         return $extra + [
             'key' => $this->key(),
             'uniqid' => \html_writer::random_id('ma'),
+            'selectclass' => format::select_class(),
             'summary' => $summary,
             'hassummary' => !empty($summary),
             'sections' => $sections,

@@ -44,8 +44,8 @@ class student extends base {
         student_row::MITIGATION_EXTENSION => 'fa-calendar-plus',
     ];
 
-    /** Assessment types offered Mitigate (D8: whether formative stays is Pierre's call). */
-    const MITIGATION_TYPES = ['summative', 'formative'];
+    /** Assessment types offered Mitigate: summative only (D8, Pierre 2026-10-04). */
+    const MITIGATION_TYPES = ['summative'];
 
     /** A pending assessment is due soon within this many days (rc6). */
     const DUESOON_DAYS = 7;
@@ -70,7 +70,7 @@ class student extends base {
         }
         // Active enrolments in courses the student can see (D9, P10).
         $courses = array_filter(
-            enrol_get_all_users_courses($this->userid, true, 'id, shortname, fullname, visible'),
+            enrol_get_all_users_courses($this->userid, true, 'id, shortname, fullname, visible, cacherev'),
             fn($c) => $c->visible || has_capability(
                 'moodle/course:viewhiddencourses',
                 \context_course::instance($c->id),
@@ -92,7 +92,8 @@ class student extends base {
                                             AND c.courseid $insql", $params);
         $rows = [];
         foreach ($records as $r) {
-            $modinfo = get_fast_modinfo($r->courseid, $this->userid);
+            // The course record is at hand, so modinfo needn't fetch it again (F7).
+            $modinfo = get_fast_modinfo($courses[$r->courseid], $this->userid);
             $cm = $modinfo->cms[$r->cmid] ?? null;
             if (!$cm || !$cm->uservisible) {
                 continue;
@@ -114,6 +115,11 @@ class student extends base {
             'userid = :userid',
             ['userid' => $this->userid]
         ));
+    }
+
+    #[\Override]
+    protected function scope_courses(): array {
+        return array_map('intval', array_keys(enrol_get_all_users_courses($this->userid, true, 'id')));
     }
 
     #[\Override]
@@ -236,7 +242,7 @@ class student extends base {
             // Unset until an admin saves the new setting: use its default.
             $latenote = trim($latenote === false ? get_string('latenote_default', 'block_my_assessments') : $latenote);
             if ($r->assesstype === 'summative' && $latenote !== '') {
-                $notes[] = format_string($latenote);
+                $notes[] = format_string($latenote, true, ['escape' => false]);
             }
         }
         // Time left: to the cut-off, or to the deadline plus the grace period when there is none (G9).
@@ -262,7 +268,10 @@ class student extends base {
     protected function row(\stdClass $r, string $section, string $status): array {
         $row = format::row($r, $r->courseshortname, $this->key());
         // Students get two lines: the module's full name, then "Summative assignment".
-        $row['course'] = format_string($r->coursefullname, true, ['context' => \context_course::instance($r->courseid)]);
+        $row['course'] = format_string($r->coursefullname, true, [
+            'context' => \context_course::instance($r->courseid),
+            'escape' => false,
+        ]);
         $row['typeline'] = get_string('rowkind', 'block_my_assessments', [
             'type' => $row['typelabel'],
             'mod' => \core_text::strtolower($row['modlabel']),

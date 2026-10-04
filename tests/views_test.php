@@ -40,6 +40,8 @@ final class views_test extends \advanced_testcase {
     protected function setUp(): void {
         parent::setUp();
         $this->resetAfterTest();
+        // Index writers observe events after commit, and some tests roll back a write: no test transaction.
+        $this->preventResetByRollback();
         $this->setAdminUser();
         $gen = $this->getDataGenerator();
         $ma = $gen->get_plugin_generator('block_my_assessments');
@@ -214,5 +216,58 @@ final class views_test extends \advanced_testcase {
         $this->assertArrayHasKey('Discussion', $inprogress + self::rows($export, 'past'));
         $discussion = ($inprogress + self::rows($export, 'past'))['Discussion'];
         $this->assertNotContains('submitted', array_column($discussion['bars'], 'key'), 'generic: no submissions bar');
+    }
+
+    /**
+     * PR3: names with "&" are escaped once, by the template, and search finds them.
+     */
+    public function test_names_escaped_once(): void {
+        global $OUTPUT;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['fullname' => 'Law & Society', 'shortname' => 'L&S']);
+        $gen->enrol_user($this->u['s1']->id, $course->id, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'name' => 'Essays & Reports',
+            'duedate' => time() + DAYSECS]);
+        $gen->get_plugin_generator('block_my_assessments')->tag($a->cmid, 'summative');
+        $export = (new student($this->u['s1']->id))->export();
+        $row = self::rows($export, 'upcoming')['Essays & Reports'];
+        $this->assertSame('Law & Society', $row['course']);
+        $this->assertStringContainsString('essays & reports', $row['search']);
+        $html = $OUTPUT->render_from_template('block_my_assessments/view', $export);
+        $this->assertStringContainsString('Essays &amp; Reports', $html);
+        $this->assertStringNotContainsString('&amp;amp;', $html);
+    }
+
+    /**
+     * PR4: Refresh finds a tagged assessment the index missed, for students and convenors.
+     *
+     * @covers \block_my_assessments\external\refresh
+     */
+    public function test_refresh_finds_missed(): void {
+        global $DB;
+        $courseid = $this->a['overdue']->course;
+        foreach (['s1' => 'student', 'convenor' => 'convenor'] as $user => $view) {
+            $a = $this->getDataGenerator()->create_module('assign', ['course' => $courseid, 'name' => "Missed $view",
+                'duedate' => time() + DAYSECS]);
+            \core_tag_tag::set_item_tags('core', 'course_modules', $a->cmid, \context_module::instance($a->cmid), ['summative']);
+            $DB->delete_records('task_adhoc', ['component' => 'block_my_assessments']);
+            $DB->delete_records('task_adhoc', ['classname' => '\\block_my_assessments\\task\\reindex']);
+            $this->assertFalse($DB->record_exists('block_my_assessments_cm', ['cmid' => $a->cmid]));
+            $this->setUser($this->u[$user]);
+            \block_my_assessments\external\refresh::execute($view);
+            $this->assertTrue($DB->record_exists('block_my_assessments_cm', ['cmid' => $a->cmid]), $view);
+            $this->setAdminUser();
+        }
+    }
+
+    /**
+     * PR7: "Refreshing" stops showing after ten minutes, so the button comes back.
+     */
+    public function test_refreshing_expires(): void {
+        $userid = $this->u['convenor']->id;
+        set_user_preference('block_my_assessments_refreshing', time() - 30, $userid);
+        $this->assertTrue((new convenor($userid))->export()['freshness']['refreshing']);
+        set_user_preference('block_my_assessments_refreshing', time() - 11 * MINSECS, $userid);
+        $this->assertFalse((new convenor($userid))->export()['freshness']['refreshing']);
     }
 }

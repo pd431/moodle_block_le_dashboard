@@ -188,6 +188,15 @@ Feature: Students see only assessments they can actually access
       | was | 20 hours ago | "student1" has submitted "A1" | show     |
       | was | 2 days ago   | nothing happens               | not show |
 
+  # D8 (Pierre, 2026-10-04): Mitigate is for summative assessments only.
+  @block_rhb
+  Scenario: Formative assessments never offer Mitigate
+    Given a summative "assign" "A1" in "M1" is due "in 3 days"
+    And a formative "assign" "F1" in "M1" is due "in 3 days"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Mitigate"
+    And "F1" should not show "Mitigate"
+
   @block_rhb
   Scenario: The Mitigate window follows the settings and the student's own deadline
     Given the My assessments Mitigate window opens "30" days before and closes "48" hours after the deadline

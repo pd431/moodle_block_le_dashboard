@@ -84,6 +84,25 @@ class assign extends base {
             markingdue: self::date($a->gradingduedate),
             hasallocation: !empty($a->markingworkflow) && !empty($a->markingallocation),
             stages: $stages,
+            submissions: self::takes_submissions($a),
+        );
+    }
+
+    /**
+     * Whether students can submit at all: a submission plugin other than comments is enabled,
+     * as assign::is_any_submission_plugin_enabled(). An assignment used only to record a mark
+     * (a presentation, an exam) has none (EC5).
+     *
+     * @param \stdClass $a
+     * @return bool
+     */
+    protected static function takes_submissions(\stdClass $a): bool {
+        global $DB;
+        return $DB->record_exists_select(
+            'assign_plugin_config',
+            "assignment = :assignid AND subtype = 'assignsubmission' AND plugin <> 'comments'
+             AND name = 'enabled' AND " . $DB->sql_compare_text('value', 10) . " = '1'",
+            ['assignid' => $a->id]
         );
     }
 
@@ -238,11 +257,25 @@ class assign extends base {
             }
         }
 
-        foreach ($this->submissions($cm, $a, array_keys($rows)) as $userid => $submission) {
+        if (!$cmrow->submissions) {
+            // Nothing to submit: no submission state, like the generic tier (EC5).
+            foreach ($rows as $row) {
+                $row->submitted = null;
+            }
+            self::apply_gradebook_release($cm, $rows);
+            return $rows;
+        }
+        $submissions = $this->submissions($cm, $a, array_keys($rows));
+        $drafts = array_keys(array_filter($submissions, fn($sub) => $sub->status === 'draft'));
+        $grades = $drafts ? $this->latest_grades($a->id, $drafts) : [];
+        foreach ($submissions as $userid => $submission) {
             $rows[$userid]->submitted = $submission->status === 'submitted';
             $rows[$userid]->timesubmitted = $rows[$userid]->submitted ? (int)$submission->timemodified : null;
-            // A new, empty attempt ("Allow another attempt") the student can still submit (G13).
-            $rows[$userid]->reopened = $submission->status === 'reopened';
+            // A new, empty attempt ("Allow another attempt") the student can still submit (G13), or
+            // a graded attempt reverted to draft for rework, which reads the same way (EC11).
+            $graded = isset($grades[$userid]) && $grades[$userid]->grade !== null && (float)$grades[$userid]->grade >= 0
+                && (int)$grades[$userid]->attemptnumber === (int)$submission->attemptnumber;
+            $rows[$userid]->reopened = $submission->status === 'reopened' || ($submission->status === 'draft' && $graded);
         }
         self::apply_gradebook_release($cm, $rows);
         // A resubmission after release is in marking again, whatever the gradebook still holds.
@@ -258,7 +291,16 @@ class assign extends base {
     #[\Override]
     public function marking_rows(\cm_info $cm, cm_row $cmrow, array $userids): array {
         $a = $this->instance($cm);
-        $submissions = array_filter($this->submissions($cm, $a, $userids), fn($s) => $s->status === 'submitted');
+        if ($cmrow->submissions) {
+            $submissions = array_filter($this->submissions($cm, $a, $userids), fn($s) => $s->status === 'submitted');
+        } else {
+            // Nothing to submit: every student has a unit, ready at their deadline (EC5).
+            $submissions = [];
+            foreach ($this->latest_grades($a->id, $userids) + array_fill_keys($userids, null) as $userid => $g) {
+                $submissions[$userid] = (object)['status' => 'submitted', 'timemodified' => 1, 'groupid' => 0,
+                    'attemptnumber' => $g ? (int)$g->attemptnumber : 0];
+            }
+        }
         if (!$submissions) {
             return [];
         }
@@ -302,11 +344,13 @@ class assign extends base {
                 }
                 if (in_array('agreed', $cmrow->stages)) {
                     // Agreement goes to the first allocated marker, as coursework does (G8).
-                    $agreeable = count($mine) >= $markers;
+                    // With allocation, only the allocated markers' marks count, as assign::get_marks() (EC9).
+                    $counted = $cmrow->hasallocation ? array_intersect_key($mine, array_flip($allocated)) : $mine;
+                    $agreeable = count($counted) >= $markers;
                     $stages['agreed'] = [$allocated[0] ?? null, $agreeable, $final,
                         $final && $grade ? ((int)$grade->grader ?: null) : null,
                         $final && $grade ? (int)$grade->timemodified : null,
-                        $agreeable ? max(array_map(fn($m) => (int)$m->timemodified, $mine)) : null];
+                        $agreeable ? max(array_map(fn($m) => (int)$m->timemodified, $counted)) : null];
                 }
             }
             foreach ($stages as $stage => [$allocatedto, $ready, $marked, $markedby, $timemarked, $timeready]) {

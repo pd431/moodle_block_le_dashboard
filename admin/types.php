@@ -57,8 +57,8 @@ foreach ($types as $modname => $support) {
             'block_my_assessments'
         ),
         'enabled' => in_array($modname, $enabled),
-        'error' => $error ? get_string('lasterror', 'block_my_assessments', [
-            'time' => userdate($error->time), 'message' => s($error->message)]) : null,
+        'error' => $error ? get_string((($error->count ?? 1) > 1) ? 'lasterrorcount' : 'lasterror', 'block_my_assessments', [
+            'time' => userdate($error->time), 'message' => $error->message, 'count' => $error->count ?? 1]) : null,
     ];
 }
 usort($rows, fn($a, $b) => strcmp($a['name'], $b['name']));

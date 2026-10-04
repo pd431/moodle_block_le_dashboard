@@ -167,7 +167,7 @@ $ma-dark-ink-on-solid: ("attention");
     $theme: list.nth($def, 2);
 
     @if $theme {
-      --ma-#{$tone}-solid: var(--#{$theme}, #{$hex});
+      --ma-#{$tone}-solid: var(--bs-#{$theme}, var(--#{$theme}, #{$hex}));
     } @else {
       --ma-#{$tone}-solid: #{$hex};
     }
@@ -286,6 +286,17 @@ $ma-dark-ink-on-solid: ("attention");
   .ma-search {
     flex: 1 1 12rem;
     width: auto;
+  }
+
+  // The icon sits straight in the input group (no Bootstrap 4 .input-group-prepend, PR9).
+  .ma-search .input-group-text {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  // Space after an icon or spinner, the same on Bootstrap 4 and 5 (no .mr-*, PR9).
+  .ma-icon {
+    margin-inline-end: 0.25rem;
   }
 
   // Summary boxes: centred, as many across as fit (three on a phone); a
@@ -807,4 +818,9 @@ $ma-dark-ink-on-solid: ("attention");
     width: auto;
     max-width: 24rem;
   }
+}
+
+// Admin pages: space between row actions.
+.ma-gap {
+  margin-inline-end: 1rem;
 }

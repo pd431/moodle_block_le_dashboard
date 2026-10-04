@@ -87,11 +87,11 @@
         {{#bars}}{{> block_my_assessments/progress }}{{/bars}}
     </div>
     <div class="ma-row-actions">
-        {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}"><i class="fa-solid {{icon}} mr-1" aria-hidden="true"></i>{{label}}<span class="sr-only">: {{name}}</span></a>{{/actions}}
+        {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{label}}<span class="accesshide">: {{name}}</span></a>{{/actions}}
         {{#mitigation}}
         <div class="dropdown ma-mitigate">
             <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
-                    data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} mr-1" aria-hidden="true"></i>{{#str}}action_mitigate, block_my_assessments{{/str}}</button>
+                    data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_mitigate, block_my_assessments{{/str}}</button>
             <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
                 {{#links}}<div class="dropdown-item ma-mitigate-item">{{{html}}}</div>{{/links}}
             </div>

@@ -18,6 +18,7 @@ namespace block_my_assessments\local\index;
 
 use block_my_assessments\local\adapter\registry;
 use block_my_assessments\local\config;
+use block_my_assessments\local\memo;
 use block_my_assessments\local\tags;
 
 /**
@@ -77,32 +78,110 @@ class indexer {
     }
 
     /**
+     * Users who can mark in a course now: an active enrolment and a staff or module convenor role
+     * there or above (EC1).
+     *
+     * @param int $courseid
+     * @return int[]
+     */
+    public static function markers(int $courseid): array {
+        global $DB;
+        $roleids = array_unique(array_merge(config::role_ids('staffrole'), config::role_ids('moduleconvenorrole')));
+        if (!$roleids) {
+            return [];
+        }
+        $context = \context_course::instance($courseid);
+        [$esql, $params] = get_enrolled_sql($context, '', 0, true);
+        [$rolesql, $roleparams] = $DB->get_in_or_equal($roleids, SQL_PARAMS_NAMED, 'r');
+        [$ctxsql, $ctxparams] = $DB->get_in_or_equal($context->get_parent_context_ids(true), SQL_PARAMS_NAMED, 'ctx');
+        $sql = "SELECT DISTINCT u.id
+                  FROM {user} u
+                  JOIN ($esql) je ON je.id = u.id
+                  JOIN {role_assignments} ra ON ra.userid = u.id
+                 WHERE u.deleted = 0 AND ra.roleid $rolesql AND ra.contextid $ctxsql";
+        return array_map('intval', $DB->get_fieldset_sql($sql, $params + $roleparams + $ctxparams));
+    }
+
+    /**
      * Re-indexes one assessment, or removes it from the index if it should no longer be listed.
+     *
+     * One re-index of an assessment at a time (F2): a second caller waits for the lock, then
+     * reads fresh data.
      *
      * @param int $cmid
      * @return bool True if the assessment is in the index afterwards.
      */
     public function index_cm(int $cmid): bool {
+        return $this->locked($cmid, fn() => $this->index_rows($cmid, null));
+    }
+
+    /**
+     * Re-indexes some students of one assessment: their student rows and their marking units,
+     * with everyone in their groups so group units stay whole (F4). An assessment not yet in
+     * the index is indexed in full.
+     *
+     * @param int $cmid
+     * @param int[] $userids
+     * @return bool True if the assessment is in the index afterwards.
+     */
+    public function index_users(int $cmid, array $userids): bool {
+        return $this->locked($cmid, fn() => $this->index_rows($cmid, array_map('intval', $userids)));
+    }
+
+    /**
+     * Runs a re-index of one assessment under its lock.
+     *
+     * @param int $cmid
+     * @param callable $index
+     * @return bool
+     */
+    protected function locked(int $cmid, callable $index): bool {
+        $factory = \core\lock\lock_config::get_lock_factory('block_my_assessments');
+        $lock = $factory->get_lock('cm' . $cmid, self::LOCK_WAIT);
+        if (!$lock) {
+            throw new \moodle_exception('locktimeout', 'block_my_assessments', '', $cmid);
+        }
+        try {
+            return $index();
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /** Seconds a re-index waits for another re-index of the same assessment to finish. */
+    const LOCK_WAIT = 60;
+
+    /**
+     * The re-index itself: all students, or only some.
+     *
+     * @param int $cmid
+     * @param int[]|null $only Students to re-index, or null for everyone.
+     * @return bool
+     */
+    protected function index_rows(int $cmid, ?array $only): bool {
         global $DB;
+        if ($only !== null && !$DB->record_exists(self::CM, ['cmid' => $cmid])) {
+            $only = null;
+        }
         $courseid = $DB->get_field('course_modules', 'course', ['id' => $cmid]);
         if (!$courseid) {
-            $this->remove_cm($cmid);
+            $this->drop_rows($cmid);
             return false;
         }
         $types = tags::types(null, [$cmid]);
         if (!isset($types[$cmid])) {
-            $this->remove_cm($cmid);
+            $this->drop_rows($cmid);
             return false;
         }
         $modinfo = get_fast_modinfo($courseid);
         $cm = $modinfo->cms[$cmid] ?? null;
         if (!$cm || $cm->deletioninprogress) {
-            $this->remove_cm($cmid);
+            $this->drop_rows($cmid);
             return false;
         }
         $adapter = registry::adapter_for($cm->modname);
         if (!$adapter) {
-            $this->remove_cm($cmid);
+            $this->drop_rows($cmid);
             return false;
         }
 
@@ -111,11 +190,16 @@ class indexer {
             $cmrow = $adapter->cm_row($cm);
             if (!$cmrow || $cmrow->due === null) {
                 // Nothing to bucket it by (R8).
-                $this->remove_cm($cmid);
+                $this->drop_rows($cmid);
                 registry::clear_error($cm->modname);
                 return false;
             }
             $students = self::students($courseid);
+            $groupids = [];
+            if ($only !== null) {
+                [$only, $groupids] = $this->with_group_members($cm, $only);
+                $students = array_values(array_intersect($students, $only));
+            }
             $students = $this->accessible($cm, $students);
             $sturows = $adapter->student_rows($cm, $cmrow, array_keys($students));
             $markrows = $adapter->marking_rows($cm, $cmrow, array_keys($students));
@@ -128,13 +212,23 @@ class indexer {
             return $DB->record_exists(self::CM, ['cmid' => $cmid]);
         }
 
+        // A group unit outside the groups gathered can't be re-indexed in part: do it all.
+        if ($only !== null) {
+            foreach ($markrows as $row) {
+                if ($row->unittype === marking_row::UNIT_GROUP && !in_array($row->unitid, $groupids)) {
+                    return $this->index_rows($cmid, null);
+                }
+            }
+        }
+
         $now = $this->now ?? time();
         $section = $cm->get_section_info();
         $record = (object)[
             'cmid' => $cmid,
             'courseid' => $courseid,
             'modname' => $cm->modname,
-            'adapter' => isset(registry::OWN[$cm->modname]) ? $cm->modname : 'generic',
+            // Without submissions it is shown like the generic tier: no Submitted bar, never Overdue (EC5).
+            'adapter' => isset(registry::OWN[$cm->modname]) && $cmrow->submissions ? $cm->modname : 'generic',
             'name' => \core_text::substr($cm->get_name(), 0, 1333),
             'assesstype' => $types[$cmid],
             'opens' => $cmrow->opens,
@@ -147,12 +241,14 @@ class indexer {
             'stages' => implode(',', $cmrow->stages),
             'timeindexed' => $now,
         ];
+        $markers = array_flip(self::markers($courseid));
         $stu = [];
         $dues = [];
         foreach ($students as $userid => $canaccess) {
             $row = $sturows[$userid] ?? new student_row($userid, $cmrow->due, $cmrow->cutoff);
             $dues[$userid] = $row->due ?? $cmrow->due;
-            $allocated = array_unique(array_filter(array_map('intval', $row->allocatedto)));
+            // Markers who left the module no longer hold work still to come (EC1).
+            $allocated = array_unique(array_filter(array_map('intval', $row->allocatedto), fn($id) => isset($markers[$id])));
             $stu[] = (object)[
                 'cmid' => $cmid,
                 'userid' => $userid,
@@ -187,7 +283,10 @@ class indexer {
                 'unitid' => $row->unitid,
                 'unittype' => $row->unittype,
                 'stage' => $row->stage,
-                'allocatedto' => $row->allocatedto,
+                // Unmarked work of a marker who left the module is unallocated, so it falls to the
+                // convenor (G3); work they marked stays theirs (EC1).
+                'allocatedto' => $row->allocatedto !== null && !$row->marked && !isset($markers[$row->allocatedto])
+                    ? null : $row->allocatedto,
                 'submitted' => $row->submitted ? 1 : 0,
                 'timeready' => $timeready,
                 'unitdue' => $unitdue,
@@ -198,18 +297,95 @@ class indexer {
             ];
         }
 
+        $failwrite = registry::take_test_write_failure($cmid);
         $transaction = $DB->start_delegated_transaction();
-        $this->delete_rows($cmid);
-        $DB->insert_record(self::CM, $record);
-        if ($stu) {
-            $DB->insert_records(self::STU, $stu);
+        try {
+            if ($only === null) {
+                $this->delete_rows($cmid);
+                $DB->insert_record(self::CM, $record);
+            } else {
+                $this->delete_unit_rows($cmid, $only, $groupids);
+            }
+            if ($failwrite) {
+                throw new \moodle_exception('testfailure', 'block_my_assessments', '', 'cm ' . $cmid);
+            }
+            if ($stu) {
+                $DB->insert_records(self::STU, $stu);
+            }
+            if ($mark) {
+                $DB->insert_records(self::MARK, $mark);
+            }
+            $transaction->allow_commit();
+        } catch (\Throwable $e) {
+            // Undo the half-written rows and close this transaction before anyone catches the error:
+            // a caught error with the transaction still open would silently undo every later write
+            // in the process (PR2). The course and reconcile loops then carry on.
+            try {
+                $transaction->rollback($e);
+            } finally {
+                registry::record_error($cm->modname, $e);
+            }
         }
-        if ($mark) {
-            $DB->insert_records(self::MARK, $mark);
-        }
-        $transaction->allow_commit();
         registry::clear_error($cm->modname);
+        if ($only === null) {
+            // What is indexed changed: forget memoised grade item lookups in this process (a cron run is long).
+            memo::reset();
+        }
         return true;
+    }
+
+    /**
+     * Students plus everyone who shares a group with them on this activity (its grouping, or
+     * the course), so team submissions are re-indexed whole.
+     *
+     * @param \cm_info $cm
+     * @param int[] $userids
+     * @return array [user ids, group ids]
+     */
+    protected function with_group_members(\cm_info $cm, array $userids): array {
+        global $DB;
+        $groupids = [];
+        foreach ($userids as $userid) {
+            $groups = groups_get_user_groups($cm->course, $userid);
+            $groupids = array_merge($groupids, $groups[(int)$cm->groupingid] ?? []);
+        }
+        $groupids = array_values(array_unique(array_map('intval', $groupids)));
+        if ($groupids) {
+            [$insql, $params] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED);
+            $members = $DB->get_fieldset_select('groups_members', 'userid', "groupid $insql", $params);
+            $userids = array_merge($userids, array_map('intval', $members));
+        }
+        return [array_values(array_unique($userids)), $groupids];
+    }
+
+    /**
+     * Deletes some students' rows of an assessment: their student rows, their own marking
+     * units, and their groups' units.
+     *
+     * @param int $cmid
+     * @param int[] $userids
+     * @param int[] $groupids
+     */
+    protected function delete_unit_rows(int $cmid, array $userids, array $groupids): void {
+        global $DB;
+        if (!$userids) {
+            return;
+        }
+        [$usql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'u');
+        $DB->delete_records_select(self::STU, "cmid = :cmid AND userid $usql", $params + ['cmid' => $cmid]);
+        $DB->delete_records_select(
+            self::MARK,
+            "cmid = :cmid AND unittype = :user AND unitid $usql",
+            $params + ['cmid' => $cmid, 'user' => marking_row::UNIT_USER]
+        );
+        if ($groupids) {
+            [$gsql, $gparams] = $DB->get_in_or_equal($groupids, SQL_PARAMS_NAMED, 'g');
+            $DB->delete_records_select(
+                self::MARK,
+                "cmid = :cmid AND unittype = :group AND unitid $gsql",
+                $gparams + ['cmid' => $cmid, 'group' => marking_row::UNIT_GROUP]
+            );
+        }
     }
 
     /**
@@ -315,14 +491,33 @@ class indexer {
      * @param int $cmid
      */
     public function remove_cm(int $cmid): void {
+        // Under the assessment's lock, so a re-index already reading it can't put the rows back (PR1).
+        $this->locked($cmid, function () use ($cmid) {
+            $this->drop_rows($cmid);
+            return false;
+        });
+    }
+
+    /**
+     * Deletes an assessment's rows in one transaction. The caller holds the lock.
+     *
+     * @param int $cmid
+     */
+    protected function drop_rows(int $cmid): void {
         global $DB;
         $transaction = $DB->start_delegated_transaction();
-        $this->delete_rows($cmid);
-        $transaction->allow_commit();
+        try {
+            $this->delete_rows($cmid);
+            $transaction->allow_commit();
+        } catch (\Throwable $e) {
+            $transaction->rollback($e);
+        }
     }
 
     /**
      * Re-indexes every tagged assessment in a course and drops the course's rows that are no longer tagged.
+     * One assessment failing doesn't stop the others (F2); the first failure is thrown at the end,
+     * so a task retries.
      *
      * @param int $courseid
      */
@@ -333,19 +528,27 @@ class indexer {
         foreach (array_diff(array_map('intval', $indexed), $tagged) as $cmid) {
             $this->remove_cm($cmid);
         }
-        foreach ($tagged as $cmid) {
-            $this->index_cm($cmid);
-        }
+        $this->index_cms($tagged);
     }
 
     /**
-     * Re-indexes a list of assessments.
+     * Re-indexes a list of assessments, each on its own: one failing doesn't stop the others.
+     * The first failure is thrown at the end.
      *
      * @param int[] $cmids
      */
     public function index_cms(array $cmids): void {
+        $failure = null;
         foreach (array_unique($cmids) as $cmid) {
-            $this->index_cm((int)$cmid);
+            try {
+                $this->index_cm((int)$cmid);
+            } catch (\Throwable $e) {
+                debugging("block_my_assessments: writing the index for cm $cmid failed: " . $e->getMessage(), DEBUG_DEVELOPER);
+                $failure = $failure ?? $e;
+            }
+        }
+        if ($failure) {
+            throw $failure;
         }
     }
 
@@ -372,11 +575,23 @@ class indexer {
         $DB->delete_records(self::MARK, ['unitid' => $userid, 'unittype' => marking_row::UNIT_USER]);
         $DB->set_field(self::MARK, 'allocatedto', null, ['allocatedto' => $userid]);
         $DB->set_field(self::MARK, 'markedby', null, ['markedby' => $userid]);
+        // Allocated markers on other students' rows, stored as ",id,id," (PR13).
+        $DB->execute(
+            "UPDATE {" . self::STU . "} SET allocatedto = REPLACE(allocatedto, :id, ',')
+              WHERE " . $DB->sql_like('allocatedto', ':like'),
+            ['id' => ',' . $userid . ',', 'like' => '%,' . $userid . ',%']
+        );
+        $DB->set_field(self::STU, 'allocatedto', null, ['allocatedto' => ',']);
     }
 
     /**
-     * The nightly reconcile: every course with tagged assessments or index rows is re-indexed,
+     * The nightly reconcile: courses with tagged assessments or index rows are re-indexed,
      * which also catches missed events, direct database edits and restores.
+     *
+     * Only live courses (F5): those with an indexed deadline within the live window or ahead,
+     * or with tagged assessments not yet indexed. Older courses keep their rows; events and
+     * Refresh still update them. One course or assessment failing doesn't stop the run; failures
+     * are recorded for the activity types admin page.
      *
      * @param callable|null $trace Receives progress lines.
      */
@@ -397,16 +612,52 @@ class indexer {
                                                          JOIN {course_modules} cm ON cm.id = ti.itemid
                                                         WHERE ti.component = 'core' AND ti.itemtype = 'course_modules'"))
         ));
+        $live = $this->live_courses();
         foreach ($courses as $courseid) {
             if (!$DB->record_exists('course', ['id' => $courseid])) {
                 $this->remove_course($courseid);
                 continue;
             }
+            if ($live !== null && !isset($live[$courseid])) {
+                continue;
+            }
             if ($trace) {
                 $trace("Indexing course $courseid");
             }
-            $this->index_course($courseid);
+            try {
+                $this->index_course($courseid);
+            } catch (\Throwable $e) {
+                // Recorded for the admin page; events, Refresh or the next run pick it up again.
+                if ($trace) {
+                    $trace("Course $courseid: " . $e->getMessage());
+                }
+            }
         }
+    }
+
+    /**
+     * Courses the reconcile re-indexes: an indexed deadline within the live window or ahead, or a
+     * tagged assessment not in the index yet. Null when the window is off (0 months): every course.
+     *
+     * @return array|null courseid => true
+     */
+    protected function live_courses(): ?array {
+        global $DB;
+        $months = config::number('reconcilemonths');
+        if (!$months) {
+            return null;
+        }
+        $since = ($this->now ?? time()) - $months * 30 * DAYSECS;
+        $live = $DB->get_fieldset_sql(
+            "SELECT DISTINCT courseid FROM {" . self::CM . "} WHERE due >= :since",
+            ['since' => $since]
+        );
+        $new = $DB->get_fieldset_sql("SELECT DISTINCT cm.course
+                                        FROM {tag_instance} ti
+                                        JOIN {course_modules} cm ON cm.id = ti.itemid
+                                   LEFT JOIN {" . self::CM . "} i ON i.cmid = cm.id
+                                       WHERE ti.component = 'core' AND ti.itemtype = 'course_modules' AND i.id IS NULL");
+        return array_fill_keys(array_map('intval', array_merge($live, $new)), true);
     }
 
     /**
@@ -415,9 +666,7 @@ class indexer {
      * @param int $cmid
      */
     public static function queue_cm(int $cmid): void {
-        $task = new \block_my_assessments\task\reindex();
-        $task->set_custom_data(['cmid' => $cmid]);
-        \core\task\manager::queue_adhoc_task($task, true);
+        self::queue(['cmid' => $cmid]);
     }
 
     /**
@@ -426,8 +675,28 @@ class indexer {
      * @param int $courseid
      */
     public static function queue_course(int $courseid): void {
+        self::queue(['courseid' => $courseid]);
+    }
+
+    /**
+     * Queues a re-index unless the same one is already waiting to start (F1). Core's own check
+     * also matches a task that is running, which has read its data already: a change made
+     * meanwhile would be lost. So one may wait while another runs; re-indexing is idempotent.
+     *
+     * @param array $data Task custom data.
+     */
+    protected static function queue(array $data): void {
+        global $DB;
         $task = new \block_my_assessments\task\reindex();
-        $task->set_custom_data(['courseid' => $courseid]);
-        \core\task\manager::queue_adhoc_task($task, true);
+        $task->set_custom_data($data);
+        $waiting = $DB->record_exists_select(
+            'task_adhoc',
+            'classname = :classname AND timestarted IS NULL AND ' . $DB->sql_compare_text('customdata', 255) . ' = ' .
+                $DB->sql_compare_text(':customdata', 255),
+            ['classname' => '\\' . get_class($task), 'customdata' => $task->get_custom_data_as_string()]
+        );
+        if (!$waiting) {
+            \core\task\manager::queue_adhoc_task($task);
+        }
     }
 }

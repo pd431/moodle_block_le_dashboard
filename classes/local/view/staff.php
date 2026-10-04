@@ -41,8 +41,8 @@ class staff extends base {
     /** Default work-marked range. */
     const DEFAULT_RANGE = '2weeks';
 
-    /** @var array|null Course ids, once loaded: staff and marker courses. */
-    protected ?array $courses = null;
+    /** @var array Course ids once loaded, for the selected year and for all years. */
+    protected array $courses = [];
 
     #[\Override]
     public function key(): string {
@@ -53,16 +53,18 @@ class staff extends base {
      * Courses in scope: [staff role courses, courses where I may have allocated work,
      * convenor role courses].
      *
+     * @param bool $allyears Every year, for marking still to do (EC3), instead of the selected one.
      * @return array
      */
-    protected function courses(): array {
-        if ($this->courses === null) {
-            $year = $this->year();
+    protected function courses(bool $allyears = false): array {
+        $key = $allyears ? 'all' : 'year';
+        if (!isset($this->courses[$key])) {
+            $year = $allyears ? null : $this->year();
             $staff = scope::courses_with_roles($this->userid, config::role_ids('staffrole'), $year);
             $convenor = scope::courses_with_roles($this->userid, config::role_ids('moduleconvenorrole'), $year);
-            $this->courses = [$staff, array_values(array_unique(array_merge($staff, $convenor))), $convenor];
+            $this->courses[$key] = [$staff, array_values(array_unique(array_merge($staff, $convenor))), $convenor];
         }
-        return $this->courses;
+        return $this->courses[$key];
     }
 
     /**
@@ -81,12 +83,13 @@ class staff extends base {
      */
     protected function marking(): array {
         global $DB;
-        [$staff, $marker, $convenor] = $this->courses();
+        [$staff, $marker, $convenor] = $this->courses(true);
         if (!$marker) {
             return [];
         }
         [$markersql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED, 'mc');
-        $where = ["(m.allocatedto = :me AND c.courseid $markersql)"];
+        // Marked work counts for whoever marked it, the rest for whoever it is allocated to (EC8).
+        $where = ["(" . self::MARKER_SQL . " = :me AND c.courseid $markersql)"];
         if ($convenor) {
             [$convenorsql, $convenorparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'cc');
             $where[] = "(m.allocatedto IS NULL AND c.hasallocation = 1 AND c.courseid $convenorsql)";
@@ -114,10 +117,15 @@ class staff extends base {
                                             MAX(CASE WHEN m.markedby = :me2 THEN m.timemarked ELSE NULL END) AS lastmarked
                                        FROM {block_my_assessments_mark} m
                                        JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                       " . base::LIVE . "
                                       WHERE " . implode(' OR ', $where) . "
                                    GROUP BY m.cmid, m.stage", $params);
         return array_merge(array_values($records), array_values($shared));
     }
+
+    /** SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated to (EC8). */
+    const MARKER_SQL = "(CASE WHEN m.marked = 1 AND m.markedby IS NOT NULL AND m.allocatedto IS NOT NULL
+                              THEN m.markedby ELSE m.allocatedto END)";
 
     /**
      * SQL for a mark index row (alias m) that is ready to mark at a time: submitted, and its
@@ -152,7 +160,7 @@ class staff extends base {
      */
     protected function extensions(): array {
         global $DB;
-        [$staff, $marker, $convenor] = $this->courses();
+        [$staff, $marker, $convenor] = $this->courses(true);
         if (!$marker) {
             return [];
         }
@@ -187,6 +195,7 @@ class staff extends base {
         $records = $DB->get_records_sql("SELECT s.cmid, COUNT(1) AS students, MAX(s.due) AS latest
                                            FROM {block_my_assessments_stu} s
                                            JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
+                                           " . base::LIVE . "
                                           WHERE s.canaccess = 1 AND s.due > c.due
                                                 AND ((s.submitted = 1 AND s.due >= :now1)
                                                      OR (s.submitted = 0 AND s.due >= :now2))
@@ -231,6 +240,7 @@ class staff extends base {
                                              m.markedby, m.timemarked, m.timeready, m.unitdue
                                         FROM {block_my_assessments_mark} m
                                         JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                        " . base::LIVE . "
                                        WHERE c.hasallocation = 0 AND " . $DB->sql_like('c.stages', ':multi') . "
                                              AND c.courseid $insql
                                     ORDER BY m.cmid, m.unittype, m.unitid, m.stage", $params);
@@ -305,6 +315,7 @@ class staff extends base {
                                             (SELECT COUNT(1) FROM {block_my_assessments_stu} s
                                               WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.submitted = 1) AS submissions
                                        FROM {block_my_assessments_cm} c
+                                       " . base::LIVE . "
                                       WHERE " . implode(' OR ', $where) . "
                                    ORDER BY c.due ASC", $params);
         return array_column(array_values($records), null, 'cmid');
@@ -319,6 +330,11 @@ class staff extends base {
         }
         [$insql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED);
         return array_map('intval', $DB->get_fieldset_select('block_my_assessments_cm', 'cmid', "courseid $insql", $params));
+    }
+
+    #[\Override]
+    protected function scope_courses(): array {
+        return $this->courses()[1];
     }
 
     #[\Override]
@@ -341,6 +357,8 @@ class staff extends base {
         $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::STAFF_UPCOMING => []];
         $tomarkcounts = format::zero_counts();
         $oldest = null;
+        // Marking still to do shows whatever its year; the rest follows the year picker (EC3).
+        $inyear = array_flip($this->courses()[1]);
         foreach ($bycm as $cmid => $stages) {
             $cm = $cms[$cmid];
             $tomark = $mine = $unallocated = $lastready = $lastmarked = 0;
@@ -358,10 +376,14 @@ class staff extends base {
                 $this->now,
                 isset($pending[$cmid])
             );
-            if (!$section || $section === classifier::STAFF_UPCOMING) {
+            $otheryear = !isset($inyear[(int)$cm->courseid]);
+            if (!$section || $section === classifier::STAFF_UPCOMING || ($otheryear && $section !== classifier::TOMARK)) {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
+            if ($otheryear) {
+                $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
+            }
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
                 $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
@@ -407,7 +429,10 @@ class staff extends base {
         ));
         $later = [];
         foreach (array_keys($pending) as $cmid) {
-            if (!isset($listed[$cmid]) && isset($cms[$cmid]) && (int)$cms[$cmid]->due < $this->now) {
+            if (
+                !isset($listed[$cmid]) && isset($cms[$cmid]) && (int)$cms[$cmid]->due < $this->now
+                    && isset($inyear[(int)$cms[$cmid]->courseid])
+            ) {
                 $later[] = $cmid;
             }
         }
@@ -488,7 +513,8 @@ class staff extends base {
         }
         $bars = [];
         foreach (['marked', 'agreed', 'moderated'] as $kind) {
-            if (isset($kinds[$kind])) {
+            // Agreement or moderation not yet open to me says nothing as "0 of 0" (EC9).
+            if (isset($kinds[$kind]) && ($kind === 'marked' || $kinds[$kind][1] > 0)) {
                 [$marked, $mine, $groups] = $kinds[$kind];
                 $bars[] = format::bar($kind, format::stage($kind), $marked, $mine, $groups);
             }
@@ -516,6 +542,7 @@ class staff extends base {
         $records = $DB->get_records_sql("SELECT c.assesstype, " . implode(', ', $select) . "
                                            FROM {block_my_assessments_mark} m
                                            JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                           " . base::LIVE . "
                                           WHERE m.markedby = :me AND m.marked = 1
                                        GROUP BY c.assesstype", $params);
         $counts = [];

@@ -23,6 +23,7 @@
     {
         "key": "student",
         "uniqid": "ma1",
+        "selectclass": "custom-select custom-select-sm",
         "freshness": {"text": "Updated 12 min ago", "refreshing": false, "preparing": false},
         "hasyears": false,
         "years": [],
@@ -42,8 +43,8 @@
     <div class="ma-toolbar">
         {{#hasyears}}
         <div class="ma-year">
-            <label class="sr-only" for="{{uniqid}}-year">{{#str}}academicyear, block_my_assessments{{/str}}</label>
-            <select id="{{uniqid}}-year" class="custom-select custom-select-sm" data-action="year">
+            <label class="accesshide" for="{{uniqid}}-year">{{#str}}academicyear, block_my_assessments{{/str}}</label>
+            <select id="{{uniqid}}-year" class="{{selectclass}}" data-action="year">
                 {{#years}}<option value="{{id}}"{{#selected}} selected{{/selected}}>{{label}}</option>{{/years}}
             </select>
         </div>
@@ -51,13 +52,13 @@
         <div class="ma-freshness" data-region="ma-freshness">
             {{#freshness.refreshing}}
             <span class="ma-freshness-text">
-                <span class="spinner-border spinner-border-sm mr-1" aria-hidden="true"></span>{{#str}}refreshing, block_my_assessments{{/str}}
+                <span class="spinner-border spinner-border-sm ma-icon" aria-hidden="true"></span>{{#str}}refreshing, block_my_assessments{{/str}}
             </span>
             {{/freshness.refreshing}}
             {{^freshness.refreshing}}
             <span class="ma-freshness-text">{{freshness.text}}</span>
             <button type="button" class="btn btn-sm ma-btn ma-btn--refresh" data-action="refresh">
-                <i class="fa fa-rotate-right mr-1" aria-hidden="true"></i>{{#str}}refresh, block_my_assessments{{/str}}
+                <i class="fa fa-rotate-right ma-icon" aria-hidden="true"></i>{{#str}}refresh, block_my_assessments{{/str}}
             </button>
             {{/freshness.refreshing}}
         </div>
@@ -75,11 +76,9 @@
             <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="summative">{{#str}}summative, block_my_assessments{{/str}}</button>
             <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="formative">{{#str}}formative, block_my_assessments{{/str}}</button>
         </div>
+        <label class="accesshide" for="{{uniqid}}-search">{{#str}}search, block_my_assessments{{/str}}</label>
         <div class="input-group input-group-sm ma-search">
-            <div class="input-group-prepend">
-                <span class="input-group-text" aria-hidden="true"><i class="fa fa-search"></i></span>
-            </div>
-            <label class="sr-only" for="{{uniqid}}-search">{{#str}}search, block_my_assessments{{/str}}</label>
+            <span class="input-group-text" aria-hidden="true"><i class="fa fa-search"></i></span>
             <input type="search" id="{{uniqid}}-search" class="form-control" data-action="search"
                    placeholder="{{searchplaceholder}}">
         </div>

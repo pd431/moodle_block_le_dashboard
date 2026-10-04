@@ -16,6 +16,7 @@
 
 namespace block_my_assessments\task;
 
+use block_my_assessments\local\adapter\registry;
 use block_my_assessments\local\index\indexer;
 
 /**
@@ -34,7 +35,11 @@ class backfill extends \core\task\adhoc_task {
 
     #[\Override]
     public function execute() {
-        (new indexer())->reconcile(fn($line) => mtrace($line));
+        try {
+            (new indexer())->reconcile(fn($line) => mtrace($line));
+        } finally {
+            registry::flush_errors();
+        }
         unset_config('backfillpending', 'block_my_assessments');
         set_config('backfilldone', time(), 'block_my_assessments');
     }
@@ -45,5 +50,14 @@ class backfill extends \core\task\adhoc_task {
     public static function queue(): void {
         set_config('backfillpending', time(), 'block_my_assessments');
         \core\task\manager::queue_adhoc_task(new self(), true);
+    }
+
+    /**
+     * Admin setting callback: a tag or role setting changed, so what is indexed changed (PR5).
+     *
+     * @param string $name Full setting name.
+     */
+    public static function setting_changed(string $name = ''): void {
+        self::queue();
     }
 }

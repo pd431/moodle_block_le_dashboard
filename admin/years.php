@@ -80,7 +80,7 @@ if ($form->is_cancelled()) {
 $rows = [];
 foreach (years::all() as $year) {
     $rows[] = [
-        'label' => format_string($year->label),
+        'label' => format_string($year->label, true, ['escape' => false]),
         'start' => userdate($year->timestart, get_string('strftimedate', 'langconfig')),
         'end' => userdate($year->timeend - 1, get_string('strftimedate', 'langconfig')),
         'editurl' => (new moodle_url($PAGE->url, ['id' => $year->id]))->out(false),

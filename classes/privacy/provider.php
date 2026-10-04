@@ -41,7 +41,7 @@ class provider implements
     \core_privacy\local\request\plugin\provider,
     \core_privacy\local\request\user_preference_provider {
     /** Preferences the block stores. */
-    const PREFERENCES = ['view', 'showgrades', 'window', 'range', 'type', 'year', 'refreshing'];
+    const PREFERENCES = ['view', 'showgrades', 'window', 'range', 'type', 'year', 'refreshing', 'lastrefresh'];
 
     #[\Override]
     public static function get_metadata(collection $collection): collection {
@@ -79,11 +79,32 @@ class provider implements
     protected static function has_rows(int $userid): bool {
         global $DB;
         return $DB->record_exists('block_my_assessments_stu', ['userid' => $userid])
+            || $DB->record_exists_select('block_my_assessments_stu', self::allocated_sql(), self::allocated_params($userid))
             || $DB->record_exists_select(
                 'block_my_assessments_mark',
                 "(unitid = :u1 AND unittype = 'user') OR allocatedto = :u2 OR markedby = :u3",
                 ['u1' => $userid, 'u2' => $userid, 'u3' => $userid]
             );
+    }
+
+    /**
+     * Student rows that list the user as an allocated marker (stored as ",id,id,").
+     *
+     * @return string
+     */
+    protected static function allocated_sql(): string {
+        global $DB;
+        return $DB->sql_like('allocatedto', ':allocated');
+    }
+
+    /**
+     * Parameters for allocated_sql().
+     *
+     * @param int $userid
+     * @return array
+     */
+    protected static function allocated_params(int $userid): array {
+        return ['allocated' => '%,' . $userid . ',%'];
     }
 
     #[\Override]
@@ -129,9 +150,17 @@ class provider implements
                 '',
                 'id, cmid, stage, allocatedto, marked, markedby, timemarked'
             ));
+            // Students allocated to this person as marker, counted per assessment.
+            $allocated = array_values($DB->get_records_sql(
+                "SELECT cmid, COUNT(1) AS students
+                   FROM {block_my_assessments_stu}
+                  WHERE " . self::allocated_sql() . "
+               GROUP BY cmid",
+                self::allocated_params($userid)
+            ));
             writer::with_context($context)->export_data(
                 [get_string('pluginname', 'block_my_assessments')],
-                (object)['assessments' => $rows, 'marking' => $marking]
+                (object)['assessments' => $rows, 'marking' => $marking, 'allocated' => $allocated]
             );
         }
     }

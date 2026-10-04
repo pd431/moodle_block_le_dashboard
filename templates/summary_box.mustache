@@ -23,6 +23,7 @@
     Example context (json):
     {
         "key": "duesoon",
+        "selectclass": "custom-select custom-select-sm",
         "view": "staff",
         "label": "Deadlines",
         "value": 2,
@@ -39,8 +40,8 @@
         {{#note}}<div class="ma-box-value">{{note}}</div>{{/note}}
         {{#subnote}}<div class="ma-box-note">{{subnote}}</div>{{/subnote}}
         {{#hasoptions}}
-        <label class="sr-only" for="ma-box-{{view}}-{{key}}-select">{{label}}</label>
-        <select id="ma-box-{{view}}-{{key}}-select" class="custom-select custom-select-sm ma-box-select" data-action="box-option">
+        <label class="accesshide" for="ma-box-{{view}}-{{key}}-select">{{label}}</label>
+        <select id="ma-box-{{view}}-{{key}}-select" class="{{selectclass}} ma-box-select" data-action="box-option">
             {{#options}}<option value="{{value}}"{{#selected}} selected{{/selected}}>{{label}}</option>{{/options}}
         </select>
         {{/hasoptions}}

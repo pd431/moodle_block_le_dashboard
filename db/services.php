@@ -31,6 +31,8 @@ $functions = [
         'type' => 'read',
         'ajax' => true,
         'loginrequired' => true,
+        // Rendering never writes the session, so it doesn't wait for a Refresh in another request (PR10).
+        'readonlysession' => true,
     ],
     'block_my_assessments_refresh' => [
         'classname' => '\block_my_assessments\external\refresh',

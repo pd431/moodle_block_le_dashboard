@@ -18,6 +18,9 @@
 
 require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
+// Step definitions are single-line regular expressions, so some lines are long.
+// phpcs:disable moodle.Files.LineLength.TooLong
+
 use Behat\Gherkin\Node\TableNode;
 use Behat\Mink\Exception\ExpectationException;
 use block_my_assessments\local\index\indexer;
@@ -49,6 +52,8 @@ class behat_block_my_assessments extends behat_base {
      */
     public function create_convenor_role(): void {
         global $DB;
+        // Ids restart with each scenario, so nothing memoised in this process still holds.
+        \block_my_assessments\local\memo::reset();
         if (!$DB->record_exists('role', ['shortname' => 'moduleconvenor'])) {
             $roleid = create_role('Module convenor', 'moduleconvenor', '', 'editingteacher');
             set_role_contextlevels($roleid, [CONTEXT_COURSE]);
@@ -241,7 +246,8 @@ class behat_block_my_assessments extends behat_base {
      */
     public function the_academic_year_starts_on(string $label, string $date): void {
         global $DB;
-        $start = strtotime($date . ' 00:00');
+        // A date, or a timestamp when written as ##date##.
+        $start = ctype_digit($date) ? (int)$date : strtotime($date . ' 00:00');
         $DB->delete_records(years::TABLE, ['label' => $label]);
         $id = $DB->insert_record(years::TABLE, ['label' => $label, 'timestart' => $start,
             'timeend' => strtotime('+1 year', $start), 'timecreated' => time(), 'timemodified' => time()]);
@@ -319,10 +325,16 @@ class behat_block_my_assessments extends behat_base {
         }
         switch ($modname) {
             case 'assign':
-                $record += ['duedate' => (int)$due, 'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1,
+                // EC5: "with no online submission" means the assignment only records a mark.
+                $online = str_contains($opts, 'no online submission') ? 0 : 1;
+                $record += ['duedate' => (int)$due, 'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => $online,
+                    'assignsubmission_file_enabled' => 0,
                     'gradingduedate' => $markingdue,
                     'markingworkflow' => $allocation || str_contains($opts, 'marking workflow') ? 1 : 0,
                     'markingallocation' => $allocation ? 1 : 0];
+                if (str_contains($opts, 'team submission')) {
+                    $record += ['teamsubmission' => 1, 'requireallteammemberssubmit' => 0, 'preventsubmissionnotingroup' => 0];
+                }
                 if (str_contains($opts, 'reopened attempts')) {
                     $record += ['attemptreopenmethod' => 'manual', 'maxattempts' => -1];
                 }
@@ -1122,7 +1134,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $stage
      * @param bool $final
      */
-    protected function feedback(cm_info $cm, int $userid, int $markerid, string $stage, bool $final): void {
+    protected function feedback(cm_info $cm, int $userid, int $markerid, string $stage, bool $final, float $mark = 60): void {
         global $CFG;
         if ($cm->modname === 'assign') {
             require_once($CFG->dirroot . '/mod/assign/locallib.php');
@@ -1135,7 +1147,7 @@ class behat_block_my_assessments extends behat_base {
                 self::queue($cm);
                 return;
             }
-            $grade->grade = 60;
+            $grade->grade = $mark;
             $grade->grader = $markerid;
             $assign->update_grade($grade);
             if ($assign->get_instance()->markingworkflow) {
@@ -1150,6 +1162,338 @@ class behat_block_my_assessments extends behat_base {
                 'stage_identifier' => $stage, 'grade' => 60, 'isfinalgrade' => $final ? 1 : 0]);
         }
         self::queue($cm);
+    }
+
+    // Freshness steps (perf review F1 to F5, F9).
+
+    /** @var array|null A student index row saved by "without the index being told". */
+    protected static ?array $savedrow = null;
+
+    /**
+     * A re-index of an assessment is running: its task has started and read the old data.
+     *
+     * @Given /^a re-index of "(?P<name>[^"]*)" has started$/
+     * @param string $name
+     */
+    public function a_reindex_has_started(string $name): void {
+        global $DB;
+        self::queue($this->cm($name));
+        $DB->set_field_select(
+            'task_adhoc',
+            'timestarted',
+            time(),
+            'classname = :c AND timestarted IS NULL',
+            ['c' => '\\block_my_assessments\\task\\reindex']
+        );
+    }
+
+    /**
+     * A student submits (the activity's own events fire).
+     *
+     * @When /^"(?P<user>[^"]*)" submits "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     */
+    public function submits(string $username, string $name): void {
+        $this->submit($this->cm($name), self::userid($username));
+    }
+
+    /**
+     * The running re-index finishes, having read the data before the change.
+     *
+     * @When /^the running re-index of "(?P<name>[^"]*)" finishes$/
+     * @param string $name
+     */
+    public function the_running_reindex_finishes(string $name): void {
+        global $DB;
+        $DB->delete_records_select(
+            'task_adhoc',
+            'classname = :c AND timestarted IS NOT NULL',
+            ['c' => '\\block_my_assessments\\task\\reindex']
+        );
+    }
+
+    /** @var string[] Output of the parallel re-indexes. */
+    protected static array $parallel = [];
+
+    /**
+     * Re-indexes an assessment in two processes at once.
+     *
+     * @When /^"(?P<name>[^"]*)" is re-indexed twice at the same time$/
+     * @param string $name
+     */
+    public function reindexed_twice_at_once(string $name): void {
+        global $CFG;
+        $cm = $this->cm($name);
+        $script = $CFG->dirroot . '/blocks/my_assessments/tests/fixtures/behat_reindex.php';
+        $procs = [];
+        foreach ([1, 2] as $i) {
+            $procs[$i] = proc_open([PHP_BINARY, $script, (string)$cm->id], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
+        }
+        self::$parallel = [];
+        foreach ($procs as $i => $proc) {
+            $out = stream_get_contents($pipes[$i][1]) . stream_get_contents($pipes[$i][2]);
+            $code = proc_close($proc);
+            self::$parallel[] = "exit $code: " . trim($out);
+        }
+    }
+
+    /**
+     * Both parallel re-indexes succeeded.
+     *
+     * @Then /^neither re-index should fail$/
+     */
+    public function neither_reindex_should_fail(): void {
+        foreach (self::$parallel as $result) {
+            if (!str_starts_with($result, 'exit 0: ok')) {
+                throw new ExpectationException("A re-index failed: $result", $this->getSession());
+            }
+        }
+    }
+
+    /**
+     * The index has the assessment and a row for every student.
+     *
+     * @Then /^the index for "(?P<name>[^"]*)" should match the activity$/
+     * @param string $name
+     */
+    public function the_index_should_match(string $name): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $expected = count(indexer::students((int)$cm->course));
+        $rows = $DB->count_records('block_my_assessments_stu', ['cmid' => $cm->id]);
+        if (!$DB->record_exists('block_my_assessments_cm', ['cmid' => $cm->id]) || $rows !== $expected) {
+            throw new ExpectationException("'$name' has $rows student rows, not $expected", $this->getSession());
+        }
+    }
+
+    /**
+     * The next write of an assessment's index rows fails.
+     *
+     * @Given /^writing the index for "(?P<name>[^"]*)" fails once$/
+     * @param string $name
+     */
+    public function writing_fails_once(string $name): void {
+        set_config('testfailwrite', $this->cm($name)->id, 'block_my_assessments');
+    }
+
+    /**
+     * An assessment is in the index.
+     *
+     * @Then /^"(?P<name>[^"]*)" should be in the index$/
+     * @param string $name
+     */
+    public function should_be_in_the_index(string $name): void {
+        global $DB;
+        if (!$DB->record_exists('block_my_assessments_cm', ['cmid' => $this->cm($name)->id])) {
+            throw new ExpectationException("'$name' is not in the index", $this->getSession());
+        }
+    }
+
+    /**
+     * Moves an existing assessment's deadline, through the activity, and re-indexes it.
+     *
+     * @Given /^"(?P<name>[^"]*)" was due "(?P<when>[^"]*)"$/
+     * @param string $name
+     * @param string $when
+     */
+    public function was_due(string $name, string $when): void {
+        $this->the_deadline_is_changed_directly($name, $when);
+        (new indexer())->index_cm((int)$this->cm($name)->id);
+    }
+
+    /**
+     * Hides or shows an activity's grade item in the gradebook.
+     *
+     * @Given /^the grade item of "(?P<name>[^"]*)" is (?P<state>hidden|shown)$/
+     * @param string $name
+     * @param string $state
+     */
+    public function the_grade_item_is(string $name, string $state): void {
+        global $CFG;
+        require_once($CFG->libdir . '/gradelib.php');
+        $cm = $this->cm($name);
+        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
+            'itemnumber' => 0, 'courseid' => $cm->course]);
+        $item->set_hidden($state === 'hidden' ? 1 : 0);
+    }
+
+    /**
+     * A marker grades a student.
+     *
+     * @Given /^"(?P<marker>[^"]*)" grades "(?P<student>[^"]*)" on "(?P<name>[^"]*)" with "(?P<grade>[\d.]+)"$/
+     * @param string $marker
+     * @param string $student
+     * @param string $name
+     * @param string $grade
+     */
+    public function grades_with(string $marker, string $student, string $name, string $grade): void {
+        $this->feedback($this->cm($name), self::userid($student), self::userid($marker), 'assessor_1', true, (float)$grade);
+    }
+
+    /**
+     * A row's status pill.
+     *
+     * @Then /^"(?P<name>[^"]*)" should show the status "(?P<status>[^"]*)"$/
+     * @param string $name
+     * @param string $status
+     */
+    public function should_show_the_status(string $name, string $status): void {
+        $pill = $this->row($name)->find('css', '[data-status]');
+        if (!$pill || trim($pill->getText()) !== $status) {
+            throw new ExpectationException(
+                "'$name' shows '" . ($pill ? trim($pill->getText()) : '') . "', not '$status'",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * The logged-in student submits an assignment through its page.
+     *
+     * @When /^I submit "(?P<name>[^"]*)"(?: for my group)?$/
+     * @param string $name
+     */
+    public function i_submit(string $name): void {
+        $this->getSession()->visit($this->locate_path('/mod/assign/view.php?id=' . $this->cm($name)->id));
+        $this->execute('behat_forms::press_button', [get_string('addsubmission', 'assign')]);
+        $this->execute('behat_forms::i_set_the_field_to', [get_string('onlinetext', 'assignsubmission_onlinetext'), 'My work']);
+        $this->execute('behat_forms::press_button', [get_string('savechanges')]);
+    }
+
+    /**
+     * Opens the dashboard without running pending index tasks.
+     *
+     * @When /^I view my dashboard$/
+     */
+    public function i_view_my_dashboard(): void {
+        $this->getSession()->visit($this->locate_path('/my/'));
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * A student submits but the index hears nothing: their task is dropped. Saves their row.
+     *
+     * @Given /^"(?P<user>[^"]*)" has submitted "(?P<name>[^"]*)" without the index being told$/
+     * @param string $username
+     * @param string $name
+     */
+    public function submitted_untold(string $username, string $name): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $userid = self::userid($username);
+        $this->submit($cm, $userid);
+        $DB->delete_records('task_adhoc', ['classname' => '\\block_my_assessments\\task\\reindex']);
+        self::$savedrow = (array)$DB->get_record('block_my_assessments_stu', ['cmid' => $cm->id, 'userid' => $userid]);
+    }
+
+    /**
+     * A student's index row is as it was saved.
+     *
+     * @Then /^the index row of "(?P<user>[^"]*)" for "(?P<name>[^"]*)" should be unchanged$/
+     * @param string $username
+     * @param string $name
+     */
+    public function the_index_row_should_be_unchanged(string $username, string $name): void {
+        global $DB;
+        $row = (array)$DB->get_record('block_my_assessments_stu', ['cmid' => $this->cm($name)->id,
+            'userid' => self::userid($username)]);
+        unset($row['id'], self::$savedrow['id']);
+        if ($row != self::$savedrow) {
+            throw new ExpectationException("The index row of '$username' changed", $this->getSession());
+        }
+    }
+
+    /**
+     * Puts two users in a new group of the course they share.
+     *
+     * @Given /^"(?P<u1>[^"]*)" and "(?P<u2>[^"]*)" are in group "(?P<group>[^"]*)"$/
+     * @param string $u1
+     * @param string $u2
+     * @param string $group
+     */
+    public function are_in_group(string $u1, string $u2, string $group): void {
+        $ids = [self::userid($u1), self::userid($u2)];
+        $shared = array_intersect_key(enrol_get_all_users_courses($ids[0]), enrol_get_all_users_courses($ids[1]));
+        $gen = testing_util::get_data_generator();
+        $g = $gen->create_group(['courseid' => reset($shared)->id, 'name' => $group]);
+        foreach ($ids as $id) {
+            $gen->create_group_member(['groupid' => $g->id, 'userid' => $id]);
+        }
+    }
+
+    /** Setting names in steps, to their keys. */
+    const SETTINGS = ['Live window for the nightly reconcile' => 'reconcilemonths'];
+
+    /**
+     * Sets a number setting.
+     *
+     * @Given /^the "(?P<setting>[^"]*)" setting is "(?P<value>\d+)" months$/
+     * @param string $setting
+     * @param int $value
+     */
+    public function the_setting_is(string $setting, int $value): void {
+        set_config(self::SETTINGS[$setting], $value, 'block_my_assessments');
+    }
+
+    /**
+     * A new course holding one tagged assessment.
+     *
+     * @Given /^a course "(?P<course>[^"]*)" with an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" was due "(?P<due>[^"]*)"$/
+     * @param string $course
+     * @param string $tag
+     * @param string $modname
+     * @param string $name
+     * @param string $due
+     */
+    public function a_course_with(string $course, string $tag, string $modname, string $name, string $due): void {
+        testing_util::get_data_generator()->create_course(['shortname' => $course, 'fullname' => $course]);
+        $this->create_assessment($tag, $modname, $name, $course, '', self::time($due));
+    }
+
+    /**
+     * What the index holds for an assessment.
+     *
+     * @Then /^the index should (?:still )?show "(?P<name>[^"]*)"(?: due "(?P<when>[^"]*)")?$/
+     * @param string $name
+     * @param string $when
+     */
+    public function the_index_should_show(string $name, string $when = ''): void {
+        global $DB;
+        $row = $DB->get_record('block_my_assessments_cm', ['cmid' => $this->cm($name)->id]);
+        if (!$row || $row->name !== $name) {
+            throw new ExpectationException("The index doesn't show '$name'", $this->getSession());
+        }
+        if ($when !== '' && date('Y-m-d', (int)$row->due) !== date('Y-m-d', self::time($when))) {
+            throw new ExpectationException("The index shows '$name' due " . date('Y-m-d', (int)$row->due), $this->getSession());
+        }
+    }
+
+    /**
+     * Renames an activity the usual way (course_module_updated fires).
+     *
+     * @When /^"(?P<name>[^"]*)" is renamed to "(?P<new>[^"]*)"$/
+     * @param string $name
+     * @param string $new
+     */
+    public function is_renamed(string $name, string $new): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/course/lib.php');
+        set_coursemodule_name($this->cm($name)->id, $new);
+    }
+
+    /**
+     * An assessment was not re-indexed since time last passed: its index time is still in the past.
+     *
+     * @Then /^"(?P<name>[^"]*)" should have been re-indexed once$/
+     * @param string $name
+     */
+    public function reindexed_once(string $name): void {
+        global $DB;
+        $time = (int)$DB->get_field('block_my_assessments_cm', 'timeindexed', ['cmid' => $this->cm($name)->id]);
+        if ($time > time() - MINSECS) {
+            throw new ExpectationException("'$name' was re-indexed again", $this->getSession());
+        }
     }
 
     // Index steps.
@@ -1870,5 +2214,72 @@ class behat_block_my_assessments extends behat_base {
         if (!$tr->find('css', '.text-danger')) {
             throw new ExpectationException("$type shows no error", $this->getSession());
         }
+    }
+
+    /**
+     * Deletes a group, which removes its members without a member-removed event.
+     *
+     * @Given /^the group "(?P<group>[^"]*)" is deleted$/
+     * @param string $group
+     */
+    public function the_group_is_deleted(string $group): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/group/lib.php');
+        groups_delete_group($DB->get_field('groups', 'id', ['idnumber' => $group], MUST_EXIST));
+    }
+
+    /**
+     * Enables or disables an enrolment method of a course.
+     *
+     * @Given /^the "(?P<method>[^"]*)" enrolment method of "(?P<course>[^"]*)" is (?P<state>enabled|disabled)$/
+     * @param string $method
+     * @param string $shortname
+     * @param string $state
+     */
+    public function the_enrolment_method_is(string $method, string $shortname, string $state): void {
+        global $DB;
+        $instance = $DB->get_record('enrol', ['courseid' => self::course($shortname)->id, 'enrol' => $method], '*', MUST_EXIST);
+        enrol_get_plugin($method)->update_status($instance, $state === 'enabled' ? ENROL_INSTANCE_ENABLED : ENROL_INSTANCE_DISABLED);
+    }
+
+    /**
+     * Deletes an activity from the course page: it is only flagged, and core's deletion task
+     * is held back, as when the recycle bin's backup fails (EC7).
+     *
+     * @Given /^"(?P<name>[^"]*)" is deleted from the course page$/
+     * @param string $name
+     */
+    public function deleted_from_the_course_page(string $name): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/course/lib.php');
+        course_delete_module($this->cm($name)->id, true);
+        $DB->delete_records('task_adhoc', ['classname' => '\\core_course\\task\\course_delete_modules']);
+    }
+
+    /**
+     * Reverts an assign submission to draft, as a marker does to let the student rework it.
+     *
+     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is reverted to draft$/
+     * @param string $student
+     * @param string $name
+     */
+    public function the_submission_is_reverted_to_draft(string $student, string $name): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $cm = $this->cm($name);
+        (new assign($cm->context, $cm, null))->revert_to_draft(self::userid($student));
+    }
+
+    /**
+     * Removes a course's start date, which core's API refuses while it has an end date.
+     *
+     * @Given /^the start date of "(?P<course>[^"]*)" is removed$/
+     * @param string $shortname
+     */
+    public function the_start_date_is_removed(string $shortname): void {
+        global $DB;
+        $id = self::course($shortname)->id;
+        $DB->set_field('course', 'startdate', 0, ['id' => $id]);
+        rebuild_course_cache($id, true);
     }
 }

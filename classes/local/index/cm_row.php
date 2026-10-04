@@ -33,6 +33,7 @@ final class cm_row {
      * @param int|null $markingdue When marking is due, if the activity has such a date.
      * @param bool $hasallocation Whether units are allocated to named markers.
      * @param string[] $stages Marking stage keys in order (see stage strings in the lang file).
+     * @param bool $submissions Whether students submit (false: an assignment that only records a mark).
      */
     public function __construct(
         /** @var int|null When submissions open. */
@@ -47,6 +48,8 @@ final class cm_row {
         public bool $hasallocation = false,
         /** @var string[] Marking stage keys, in order. */
         public array $stages = ['marked'],
+        /** @var bool Whether students submit here; false lists it like the generic tier (EC5). */
+        public bool $submissions = true,
     ) {
     }
 }

@@ -218,14 +218,16 @@ class format {
      * @return array
      */
     public static function row(\stdClass $cm, string $courseshortname, string $view): array {
-        $name = format_string($cm->name, true, ['context' => \context_course::instance($cm->courseid)]);
+        // Not escaped here: the template escapes once (PR3).
+        $options = ['context' => \context_course::instance($cm->courseid), 'escape' => false];
+        $name = format_string($cm->name, true, $options);
         $modname = get_string('modulename', $cm->modname);
         return [
             'id' => 'ma-' . $view . '-' . $cm->cmid,
             'cmid' => (int)$cm->cmid,
             'name' => $name,
             'url' => (new \moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cm->cmid]))->out(false),
-            'course' => format_string($courseshortname),
+            'course' => format_string($courseshortname, true, $options),
             'modname' => $cm->modname,
             'modlabel' => $modname,
             'faicon' => self::ICONS[$cm->modname] ?? self::ICON_FALLBACK,
@@ -280,5 +282,16 @@ class format {
         }
         [$insql, $params] = $DB->get_in_or_equal(array_unique($courseids), SQL_PARAMS_NAMED);
         return $DB->get_records_select_menu('course', "id $insql", $params, '', 'id, shortname');
+    }
+
+    /**
+     * Classes for a small select: Bootstrap 4's on Moodle 4.x, Bootstrap 5's from 5.0, so 5.x
+     * never relies on its deprecated Bootstrap 4 compatibility styles (PR9).
+     *
+     * @return string
+     */
+    public static function select_class(): string {
+        global $CFG;
+        return (int)$CFG->branch >= 500 ? 'form-select form-select-sm' : 'custom-select custom-select-sm';
     }
 }

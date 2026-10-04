@@ -39,7 +39,7 @@
         <button type="button" class="btn btn-link btn-sm ma-section-toggle" data-action="toggle-section"
                 aria-expanded="true" aria-controls="ma-{{view}}-{{key}}-list">
             <i class="fa fa-chevron-down" aria-hidden="true"></i>
-            <span class="sr-only">{{#str}}togglesection, block_my_assessments, {{title}}{{/str}}</span>
+            <span class="accesshide">{{#str}}togglesection, block_my_assessments, {{title}}{{/str}}</span>
         </button>
     </div>
     <ul class="list-group list-group-flush ma-rows" id="ma-{{view}}-{{key}}-list" aria-labelledby="ma-{{view}}-{{key}}-title">
@@ -47,8 +47,8 @@
     </ul>
     <div class="card-footer ma-section-footer" data-region="ma-more" {{^hasmore}}hidden{{/hasmore}}>
         <button type="button" class="btn btn-link btn-sm ma-more" data-action="show-more" aria-expanded="false">
-            <span class="ma-more-label"><i class="fa-solid fa-chevron-down mr-1" aria-hidden="true"></i>{{#str}}showmore, block_my_assessments{{/str}}</span>
-            <span class="ma-less-label"><i class="fa-solid fa-chevron-up mr-1" aria-hidden="true"></i>{{#str}}showless, block_my_assessments{{/str}}</span>
+            <span class="ma-more-label"><i class="fa-solid fa-chevron-down ma-icon" aria-hidden="true"></i>{{#str}}showmore, block_my_assessments{{/str}}</span>
+            <span class="ma-less-label"><i class="fa-solid fa-chevron-up ma-icon" aria-hidden="true"></i>{{#str}}showless, block_my_assessments{{/str}}</span>
         </button>
     </div>
 </section>
