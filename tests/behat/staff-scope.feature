@@ -259,6 +259,22 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     Then "A1" should appear in the "Upcoming deadlines" section
     And "A1" should show "1 student has an extension"
 
+  # D10: a row held in Upcoming by extensions shows when the latest one ends, not only a past deadline.
+  Scenario: An assessment held in Upcoming deadlines by extensions shows the latest extended deadline
+    Given a summative "assign" "A1" in "M1" was due "2 days ago"
+    And "student1" has an extension on "A1" to "in 3 days"
+    And "student2" has an extension on "A1" to "in 5 days"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should show "Submission deadline" with the date "2 days ago"
+    And "A1" should show "Extended deadline" with the date "in 5 days"
+
+  Scenario: An assessment still before its deadline shows no extended deadline
+    Given a summative "assign" "A1" in "M1" is due "in 2 days"
+    And "student2" has an extension on "A1" to "in 5 days"
+    When I log in as "marker1" and view my dashboard
+    Then "A1" should show "1 student has an extension"
+    And "A1" should not show "Extended deadline"
+
   # Whose extensions: allocated to me, or unallocated when I convene.
   Scenario: Extensions count only for students whose marking is mine
     Given the following "users" exist:

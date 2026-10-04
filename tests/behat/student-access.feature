@@ -148,6 +148,22 @@ Feature: Students see only assessments they can actually access
     Then I should see "Feedback should arrive soon. If it doesn't, contact your module convenor." in the "My assessments" block
     And I should see "your module convenor" linking to "https://example.com/contact"
 
+  # D9: the contact defaults to "your module convenor"; an admin who clears it gets no hint.
+  Scenario: The feedback contact defaults to the module convenor
+    Given a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
+    And "student1" submitted "A1" "11 days ago"
+    When I log in as "student1" and view my dashboard
+    And I click on the feedback contact hint of "A1"
+    Then I should see "If it doesn't, contact your module convenor." in the "My assessments" block
+
+  Scenario: With the feedback contact cleared, a passed feedback date has no hint
+    Given the My assessments feedback contact is "" linking to ""
+    And a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
+    And "student1" submitted "A1" "11 days ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Feedback expected"
+    And "A1" should not have a feedback contact hint
+
   Scenario: A feedback date still to come has no hint
     Given a summative "assign" "A1" in "M1" with a marking deadline "in 5 days" was due "3 days ago"
     And "student1" submitted "A1" "4 days ago"

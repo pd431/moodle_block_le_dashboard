@@ -44,6 +44,9 @@ class student extends base {
         student_row::MITIGATION_EXTENSION => 'fa-calendar-plus',
     ];
 
+    /** Assessment types offered Mitigate (D8: whether formative stays is Pierre's call). */
+    const MITIGATION_TYPES = ['summative', 'formative'];
+
     /** A pending assessment is due soon within this many days (rc6). */
     const DUESOON_DAYS = 7;
 
@@ -285,8 +288,8 @@ class student extends base {
         } else if ($status === classifier::STATUS_INMARKING && $r->markingdue) {
             // The date stays once it has passed, with a hint saying who to contact (G12).
             $dates[] = format::date('feedbackexpected', (int)$r->markingdue);
-            if ((int)$r->markingdue < $this->now) {
-                $row['hints'][] = $this->feedback_hint($row['id']);
+            if ((int)$r->markingdue < $this->now && ($hint = $this->feedback_hint($row['id']))) {
+                $row['hints'][] = $hint;
             }
         }
         $row['dates'] = $dates;
@@ -303,8 +306,9 @@ class student extends base {
         }
         $row['actions'] = $actions;
         // Mitigate around the student's own deadline, whatever the section or status (G4).
-        $links = config::mitigation_open($r->due ? (int)$r->due : null, $this->now)
-            ? mitigation::links($r->modname, $r->instance) : [];
+        $mitigable = in_array($r->assesstype, self::MITIGATION_TYPES)
+            && config::mitigation_open($r->due ? (int)$r->due : null, $this->now);
+        $links = $mitigable ? mitigation::links($r->modname, $r->instance) : [];
         if ($links) {
             $row['mitigation'] = [
                 'id' => $row['id'] . '-mitigate',
@@ -317,19 +321,22 @@ class student extends base {
 
     /**
      * The hint on work in marking whose feedback date has passed: feedback should arrive
-     * soon, and who to contact if it doesn't. The contact text and link are settings.
+     * soon, and who to contact if it doesn't. The contact text and link are settings; with
+     * the contact cleared, there is no hint, as it would point nowhere (D9).
      *
      * @param string $rowid
-     * @return array
+     * @return array|null
      */
-    protected function feedback_hint(string $rowid): array {
-        $text = trim((string)get_config('block_my_assessments', 'feedbackcontact'));
-        $url = trim((string)get_config('block_my_assessments', 'feedbackcontacturl'));
-        $contact = null;
-        if ($text !== '') {
-            $who = $url !== '' ? \html_writer::link(new \moodle_url($url), format_string($text)) : format_string($text);
-            $contact = get_string('hint_feedbackcontact_contact', 'block_my_assessments', $who);
+    protected function feedback_hint(string $rowid): ?array {
+        $text = get_config('block_my_assessments', 'feedbackcontact');
+        // Unset until an admin saves the new setting: use its default.
+        $text = trim($text === false ? get_string('feedbackcontact_default', 'block_my_assessments') : $text);
+        if ($text === '') {
+            return null;
         }
+        $url = trim((string)get_config('block_my_assessments', 'feedbackcontacturl'));
+        $who = $url !== '' ? \html_writer::link(new \moodle_url($url), format_string($text)) : format_string($text);
+        $contact = get_string('hint_feedbackcontact_contact', 'block_my_assessments', $who);
         return format::hint($rowid, 'feedbackcontact', get_string('hint_feedbackcontact_text', 'block_my_assessments'), $contact);
     }
 }

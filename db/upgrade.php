@@ -132,5 +132,13 @@ function xmldb_block_my_assessments_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100500, 'my_assessments');
     }
 
+    if ($oldversion < 2026100600) {
+        // The feedback contact now has a default (D9); beta8 saved it empty because that was its default.
+        if (get_config('block_my_assessments', 'feedbackcontact') === '') {
+            set_config('feedbackcontact', get_string('feedbackcontact_default', 'block_my_assessments'), 'block_my_assessments');
+        }
+        upgrade_block_savepoint(true, 2026100600, 'my_assessments');
+    }
+
     return true;
 }

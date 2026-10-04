@@ -109,7 +109,7 @@ if ($ADMIN->fulltree) {
         'block_my_assessments/feedbackcontact',
         new lang_string('feedbackcontact', 'block_my_assessments'),
         new lang_string('feedbackcontact_desc', 'block_my_assessments'),
-        '',
+        get_string('feedbackcontact_default', 'block_my_assessments'),
         PARAM_TEXT
     ));
     $settings->add(new admin_setting_configtext(

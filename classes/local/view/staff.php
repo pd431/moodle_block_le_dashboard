@@ -422,6 +422,10 @@ class staff extends base {
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
             $row['dates'] = [format::date('submissiondeadline', (int)$cm->due)];
+            // Held here past its deadline by extensions: say when the last one ends (D10).
+            if ((int)$cm->due < $this->now && isset($pending[$cmid])) {
+                $row['dates'][] = format::date('extendeddeadline', (int)$pending[$cmid]->latest);
+            }
             // Generic types can't know about submissions (R5).
             $row['bars'] = $cm->adapter === 'generic' ? [] : [format::bar(
                 'submitted',
