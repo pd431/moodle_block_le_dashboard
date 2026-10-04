@@ -156,5 +156,24 @@ function xmldb_block_my_assessments_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100800, 'my_assessments');
     }
 
+    if ($oldversion < 2026100901) {
+        // The late note became the late penalties popover (Pierre, 2026-10-04): replace the old default text.
+        if (get_config('block_my_assessments', 'latenote') === 'Late submissions may have their mark capped.') {
+            set_config('latenote', get_string('latenote_default', 'block_my_assessments'), 'block_my_assessments');
+        }
+        upgrade_block_savepoint(true, 2026100901, 'my_assessments');
+    }
+
+    if ($oldversion < 2026100902) {
+        // Plagiarism flags, ported from rc6 per marking unit (Pierre, 2026-10-04).
+        $table = new xmldb_table('block_my_assessments_mark');
+        $field = new xmldb_field('flagged', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'released');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_my_assessments\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026100902, 'my_assessments');
+    }
+
     return true;
 }

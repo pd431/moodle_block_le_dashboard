@@ -281,14 +281,15 @@ Feature: Students see only assessments they can actually access
     And "A1" should not show "early"
     And "A1" should not show "late"
 
-  Scenario: Late summative work carries the late note, late formative work does not
+  # Pierre, 2026-10-04: the late note is now the late penalties popover (student-polish.feature).
+  Scenario: Late summative work carries the late penalties popover, late formative work does not
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And a formative "assign" "F1" in "M1" was due "2 days ago"
     And "student1" submitted "A1" "1 day ago"
     And "student1" submitted "F1" "1 day ago"
     When I log in as "student1" and view my dashboard
-    Then "A1" should show "Late submissions may have their mark capped."
-    And "F1" should not show "capped"
+    Then "A1" should have a late penalty hint
+    And "F1" should not have a late penalty hint
 
   Scenario: Work submitted before an extended deadline is not late
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
@@ -296,7 +297,7 @@ Feature: Students see only assessments they can actually access
     And "student1" submitted "A1" "1 day ago"
     When I log in as "student1" and view my dashboard
     Then "A1" should not show "late"
-    And "A1" should not show "capped"
+    And "A1" should not have a late penalty hint
 
   Scenario: An overdue assessment with a cut-off says how long is left to submit
     Given a summative "assign" "A1" in "M1" with a cut-off "in 21 hours" was due "3 hours ago"

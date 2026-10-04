@@ -95,19 +95,21 @@ $ma-state-tones: (
     "pending": "attention",
     "reopened": "attention",
     "submitted": "success",
+    "received": "success",
     "inmarking": "info",
     "released": "info",
   ),
-  // The modifier icons on a row's activity icon. "overdue" is the Overdue
-  // section's red, as in rc6. Late is already done, so it is grey, never
-  // red or orange (Pierre, 2026-10-03).
+  // The modifier icons on a row's activity icon, shown only for the unusual
+  // case (Pierre, 2026-10-04). "overdue" is a red clock: Pierre's explicit
+  // choice for that one icon, not a licence for red elsewhere. Late work in
+  // Past is a grey clock. Every Mitigate icon takes the Mitigate button's
+  // tone.
   "overlay": (
     "default": "grey",
     "overdue": "danger",
-    "submitted": "success",
     "duesoon": "attention",
-    "selfcert": "info",
-    "extension": "info",
+    "selfcert": "attention",
+    "extension": "attention",
   ),
   // Progress bars, by bar key (marking stages included).
   "bar": (
@@ -139,7 +141,7 @@ $ma-dark-ink-on-solid: ("attention");
 
         @if list.index($ma-dark-ink-on-solid, $tone) {
           --ma-on-solid: var(--ma-ink);
-          --ma-glyph: var(--ma-ink);
+          --ma-glyph: var(--ma-#{$tone}-glyph);
         }
       }
     }
@@ -162,6 +164,11 @@ $ma-dark-ink-on-solid: ("attention");
   // and for text on a solid tone. Everything else shows the block's card.
   --ma-surface: #fff;
   --ma-on-solid: #fff;
+  // Icons in a tone too light for white: its solid is under 3:1 on white,
+  // and its ink is brown. This is the darkest step that still reads as
+  // orange: OKLCH L .62 at full chroma, 3.7:1 and APCA Lc 64.5 on white
+  // (non-text needs 3:1 and Lc 45). Used by due soon and every Mitigate icon.
+  --ma-attention-glyph: #bd7300;
   @each $tone, $def in $ma-tones {
     $hex: list.nth($def, 1);
     $theme: list.nth($def, 2);
@@ -229,7 +236,7 @@ $ma-dark-ink-on-solid: ("attention");
     color: var(--ma-text-muted);
   }
 
-  // Tabs, toolbar and filters. View tabs stay on one line and scroll
+  // Tabs and the control bar. View tabs stay on one line and scroll
   // sideways on phones rather than wrapping under a broken tab border.
   .ma-tabs {
     flex-wrap: nowrap;
@@ -263,15 +270,17 @@ $ma-dark-ink-on-solid: ("attention");
   }
 
   .ma-tabs,
-  .ma-toolbar,
-  .ma-summary,
-  .ma-filters {
+  .ma-controls,
+  .ma-freshness,
+  .ma-summary {
     margin-bottom: 0.75rem;
   }
 
-  .ma-toolbar,
-  .ma-freshness,
-  .ma-filters {
+  // The control bar: year, type filter, Show grades and search in one row
+  // that wraps on narrow blocks, search taking what is left (the full width
+  // once it wraps). The freshness line sits under it, on the right.
+  .ma-controls,
+  .ma-freshness {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -279,13 +288,41 @@ $ma-dark-ink-on-solid: ("attention");
   }
 
   .ma-freshness {
-    margin-left: auto;
+    justify-content: flex-end;
   }
 
-  .ma-year .custom-select,
+  .ma-control {
+    flex: 0 1 auto;
+  }
+
   .ma-search {
     flex: 1 1 12rem;
-    width: auto;
+  }
+
+  // A toggle, not a fourth type: a rule and a gap set it apart from the
+  // type buttons. Narrow blocks wrap it onto its own line, where a rule at
+  // the line's start would be stray, so there it is just a separate button.
+  .ma-control--apart {
+    padding-inline-start: 0.5rem;
+    border-inline-start: 1px solid var(--ma-rule);
+  }
+
+  @container ma (width < 40rem) {
+    .ma-control--apart {
+      padding-inline-start: 0;
+      border-inline-start: 0;
+    }
+  }
+
+  // A toggle's icon changes with its state (an eye, crossed out while off),
+  // so the state never rests on the fill colour alone.
+  .ma-pressed-mark,
+  [aria-pressed="true"] > .ma-unpressed-mark {
+    display: none;
+  }
+
+  [aria-pressed="true"] > .ma-pressed-mark {
+    display: inline-block;
   }
 
   // The icon sits straight in the input group (no Bootstrap 4 .input-group-prepend, PR9).
@@ -374,9 +411,10 @@ $ma-dark-ink-on-solid: ("attention");
     @include ma-tone("primary");
   }
 
-  // Summative/formative filter: the one outlined control, like Boost's
-  // inputs (#8f959e border, 3:1 on white), so it reads as a setting rather
-  // than an action. Bootstrap's .btn-group joins the borders and corners.
+  // Control bar buttons (type filter, Show grades): the outlined controls,
+  // like Boost's inputs (#8f959e border, 3:1 on white), so they read as
+  // settings rather than actions. Bootstrap's .btn-group joins the type
+  // buttons' borders and corners.
   .ma-filter-btn {
     border: 1px solid #8f959e;
     background-color: transparent;
@@ -412,20 +450,19 @@ $ma-dark-ink-on-solid: ("attention");
     white-space: normal;
   }
 
-  .ma-btn--mitigate {
+  // Attention: Mitigate, and the staff-only plagiarism flag (a warning to
+  // follow up, not an error, so not danger).
+  .ma-btn--mitigate,
+  .ma-btn--hint[data-hint="plagiarism"] {
     @include ma-tone("attention");
+  }
 
+  .ma-btn--mitigate {
     &[aria-expanded="true"] {
       background-color: var(--ma-hover);
       box-shadow: inset 0 0 0 2px var(--ma-border);
       color: var(--ma-ink);
     }
-  }
-
-  .ma-bottom {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 0.5rem;
   }
 
   // Section cards. The header takes the section's tone ($ma-state-tones).
@@ -628,26 +665,27 @@ $ma-dark-ink-on-solid: ("attention");
     cursor: pointer;
   }
 
-  @include ma-state-tones("overlay", ".ma-row-overlay") {
+  // Modifiers sit side by side along the icon's bottom edge (Pierre,
+  // 2026-10-04), a little bigger than rc6's.
+  .ma-row-modifiers {
     position: absolute;
     right: -0.375rem;
-    bottom: -0.25rem;
+    bottom: -0.3125rem;
+    display: flex;
+    gap: 0.0625rem;
+  }
+
+  @include ma-state-tones("overlay", ".ma-row-overlay") {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 0.875rem;
-    height: 0.875rem;
+    width: 1rem;
+    height: 1rem;
     border-radius: 50%;
     background-color: var(--ma-surface);
     color: var(--ma-glyph, var(--ma-solid));
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1;
-  }
-
-  .ma-row-overlay--selfcert,
-  .ma-row-overlay--extension {
-    top: -0.25rem;
-    bottom: auto;
   }
 
   // Row text. A meta item ("Assignment · Summative") wraps as one unit.

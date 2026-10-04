@@ -132,6 +132,13 @@ if ($ADMIN->fulltree) {
         get_string('latenote_default', 'block_my_assessments'),
         PARAM_TEXT
     ));
+    $settings->add(new admin_setting_configtext(
+        'block_my_assessments/latenoteurl',
+        new lang_string('latenoteurl', 'block_my_assessments'),
+        new lang_string('latenoteurl_desc', 'block_my_assessments'),
+        '',
+        PARAM_URL
+    ));
 
     $settings->add(new admin_setting_heading(
         'block_my_assessments/selfcertheading',

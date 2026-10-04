@@ -33,12 +33,15 @@ use block_my_assessments\local\scope;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class student extends base {
-    /** Overlay state => icon. Tones come from the state map in scss/styles.scss. */
+    /**
+     * Overlay state => icon, for the unusual case only: nothing marks work handed in on time
+     * (Pierre, 2026-10-04). Late is a clock, so due soon is an hourglass. Tones come from the
+     * state map in scss/styles.scss.
+     */
     const OVERLAY_ICONS = [
-        'overdue' => 'fa-circle-exclamation',
-        'submitted' => 'fa-circle-check',
-        'late' => 'fa-hourglass-end',
-        'duesoon' => 'fa-clock',
+        'overdue' => 'fa-clock',
+        'late' => 'fa-clock',
+        'duesoon' => 'fa-hourglass-half',
         'notsubmitted' => 'fa-circle-xmark',
         student_row::MITIGATION_SELFCERT => 'fa-hand-holding-heart',
         student_row::MITIGATION_EXTENSION => 'fa-calendar-plus',
@@ -138,7 +141,9 @@ class student extends base {
             [$section, $status] = classifier::student($r, $this->now, $threshold, $grace);
             $row = $this->row($r, $section, $status);
             $hasgrades = $hasgrades || !empty($row['grade']);
-            $sections[$section][] = $row + ['sortkey' => (int)$r->due];
+            // Undated work in Past sorts by when feedback was given (Pierre, 2026-10-04).
+            $sortkey = $r->due === null && $section === classifier::PAST ? (int)$r->timereleased : (int)$r->due;
+            $sections[$section][] = $row + ['sortkey' => $sortkey];
             if (isset($counts[$section])) {
                 format::count($counts[$section], $r->assesstype);
             }
@@ -209,18 +214,30 @@ class student extends base {
         } else if ($section === classifier::OVERDUE) {
             // The red overlay is rc6's and only appears in the actionable Overdue section.
             $state = 'overdue';
-        } else if (in_array($status, [classifier::STATUS_SUBMITTED, classifier::STATUS_INMARKING, classifier::STATUS_RELEASED])) {
-            $late = $r->due && $r->timesubmitted && (int)$r->timesubmitted > (int)$r->due;
-            $state = $late ? 'late' : 'submitted';
+        } else if (self::is_late($r)) {
+            $state = 'late';
         } else if (in_array($status, [classifier::STATUS_NOTSUBMITTED, classifier::STATUS_CLOSED])) {
             $state = 'notsubmitted';
-        } else if ($r->due && (int)$r->due - $this->now <= self::DUESOON_DAYS * DAYSECS) {
+        } else if (
+            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && $r->due && (int)$r->due > $this->now
+                && (int)$r->due - $this->now <= self::DUESOON_DAYS * DAYSECS
+        ) {
             $state = 'duesoon';
         }
         if ($state) {
             $parts[] = get_string('tip_' . $state, 'block_my_assessments');
         }
         return [$state ? ['state' => $state, 'icon' => self::OVERLAY_ICONS[$state]] : null, $mitigation, $parts];
+    }
+
+    /**
+     * Whether the work was handed in after the student's own deadline, extensions included (D2).
+     *
+     * @param \stdClass $r
+     * @return bool
+     */
+    protected static function is_late(\stdClass $r): bool {
+        return (int)$r->submitted === 1 && $r->due && $r->timesubmitted && (int)$r->timesubmitted > (int)$r->due;
     }
 
     /**
@@ -240,12 +257,6 @@ class student extends base {
         if ($submitted && $due && $submitted > $due) {
             // Against the effective deadline (D2), so extensions never read as late.
             $notes[] = get_string('submittedlate', 'block_my_assessments', format::duration($submitted - $due));
-            $latenote = get_config('block_my_assessments', 'latenote');
-            // Unset until an admin saves the new setting: use its default.
-            $latenote = trim($latenote === false ? get_string('latenote_default', 'block_my_assessments') : $latenote);
-            if ($r->assesstype === 'summative' && $latenote !== '') {
-                $notes[] = format_string($latenote, true, ['escape' => false]);
-            }
         }
         // Time left: to the cut-off, or to the deadline plus the grace period when there is none (G9).
         $until = $r->cutoff ? (int)$r->cutoff : ($due ? $due + config::grace() : null);
@@ -280,8 +291,11 @@ class student extends base {
         ]);
         $row['stacked'] = true;
         $row['search'] .= ' ' . \core_text::strtolower($row['course']);
-        $row['status'] = ['key' => $status, 'label' => get_string('status_' . $status, 'block_my_assessments')];
+        // The ordinary case has no pill: the section and the Submit button already say it.
+        $row['status'] = in_array($status, classifier::PLAIN_STATUSES) ? null
+            : ['key' => $status, 'label' => get_string('status_' . $status, 'block_my_assessments')];
         [$row['overlay'], $row['mitigationoverlay'], $parts] = $this->modifiers($r, $section, $status);
+        $row['hasmodifiers'] = $row['overlay'] || $row['mitigationoverlay'];
         $row['tip'] = format::tip($row['modlabel'], $parts);
 
         $dates = [];
@@ -305,6 +319,18 @@ class student extends base {
         }
         $row['dates'] = $dates;
         $row['notes'] = $this->notes($r, $section, $status);
+        if ($status === classifier::STATUS_RECEIVED) {
+            $text = get_string('hint_received_text', 'block_my_assessments');
+            $row['hints'][] = format::hint($row['id'], 'received', $text);
+        }
+        // Late summative work: the penalties popover, next to the grade once there is one, else in the row's hints.
+        if ($r->assesstype === 'summative' && self::is_late($r) && ($hint = $this->late_hint($row['id']))) {
+            if (!empty($row['grade'])) {
+                $row['grade']['hint'] = $hint;
+            } else {
+                $row['hints'][] = $hint;
+            }
+        }
 
         $actions = [];
         if (
@@ -328,6 +354,28 @@ class student extends base {
             ];
         }
         return $row;
+    }
+
+    /**
+     * The late penalties popover: the late note setting, and a link to the policy when one is set.
+     * With the note cleared there is no popover.
+     *
+     * @param string $rowid
+     * @return array|null
+     */
+    protected function late_hint(string $rowid): ?array {
+        $text = get_config('block_my_assessments', 'latenote');
+        // Unset until an admin saves the new setting: use its default.
+        $text = trim($text === false ? get_string('latenote_default', 'block_my_assessments') : $text);
+        if ($text === '') {
+            return null;
+        }
+        $url = trim((string)get_config('block_my_assessments', 'latenoteurl'));
+        $link = $url === '' ? null : get_string('hint_latepenalty_link', 'block_my_assessments', \html_writer::link(
+            new \moodle_url($url),
+            get_string('hint_latepenalty_linktext', 'block_my_assessments')
+        ));
+        return format::hint($rowid, 'latepenalty', format_string($text, true, ['escape' => false]), $link);
     }
 
     /**

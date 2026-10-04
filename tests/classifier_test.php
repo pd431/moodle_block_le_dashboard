@@ -56,7 +56,7 @@ final class classifier_test extends \basic_testcase {
                 c::STATUS_REOPENED],
             'reopened past the cut-off (G13)' => [[$now - 2 * $day, $now - $day, 0, null, true], c::UPCOMING, c::STATUS_REOPENED],
             'no deadline, not submitted (EC2)' => [[null, null, 0, null], c::UNDATED, c::STATUS_PENDING],
-            'no deadline, submitted (EC2)' => [[null, null, 1, null], c::UNDATED, c::STATUS_SUBMITTED],
+            'no deadline, submitted (EC2)' => [[null, null, 1, null], c::UNDATED, c::STATUS_RECEIVED],
             'no deadline, released (EC2)' => [[null, null, 1, $now - 60], c::PAST, c::STATUS_RELEASED],
             'no deadline, reopened stays actionable (EC2)' => [[null, null, 0, null, true], c::UPCOMING, c::STATUS_REOPENED],
             'generic, no deadline (EC2)' => [[null, null, null, null], c::UNDATED, c::STATUS_OPEN],
@@ -124,7 +124,7 @@ final class classifier_test extends \basic_testcase {
         $this->assertNull(c::staff(0, 0, self::NOW + DAYSECS, self::NOW, true));
         // EC2: no deadline and nothing to mark is Undated; work to mark still wins.
         $this->assertSame(c::UNDATED, c::staff(0, 0, null, self::NOW));
-        $this->assertSame(c::UNDATED, c::staff(0, 3, null, self::NOW));
+        $this->assertSame(c::COMPLETED, c::staff(0, 3, null, self::NOW), 'finished work goes to Past');
         $this->assertSame(c::TOMARK, c::staff(1, 3, null, self::NOW));
     }
 
@@ -143,6 +143,7 @@ final class classifier_test extends \basic_testcase {
         $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90, 2));
         // EC2: no deadline is Undated unless something is outstanding.
         $this->assertSame(c::UNDATED, c::convenor(null, self::NOW, 0, 0, 90, 2));
+        $this->assertSame(c::CONVENOR_PAST, c::convenor(null, self::NOW, 2, 0, 90, 2), 'finished work goes to Past');
         $this->assertSame(c::INPROGRESS, c::convenor(null, self::NOW, 2, 1, 90, 2));
     }
 

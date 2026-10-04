@@ -1949,14 +1949,326 @@ class behat_block_my_assessments extends behat_base {
         $this->i_should_see_linking_to($text, $url);
     }
 
+    /**
+     * Releases a grade as of a time, so its feedback date is that time.
+     *
+     * @Given /^the grade of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" was released "(?P<when>[^"]*)"$/
+     * @param string $student
+     * @param string $name
+     * @param string $when
+     */
+    public function the_grade_was_released(string $student, string $name, string $when): void {
+        global $DB;
+        $this->the_grade_is_released($student, $name);
+        $cm = $this->cm($name);
+        $time = self::time($when);
+        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
+            'itemnumber' => 0, 'courseid' => $cm->course]);
+        $DB->set_field('grade_grades', 'timemodified', $time, ['itemid' => $item->id, 'userid' => self::userid($student)]);
+        self::queue($cm);
+    }
+
+    /**
+     * The rows of a section, in order.
+     *
+     * @Then /^the "(?P<section>[^"]*)" section should list "(?P<names>[^"]*)" in that order$/
+     * @param string $section
+     * @param string $names Comma-separated.
+     */
+    public function the_section_should_list(string $section, string $names): void {
+        $xpath = "//div[contains(@class, 'block_my_assessments')]//section[@data-region='ma-section']" .
+            "[.//h3[normalize-space(.) = " . behat_context_helper::escape($section) . "]]//a[contains(@class, 'ma-row-name')]";
+        $found = array_map(fn($a) => trim($a->getText()), $this->find_all('xpath', $xpath));
+        $expected = array_map('trim', explode(',', $names));
+        if ($found !== $expected) {
+            throw new ExpectationException("'$section' lists " . implode(', ', $found), $this->getSession());
+        }
+    }
+
+    /**
+     * A row without a status pill.
+     *
+     * @Then /^"(?P<name>[^"]*)" should have no status pill$/
+     * @param string $name
+     */
+    public function should_have_no_status_pill(string $name): void {
+        if ($pill = $this->row($name)->find('css', '[data-status]')) {
+            throw new ExpectationException("'$name' has the pill '{$pill->getText()}'", $this->getSession());
+        }
+    }
+
+    /**
+     * An activity icon with no modifier icons.
+     *
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should have no modifiers$/
+     * @param string $name
+     */
+    public function should_have_no_modifiers(string $name): void {
+        if ($this->row($name)->find('css', '.ma-row-overlay')) {
+            throw new ExpectationException("The icon of '$name' has modifiers", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether an element of a row takes a tone: its --ma-solid is that tone's.
+     *
+     * @param \Behat\Mink\Element\NodeElement $node
+     * @param string $tone
+     * @return bool
+     */
+    protected function has_tone(\Behat\Mink\Element\NodeElement $node, string $tone): bool {
+        $id = 'ma-tone-' . random_string(8);
+        $this->execute_script("document.evaluate(" . json_encode($node->getXpath()) . ", document, null, " .
+            "XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute('data-tonecheck', '$id')");
+        return (bool)$this->evaluate_script("return (function() {
+            var el = document.querySelector('[data-tonecheck=\"$id\"]');
+            var root = el.closest('.block_my_assessments_dashboard');
+            var get = function(e, p) { return getComputedStyle(e).getPropertyValue(p).trim(); };
+            return get(el, '--ma-solid') === get(root, '--ma-$tone-solid');
+        })()");
+    }
+
+    /**
+     * A modifier icon's glyph and tone.
+     *
+     * @Then /^the "(?P<state>[a-z]+)" modifier of "(?P<name>[^"]*)" should be an? "(?P<icon>[^"]*)" icon in the "(?P<tone>[a-z]+)" tone$/
+     * @param string $state
+     * @param string $name
+     * @param string $icon
+     * @param string $tone
+     */
+    public function the_modifier_should_be(string $state, string $name, string $icon, string $tone): void {
+        $badge = $this->row($name)->find('css', '.ma-row-overlay--' . $state)
+            ?? throw new ExpectationException("'$name' has no $state modifier", $this->getSession());
+        if (!$badge->find('css', '.' . $icon)) {
+            throw new ExpectationException("The $state modifier of '$name' is not $icon", $this->getSession());
+        }
+        if (!$this->has_tone($badge, $tone)) {
+            throw new ExpectationException("The $state modifier of '$name' is not in the $tone tone", $this->getSession());
+        }
+    }
+
+    /**
+     * The Mitigate button's icon and tone.
+     *
+     * @Then /^the Mitigate button of "(?P<name>[^"]*)" should show an? "(?P<icon>[^"]*)" icon in the "(?P<tone>[a-z]+)" tone$/
+     * @param string $name
+     * @param string $icon
+     * @param string $tone
+     */
+    public function the_mitigate_button_should_show(string $name, string $icon, string $tone): void {
+        $button = $this->row($name)->find('css', '.ma-btn--mitigate')
+            ?? throw new ExpectationException("'$name' has no Mitigate button", $this->getSession());
+        if (!$button->find('css', '.' . $icon) || !$this->has_tone($button, $tone)) {
+            throw new ExpectationException("The Mitigate button of '$name' is not a $icon in the $tone tone", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's modifiers are on one line, not stacked.
+     *
+     * @Then /^the modifiers of "(?P<name>[^"]*)" should sit side by side$/
+     * @param string $name
+     */
+    public function the_modifiers_should_sit_side_by_side(string $name): void {
+        $rowid = $this->row($name)->getAttribute('id');
+        $tops = $this->evaluate_script("return Array.from(document.querySelectorAll('#$rowid .ma-row-overlay'))" .
+            ".map(function(e) { return Math.round(e.getBoundingClientRect().top); })");
+        if (count($tops) < 2 || count(array_unique($tops)) !== 1) {
+            throw new ExpectationException("The modifiers of '$name' are not side by side", $this->getSession());
+        }
+    }
+
+    /**
+     * Sets the late penalties link.
+     *
+     * @Given /^the My assessments late penalty link is "(?P<url>[^"]*)"$/
+     * @param string $url
+     */
+    public function the_late_penalty_link_is(string $url): void {
+        set_config('latenoteurl', $url, 'block_my_assessments');
+    }
+
+    /**
+     * The late penalties popover sits with the grade.
+     *
+     * @Then /^the late penalty hint of "(?P<name>[^"]*)" should sit next to its grade$/
+     * @param string $name
+     */
+    public function the_late_hint_should_sit_next_to_grade(string $name): void {
+        if (!$this->row($name)->find('css', '[data-region="ma-grade"] [data-hint="latepenalty"]')) {
+            throw new ExpectationException("The late penalty hint of '$name' is not next to its grade", $this->getSession());
+        }
+    }
+
+    /**
+     * Flags a coursework submission for an academic conduct (plagiarism) check, in mod_coursework's
+     * own table. Columns the block doesn't read get their defaults, or 0 / '' when required.
+     *
+     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is flagged for plagiarism(?: with status "(?P<status>[^"]*)")?$/
+     * @param string $student
+     * @param string $name
+     * @param string $status
+     */
+    public function the_submission_is_flagged(string $student, string $name, string $status = '0'): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $submissionid = $DB->get_field('coursework_submissions', 'id', ['courseworkid' => $cm->instance,
+            'allocatableid' => self::userid($student), 'allocatabletype' => 'user'], MUST_EXIST);
+        $record = ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status];
+        foreach ($DB->get_columns('coursework_plagiarism_flags') as $column) {
+            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
+                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
+            }
+        }
+        $DB->insert_record('coursework_plagiarism_flags', $record);
+        self::queue($cm);
+    }
+
+    /** Control names in steps, to the control bar's parts. */
+    const CONTROLS = ['ma-year' => 'Academic year', 'ma-type-filter' => 'Type filter',
+        'ma-control--apart' => 'Show grades', 'ma-search' => 'Search'];
+
+    /**
+     * The controls in the open view's control bar, in order.
+     *
+     * @Then /^the control bar should hold "(?P<names>[^"]*)"$/
+     * @param string $names Comma-separated control names.
+     */
+    public function the_control_bar_should_hold(string $names): void {
+        $found = [];
+        foreach ($this->find_all('css', self::BLOCK . ' [data-region="ma-controls"] > .ma-control') as $control) {
+            foreach (self::CONTROLS as $class => $name) {
+                if ($control->isVisible() && $control->hasClass($class)) {
+                    $found[] = $name;
+                }
+            }
+        }
+        $expected = array_map('trim', explode(',', $names));
+        if ($found !== $expected) {
+            throw new ExpectationException('The control bar holds "' . implode(', ', $found) . '"', $this->getSession());
+        }
+    }
+
+    /**
+     * The order of two parts of the open view.
+     *
+     * @Then /^the (?P<first>control bar|freshness line) should come (?P<rel>before|after) the (?P<second>control bar|summary boxes)$/
+     * @param string $first
+     * @param string $rel
+     * @param string $second
+     */
+    public function should_come_before(string $first, string $rel, string $second): void {
+        $regions = ['control bar' => 'ma-controls', 'freshness line' => 'ma-freshness', 'summary boxes' => 'ma-summary'];
+        $root = '.block_my_assessments [data-region="ma-view-root"]';
+        $a = json_encode("$root [data-region=\"{$regions[$first]}\"]");
+        $b = json_encode("$root [data-region=\"{$regions[$second]}\"]");
+        $follows = $this->evaluate_script("return (function() {
+            var a = document.querySelector($a), b = document.querySelector($b);
+            return !!(a && b && (b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING));
+        })()");
+        if ($follows !== ($rel === 'after')) {
+            throw new ExpectationException("The $first is not $rel the $second", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a toggle button in the block is pressed.
+     *
+     * @Then /^"(?P<label>[^"]*)" should (?P<not>not )?be pressed$/
+     * @param string $label
+     * @param string $not
+     */
+    public function should_be_pressed(string $label, string $not = ''): void {
+        foreach ($this->find_all('css', self::BLOCK . ' button[aria-pressed]') as $button) {
+            if ($button->isVisible() && trim($button->getText()) === $label) {
+                $pressed = $button->getAttribute('aria-pressed') === 'true';
+                // The icon shows the state too: an eye when pressed, crossed out when not.
+                $mark = $button->find('css', $pressed ? '.ma-pressed-mark' : '.ma-unpressed-mark');
+                if ($pressed === ($not !== '') || !$mark || !$mark->isVisible()) {
+                    throw new ExpectationException("'$label' is " . ($pressed ? '' : 'not ') . 'pressed', $this->getSession());
+                }
+                return;
+            }
+        }
+        throw new ExpectationException("No '$label' toggle in the block", $this->getSession());
+    }
+
+    /**
+     * Whether a row's released grade is shown.
+     *
+     * @Then /^the grade of "(?P<name>[^"]*)" should (?P<not>not )?be visible$/
+     * @param string $name
+     * @param string $not
+     */
+    public function the_grade_should_be_visible(string $name, string $not = ''): void {
+        $grade = $this->row($name)->find('css', '[data-region="ma-grade"]');
+        $visible = $grade && $grade->isVisible();
+        if ($visible === ($not !== '')) {
+            throw new ExpectationException("The grade of '$name' is " . ($visible ? '' : 'not ') . 'visible', $this->getSession());
+        }
+    }
+
+    /**
+     * The number a summary box shows.
+     *
+     * @Then /^the "(?P<label>[^"]*)" summary box should show "(?P<value>[^"]*)"$/
+     * @param string $label
+     * @param string $value
+     */
+    public function the_summary_box_should_show(string $label, string $value): void {
+        foreach ($this->find_all('css', self::BLOCK . ' [data-region="ma-box"]') as $box) {
+            if (trim($box->find('css', '.ma-box-label')->getText()) === $label) {
+                $shown = trim($box->find('css', '.ma-box-value')->getText());
+                if ($shown !== $value) {
+                    throw new ExpectationException("The '$label' box shows '$shown'", $this->getSession());
+                }
+                return;
+            }
+        }
+        throw new ExpectationException("No '$label' summary box", $this->getSession());
+    }
+
+    /**
+     * Nothing in the block is wider than the block.
+     *
+     * @Then /^the My assessments block should not scroll sideways$/
+     */
+    public function the_block_should_not_scroll_sideways(): void {
+        $wide = $this->evaluate_script("return (function() {
+            var view = document.querySelector('.block_my_assessments [data-region=\"ma-view-root\"]');
+            return view ? view.scrollWidth - view.clientWidth : -1;
+        })()");
+        if ($wide < 0 || $wide > 0) {
+            throw new ExpectationException("The block is {$wide}px wider than it shows", $this->getSession());
+        }
+    }
+
+    /**
+     * The search box fills its own line of the control bar once the bar wraps.
+     *
+     * @Then /^the search box should take the full width of the control bar$/
+     */
+    public function the_search_should_take_full_width(): void {
+        $gap = $this->evaluate_script("return (function() {
+            var bar = document.querySelector('.block_my_assessments [data-region=\"ma-controls\"]');
+            var search = bar && bar.querySelector('.ma-search');
+            return search ? Math.round(bar.clientWidth - search.getBoundingClientRect().width) : -1;
+        })()");
+        if ($gap < 0 || $gap > 2) {
+            throw new ExpectationException("The search box is {$gap}px short of the control bar", $this->getSession());
+        }
+    }
+
     /** Hint names in steps, to the hint keys rows carry. */
     const HINTS = ['brief' => 'brief', 'unallocated' => 'unallocated', 'returned work' => 'returned',
-        'feedback contact' => 'feedbackcontact', 'extension' => 'extensions', 'no deadline' => 'nodeadline'];
+        'feedback contact' => 'feedbackcontact', 'extension' => 'extensions', 'no deadline' => 'nodeadline',
+        'received' => 'received', 'late penalty' => 'latepenalty', 'plagiarism' => 'plagiarism'];
 
     /**
      * Clicks a row's hint.
      *
-     * @When /^I click on the (?P<hint>brief|unallocated|returned work|feedback contact|extension|no deadline) hint of "(?P<name>[^"]*)"$/
+     * @When /^I click on the (?P<hint>[a-z ]+?) hint of "(?P<name>[^"]*)"$/
      * @param string $hint
      * @param string $name
      */
@@ -1969,7 +2281,7 @@ class behat_block_my_assessments extends behat_base {
     /**
      * Whether a row has a hint.
      *
-     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>brief|unallocated|returned work|feedback contact|extension|no deadline) hint$/
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>[a-z ]+?) hint$/
      * @param string $name
      * @param string $not
      * @param string $hint

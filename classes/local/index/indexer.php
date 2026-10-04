@@ -323,6 +323,7 @@ class indexer {
                 'markedby' => $row->markedby,
                 'timemarked' => $row->timemarked,
                 'released' => $row->released ? 1 : 0,
+                'flagged' => $row->flagged ? 1 : 0,
             ];
         }
 

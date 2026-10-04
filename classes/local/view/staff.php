@@ -83,27 +83,13 @@ class staff extends base {
      */
     protected function marking(): array {
         global $DB;
-        [$staff, $marker, $convenor] = $this->courses(true);
+        [$staff, $marker] = $this->courses(true);
         if (!$marker) {
             return [];
         }
-        [$markersql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED, 'mc');
-        // Marked work counts for whoever marked it, the rest for whoever it is allocated to (EC8).
-        $where = ["(" . self::MARKER_SQL . " = :me AND c.courseid $markersql)"];
-        if ($convenor) {
-            [$convenorsql, $convenorparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'cc');
-            $where[] = "(m.allocatedto IS NULL AND c.hasallocation = 1 AND c.courseid $convenorsql)";
-            $params += $convenorparams;
-        }
-        $shared = [];
-        if ($staff) {
-            [$staffsql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sc');
-            $multi = $DB->sql_like('c.stages', ':multi');
-            $where[] = "(c.hasallocation = 0 AND NOT $multi AND c.courseid $staffsql)";
-            $params += $staffparams + ['multi' => '%marker%'];
-            $shared = $this->shared_marking($staff);
-        }
-        $params += ['me' => $this->userid, 'me2' => $this->userid];
+        [$where, $params] = $this->mine_sql(false);
+        $shared = $staff ? $this->shared_marking($staff) : [];
+        $params += ['me2' => $this->userid];
         $ready = self::ready_sql($this->now);
         $records = $DB->get_records_sql("SELECT " . $DB->sql_concat('m.cmid', "'-'", 'm.stage') . " AS id, m.cmid, m.stage,
                                             SUM(CASE WHEN $ready AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
@@ -118,9 +104,59 @@ class staff extends base {
                                        FROM {block_my_assessments_mark} m
                                        JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
                                        " . base::LIVE . "
-                                      WHERE " . implode(' OR ', $where) . "
+                                      WHERE $where
                                    GROUP BY m.cmid, m.stage", $params);
         return array_merge(array_values($records), array_values($shared));
+    }
+
+    /**
+     * SQL on m (mark index) and c (assessment index) for the units that are mine: allocated to me
+     * (or marked by me, EC8), unallocated where I convene (G3), and every unit of activities without
+     * allocation in my staff courses.
+     *
+     * @param bool $shared Include activities with several markers and no allocation, whose share
+     *                     marking() works out separately (G7).
+     * @return array [sql, params]
+     */
+    protected function mine_sql(bool $shared): array {
+        global $DB;
+        [$staff, $marker, $convenor] = $this->courses(true);
+        [$markersql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED, 'mc');
+        // Marked work counts for whoever marked it, the rest for whoever it is allocated to (EC8).
+        $where = ["(" . self::MARKER_SQL . " = :me AND c.courseid $markersql)"];
+        $params['me'] = $this->userid;
+        if ($convenor) {
+            [$convenorsql, $convenorparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'cc');
+            $where[] = "(m.allocatedto IS NULL AND c.hasallocation = 1 AND c.courseid $convenorsql)";
+            $params += $convenorparams;
+        }
+        if ($staff) {
+            [$staffsql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sc');
+            $multi = $shared ? '' : ' AND NOT ' . $DB->sql_like('c.stages', ':multi');
+            $where[] = "(c.hasallocation = 0$multi AND c.courseid $staffsql)";
+            $params += $staffparams + ($shared ? [] : ['multi' => '%marker%']);
+        }
+        return ['(' . implode(' OR ', $where) . ')', $params];
+    }
+
+    /**
+     * Units of mine flagged for an academic conduct (plagiarism) check, per assessment.
+     *
+     * @return int[] cmid => flagged units
+     */
+    protected function flagged(): array {
+        global $DB;
+        if (!$this->courses(true)[1]) {
+            return [];
+        }
+        [$where, $params] = $this->mine_sql(true);
+        $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
+        return array_map('intval', $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
+                                                                FROM {block_my_assessments_mark} m
+                                                                JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                                                " . base::LIVE . "
+                                                               WHERE m.flagged = 1 AND $where
+                                                            GROUP BY m.cmid", $params));
     }
 
     /** SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated to (EC8). */
@@ -346,6 +382,7 @@ class staff extends base {
             $bycm[(int)$m->cmid][$m->stage] = $m;
         }
         $pending = $this->extensions();
+        $flagged = $this->flagged();
         $cmids = array_unique(array_merge(array_keys($bycm), array_keys($pending)));
         $cms = [];
         if ($cmids) {
@@ -415,6 +452,9 @@ class staff extends base {
             if (isset($pending[$cmid])) {
                 $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
             }
+            if (!empty($flagged[$cmid])) {
+                $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
+            }
             $row['actions'] = [format::view_action($row['url'])];
             $sections[$section][] = $row + ['sortkey' => (int)($cm->markingdue ?: $cm->due)];
             if ($section === classifier::TOMARK) {
@@ -465,6 +505,9 @@ class staff extends base {
                 (int)$cm->students
             )];
             $row['hints'] = isset($pending[$cmid]) ? [self::extensions_hint($row['id'], $pending[$cmid])] : [];
+            if (!empty($flagged[$cmid])) {
+                $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
+            }
             $row['actions'] = [format::view_action($row['url'])];
             $section = $cm->due === null ? classifier::UNDATED : classifier::STAFF_UPCOMING;
             $sections[$section][] = $row + ['sortkey' => (int)$cm->due];

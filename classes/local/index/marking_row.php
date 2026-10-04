@@ -46,6 +46,7 @@ final class marking_row {
      *                            stage finishing), when known. The indexer makes it no earlier than unitdue.
      * @param int|null $unitdue The unit's effective deadline. The indexer fills it in: the student's own
      *                          deadline, or a group's latest member deadline.
+     * @param bool $flagged Whether the unit's submission is flagged for an academic conduct (plagiarism) check.
      */
     public function __construct(
         /** @var int User or group id. */
@@ -70,6 +71,8 @@ final class marking_row {
         public ?int $timeready = null,
         /** @var int|null The unit's effective deadline. */
         public ?int $unitdue = null,
+        /** @var bool Flagged for an academic conduct check. */
+        public bool $flagged = false,
     ) {
     }
 }

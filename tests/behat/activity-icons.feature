@@ -9,12 +9,11 @@ Feature: Activity icons say what the activity is and what applies to me
   # Icons: one Font Awesome icon per activity type, with a fallback for any other type:
   #   Assignment fa-file-arrow-up, Quiz fa-clipboard-question, Coursework fa-file-pen,
   #   Peer work fa-people-group, any other fa-file-lines.
-  # Modifier icons (student view), at most two per icon:
-  #   status, bottom right: Submitted fa-circle-check (success), Overdue fa-circle-exclamation
-  #   (danger, the existing red overlay, Overdue section only), Submitted late fa-hourglass-end
-  #   (grey ink: already done, never red or orange), Due soon fa-clock (attention), Not submitted fa-circle-xmark (grey);
-  #   mitigation, top right: Self-certification applied fa-hand-holding-heart (info),
-  #   Extension granted fa-calendar-plus (info).
+  # Modifier icons (student view), at most two per icon, side by side along its bottom edge, and only
+  # for the unusual case: work handed in on time has none (Pierre, 2026-10-04):
+  #   Overdue fa-clock (danger, Overdue section only), Submitted late fa-clock (grey), Due soon
+  #   fa-hourglass-half (attention), Not submitted fa-circle-xmark (grey); Self-certification applied
+  #   fa-hand-holding-heart and Extension granted fa-calendar-plus, both in the Mitigate tone (attention).
   # The tooltip opens like Moodle's help icons: on click or keyboard focus, never on hover,
   # and it closes on Escape, on a click elsewhere, or when focus leaves. Its text is built
   # from lang strings: the activity type, then each part as its own sentence, e.g.
@@ -47,7 +46,7 @@ Feature: Activity icons say what the activity is and what applies to me
     Examples:
       | activity | due        | event                                      | text                           |
       | quiz     | yesterday  | nothing happens                            | Quiz. Overdue.                 |
-      | assign   | in 10 days | "student1" has submitted "A1"              | Assignment. Submitted.         |
+      | assign   | in 10 days | "student1" has submitted "A1"              | Assignment.                    |
       | assign   | 3 days ago | "student1" submitted "A1" "yesterday"      | Assignment. Submitted late.    |
       | assign   | tomorrow   | "student1" has an extension on "A1" to "in 10 days" | Assignment. Extension granted. |
       | assign   | tomorrow   | nothing happens                            | Assignment. Due soon.          |

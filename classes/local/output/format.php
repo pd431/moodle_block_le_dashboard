@@ -161,7 +161,8 @@ class format {
      * One component for every hint (no brief, unallocated work, returned work).
      *
      * @param string $rowid
-     * @param string $key brief, unallocated, returned, feedbackcontact, extensions or nodeadline.
+     * @param string $key brief, unallocated, returned, feedbackcontact, extensions, nodeadline, received,
+     *                    latepenalty or plagiarism.
      * @param string $text The tip.
      * @param string|null $link HTML link sentence after the tip, if any.
      * @param string|null $label The button's text, when it isn't the hint_{key} string (a count, say).
@@ -171,10 +172,33 @@ class format {
         return [
             'id' => $rowid . '-hint-' . $key,
             'key' => $key,
+            'icon' => self::HINT_ICONS[$key] ?? 'fa-circle-info',
             'label' => $label ?? get_string('hint_' . $key, 'block_my_assessments'),
             'text' => $text,
             'link' => $link,
         ];
+    }
+
+    /** Hints with their own icon; the rest show the info icon. */
+    const HINT_ICONS = ['plagiarism' => 'fa-flag'];
+
+    /**
+     * The hint on a row with submissions flagged for an academic conduct (plagiarism) check:
+     * staff and convenors only, never students.
+     *
+     * @param string $rowid
+     * @param int $n Flagged submissions.
+     * @return array
+     */
+    public static function plagiarism_hint(string $rowid, int $n): array {
+        return self::hint(
+            $rowid,
+            'plagiarism',
+            $n === 1 ? get_string('hint_plagiarism_text_one', 'block_my_assessments')
+                : get_string('hint_plagiarism_text_many', 'block_my_assessments', $n),
+            null,
+            get_string('hint_plagiarism', 'block_my_assessments', $n)
+        );
     }
 
     /**

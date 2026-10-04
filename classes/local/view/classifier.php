@@ -52,6 +52,10 @@ class classifier {
     const STATUS_REOPENED = 'reopened';
     /** Status: generic type with no deadline (EC2). */
     const STATUS_OPEN = 'open';
+    /** Status: handed in, no deadline, not graded yet: stays in Undated until it is (Pierre, 2026-10-04). */
+    const STATUS_RECEIVED = 'received';
+    /** Statuses of the ordinary case, shown with no pill (Pierre, 2026-10-04). */
+    const PLAIN_STATUSES = [self::STATUS_PENDING, self::STATUS_DUE, self::STATUS_OPEN];
 
     /**
      * Where a student's assessment goes, and its status.
@@ -61,7 +65,8 @@ class classifier {
      * - Unsubmitted after the deadline: Overdue for the threshold, then Past.
      * - Submitted: Upcoming until the deadline, then Past (in marking, or released).
      * - A reopened attempt not yet resubmitted: Upcoming, "Resubmission open" (G13).
-     * - No deadline (EC2): Undated until released, then Past; a reopened attempt stays in Upcoming.
+     * - No deadline (EC2): Undated until released ("Received" once handed in), then Past; a reopened
+     *   attempt stays in Upcoming.
      * - Joined the course after the deadline (EC10): once the deadline plus the grace period has
      *   passed, Past and "Not submitted" at once; inside the grace period, Overdue as anyone else.
      *
@@ -88,7 +93,7 @@ class classifier {
                 return [($due !== null && $due >= $now) ? self::UPCOMING : self::PAST, self::STATUS_RELEASED];
             }
             if ($due === null) {
-                return [self::UNDATED, self::STATUS_SUBMITTED];
+                return [self::UNDATED, self::STATUS_RECEIVED];
             }
             if ($due >= $now) {
                 return [self::UPCOMING, self::STATUS_SUBMITTED];
@@ -146,8 +151,9 @@ class classifier {
             return self::TOMARK;
         }
         if ($due === null) {
-            // Nothing to mark and no deadline: more work may still arrive (EC2).
-            return self::UNDATED;
+            // No deadline: all my marking done is finished (Pierre, 2026-10-04); with none yet,
+            // work may still arrive (EC2).
+            return $mine > 0 ? self::COMPLETED : self::UNDATED;
         }
         if ($pending && $due !== null && $due < $now) {
             return self::STAFF_UPCOMING;
@@ -184,7 +190,8 @@ class classifier {
             return self::INPROGRESS;
         }
         if ($due === null) {
-            return self::UNDATED;
+            // Finished work goes to Past whatever its date (Pierre, 2026-10-04).
+            return $submitted > 0 ? self::CONVENOR_PAST : self::UNDATED;
         }
         if ($submitted === 0 && $students !== 0 && $due >= $now - $thresholddays * DAYSECS) {
             return self::INPROGRESS;

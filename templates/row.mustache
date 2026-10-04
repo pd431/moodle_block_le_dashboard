@@ -49,8 +49,12 @@
         <button type="button" class="ma-row-iconbtn" data-action="tip" aria-expanded="false" aria-controls="{{id}}-tip"
                 aria-label="{{tip}}">
             <i class="fa-solid {{faicon}} ma-row-faicon" aria-hidden="true"></i>
-            {{#overlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}" aria-hidden="true"><i class="fa-solid {{icon}}"></i></span>{{/overlay}}
-            {{#mitigationoverlay}}<span class="ma-row-overlay ma-row-overlay--top ma-row-overlay--{{state}}" aria-hidden="true"><i class="fa-solid {{icon}}"></i></span>{{/mitigationoverlay}}
+            {{#hasmodifiers}}
+            <span class="ma-row-modifiers" aria-hidden="true">
+                {{#mitigationoverlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/mitigationoverlay}}
+                {{#overlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/overlay}}
+            </span>
+            {{/hasmodifiers}}
         </button>
         <div class="ma-tip" id="{{id}}-tip" data-region="ma-tip" hidden>{{tip}}</div>
     </div>
@@ -60,15 +64,7 @@
             <span class="ma-row-course">{{course}}</span>
             <span class="ma-row-type">{{typeline}}</span>
             {{#hidden}}<span class="badge ma-pill ma-pill--hidden">{{#str}}hiddenfromstudents, block_my_assessments{{/str}}</span>{{/hidden}}
-            {{#hints}}
-            <span class="ma-tip-wrap ma-tip-wrap--row">
-                <button type="button" class="btn btn-sm ma-btn ma-btn--hint" data-action="tip" data-hint="{{key}}"
-                        aria-expanded="false" aria-controls="{{id}}">
-                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i> {{label}}
-                </button>
-                <span class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden>{{text}}{{#link}} {{{link}}}{{/link}}</span>
-            </span>
-            {{/hints}}
+            {{#hints}}{{> block_my_assessments/hint }}{{/hints}}
         </div>
     </div>
     <div class="ma-row-dates">
@@ -83,7 +79,7 @@
     </div>
     <div class="ma-row-status">
         {{#status}}<span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{/status}}
-        {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_my_assessments{{/str}} <strong>{{text}}</strong></span>{{/grade}}
+        {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_my_assessments{{/str}} <strong>{{text}}</strong>{{#hint}} {{> block_my_assessments/hint }}{{/hint}}</span>{{/grade}}
         {{#bars}}{{> block_my_assessments/progress }}{{/bars}}
     </div>
     <div class="ma-row-actions">

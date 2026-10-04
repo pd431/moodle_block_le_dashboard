@@ -131,6 +131,12 @@ class convenor extends base {
                                                  JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
                                                 WHERE c.courseid $insql AND $ready AND m.marked = 0
                                              GROUP BY m.cmid", $params);
+        // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43).
+        $flagged = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
+                                                FROM {block_my_assessments_mark} m
+                                                JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                               WHERE c.courseid $insql AND m.flagged = 1
+                                            GROUP BY m.cmid", $params);
         // Per marker, per stage.
         $markers = [];
         // Marked work is credited to whoever marked it (EC8).
@@ -270,6 +276,9 @@ class convenor extends base {
             }
             if (isset($pending[$cmid])) {
                 $row['hints'][] = staff::extensions_hint($row['id'], $pending[$cmid]);
+            }
+            if (!empty($flagged[$cmid])) {
+                $row['hints'][] = format::plagiarism_hint($row['id'], (int)$flagged[$cmid]);
             }
             // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
             $late = (int)($unmarked[$cmid] ?? 0);

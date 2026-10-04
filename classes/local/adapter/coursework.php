@@ -252,6 +252,7 @@ class coursework extends base {
         $submissions = self::submissions($cw->id);
         $finalgrades = $this->final_grades($cw);
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id) : [];
+        $flagged = self::flagged_submissions((int)$cw->id);
 
         foreach ($rows as $userid => $row) {
             if (!isset($allocatables[$userid])) {
@@ -325,6 +326,33 @@ class coursework extends base {
     }
 
     /**
+     * Plagiarism flag statuses that mean a case is open, as rc6 counted them (B42: inferred, not
+     * checked against mod_coursework's status constants; to be confirmed for the site's version).
+     */
+    const OPEN_FLAG_STATUSES = ['0', '1', '2', '3'];
+
+    /**
+     * Submissions with an open plagiarism (academic conduct) flag, from mod_coursework's own table.
+     * Without the table there are none.
+     *
+     * @param int $courseworkid
+     * @return array submission id => true
+     */
+    protected static function flagged_submissions(int $courseworkid): array {
+        global $DB;
+        if (!self::column('coursework_plagiarism_flags', ['submissionid'])) {
+            return [];
+        }
+        [$statussql, $params] = $DB->get_in_or_equal(self::OPEN_FLAG_STATUSES, SQL_PARAMS_NAMED, 'st');
+        $params['cwid'] = $courseworkid;
+        $ids = $DB->get_fieldset_sql("SELECT DISTINCT submissionid
+                                        FROM {coursework_plagiarism_flags}
+                                       WHERE courseworkid = :cwid AND submissionid > 0 AND status IS NOT NULL
+                                             AND " . $DB->sql_compare_text('status') . " $statussql", $params);
+        return array_fill_keys(array_map('intval', $ids), true);
+    }
+
+    /**
      * Final grade per submission: the agreed grade, or the only marker's grade.
      *
      * @param \stdClass $cw
@@ -388,6 +416,7 @@ class coursework extends base {
                                                   WHERE s.courseworkid = :cwid", ['cwid' => $cw->id]);
         }
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id) : [];
+        $flagged = self::flagged_submissions((int)$cw->id);
 
         $rows = [];
         foreach ($submissions as $key => $s) {
@@ -436,6 +465,7 @@ class coursework extends base {
                     timemarked: $marked && $f ? (int)$f->timemodified : null,
                     released: $released,
                     timeready: $timeready ?: null,
+                    flagged: isset($flagged[(int)$s->id]),
                 );
                 $done[] = $marked;
                 $times[] = $marked && $f ? (int)$f->timemodified : 0;
