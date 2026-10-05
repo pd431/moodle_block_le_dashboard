@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\view;
+namespace block_le_dashboard\local\view;
 
 /**
  * The rules that put assessments into sections. Pure functions of stored
  * values and "now", so buckets change at the deadline without re-indexing.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class classifier {

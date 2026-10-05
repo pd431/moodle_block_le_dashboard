@@ -15,7 +15,7 @@
     along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 }}
 {{!
-    @template block_my_assessments/dashboard
+    @template block_le_dashboard/dashboard
 
     The dashboard: view tabs and the open view. JS hooks are data- attributes only.
 
@@ -28,7 +28,7 @@
         "view": {"key": "student", "uniqid": "ma1", "sections": [], "summary": [], "freshness": {"text": "Updated just now"} }
     }
 }}
-<div id="{{uniqid}}" class="block_my_assessments_dashboard" data-region="ma-dashboard" data-view="{{activeview}}">
+<div id="{{uniqid}}" class="block_le_dashboard_dashboard" data-region="ma-dashboard" data-view="{{activeview}}">
     {{#hastabs}}
     <ul class="nav nav-tabs ma-tabs">
         {{#tabs}}
@@ -40,10 +40,10 @@
     </ul>
     {{/hastabs}}
     <div class="ma-loading alert alert-info" data-region="ma-loading" hidden>
-        <span class="spinner-border spinner-border-sm ma-icon" aria-hidden="true"></span>{{#str}}loading, block_my_assessments{{/str}}
+        <span class="spinner-border spinner-border-sm ma-icon" aria-hidden="true"></span>{{#str}}loading, block_le_dashboard{{/str}}
     </div>
     <div class="accesshide" data-region="ma-status" role="status"></div>
     <div data-region="ma-view">
-        {{#view}}{{> block_my_assessments/view }}{{/view}}
+        {{#view}}{{> block_le_dashboard/view }}{{/view}}
     </div>
 </div>

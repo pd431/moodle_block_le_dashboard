@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard
 Feature: The index never misses or fights over a change
   In order to trust what the dashboard says right after something happens
   As a student, marker or convenor
@@ -67,6 +67,7 @@ Feature: The index never misses or fights over a change
     And I view my dashboard
     Then "A1" should show the status "Submitted"
 
+  @javascript
   Scenario: A student's Refresh changes only that student's rows
     Given "student2" has submitted "A1" without the index being told
     When I log in as "student1" and view my dashboard
@@ -100,6 +101,7 @@ Feature: The index never misses or fights over a change
     Then the index should show "Z1 resit"
 
   # Item 8 (F9)
+  @javascript
   Scenario: Pressing Refresh again within a minute does not re-index again
     Given I log in as "marker1" and view my dashboard
     And I press "Refresh" in the "My assessments" block

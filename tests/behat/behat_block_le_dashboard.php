@@ -23,8 +23,8 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
 use Behat\Gherkin\Node\TableNode;
 use Behat\Mink\Exception\ExpectationException;
-use block_my_assessments\local\index\indexer;
-use block_my_assessments\local\years;
+use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\years;
 
 /**
  * Steps for the My assessments scope (logic-overhaul/scope/*.feature).
@@ -33,14 +33,14 @@ use block_my_assessments\local\years;
  * directly, it queues the re-index the plugin's own event would have queued, so "view my
  * dashboard" (which runs pending index tasks first) sees it.
  *
- * @package    block_my_assessments
+ * @package    block_le_dashboard
  * @category   test
- * @copyright  2026 onwards block_my_assessments contributors
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class behat_block_my_assessments extends behat_base {
+class behat_block_le_dashboard extends behat_base {
     /** Block selector. */
-    const BLOCK = '.block_my_assessments';
+    const BLOCK = '.block_le_dashboard';
 
     /** Module tables searched when looking up an activity by name. */
     const MODULES = ['assign', 'quiz', 'peerwork', 'coursework', 'workshop', 'forum', 'page', 'lti'];
@@ -48,12 +48,12 @@ class behat_block_my_assessments extends behat_base {
     /**
      * The module convenor role is needed before Background enrolments refer to it.
      *
-     * @BeforeScenario @block_my_assessments
+     * @BeforeScenario @block_le_dashboard
      */
     public function create_convenor_role(): void {
         global $DB;
         // Ids restart with each scenario, so nothing memoised in this process still holds.
-        \block_my_assessments\local\memo::reset();
+        \block_le_dashboard\local\memo::reset();
         if (!$DB->record_exists('role', ['shortname' => 'moduleconvenor'])) {
             $roleid = create_role('Module convenor', 'moduleconvenor', '', 'editingteacher');
             set_role_contextlevels($roleid, [CONTEXT_COURSE]);
@@ -70,7 +70,7 @@ class behat_block_my_assessments extends behat_base {
     public function stand_in_for_block_rhb(): void {
         global $CFG;
         if (!file_exists($CFG->dirroot . '/blocks/rhb/lib.php')) {
-            set_config('behatrhbstub', 1, 'block_my_assessments');
+            set_config('behatrhbstub', 1, 'block_le_dashboard');
         }
     }
 
@@ -177,7 +177,7 @@ class behat_block_my_assessments extends behat_base {
      * @return \Behat\Mink\Element\NodeElement
      */
     protected function row(string $name): \Behat\Mink\Element\NodeElement {
-        $xpath = "//*[contains(@class, 'block_my_assessments')]" .
+        $xpath = "//*[contains(@class, 'block_le_dashboard')]" .
             "//li[@data-region='ma-row'][.//a[contains(@class, 'ma-row-name')][normalize-space(.) = " .
             behat_context_helper::escape($name) . "]]";
         return $this->find('xpath', $xpath, new ExpectationException("No row for '$name'", $this->getSession()));
@@ -223,13 +223,13 @@ class behat_block_my_assessments extends behat_base {
         global $CFG, $DB;
         require_once($CFG->dirroot . '/my/lib.php');
         $types = ['assign', 'quiz', 'peerwork', 'coursework'];
-        testing_util::get_data_generator()->get_plugin_generator('block_my_assessments')->configure($types);
-        set_config('certaintags', $summative, 'block_my_assessments');
-        set_config('formativetags', $formative, 'block_my_assessments');
-        unset_config('backfillpending', 'block_my_assessments');
+        testing_util::get_data_generator()->get_plugin_generator('block_le_dashboard')->configure($types);
+        set_config('certaintags', $summative, 'block_le_dashboard');
+        set_config('formativetags', $formative, 'block_le_dashboard');
+        unset_config('backfillpending', 'block_le_dashboard');
         $page = my_get_page(null, MY_PAGE_PRIVATE);
-        if (!$DB->record_exists('block_instances', ['blockname' => 'my_assessments', 'subpagepattern' => $page->id])) {
-            $DB->insert_record('block_instances', ['blockname' => 'my_assessments',
+        if (!$DB->record_exists('block_instances', ['blockname' => 'le_dashboard', 'subpagepattern' => $page->id])) {
+            $DB->insert_record('block_instances', ['blockname' => 'le_dashboard',
                 'parentcontextid' => context_system::instance()->id, 'showinsubcontexts' => 0, 'pagetypepattern' => 'my-index',
                 'subpagepattern' => $page->id, 'defaultregion' => 'content', 'defaultweight' => -10, 'configdata' => '',
                 'timecreated' => time(), 'timemodified' => time()]);
@@ -251,7 +251,7 @@ class behat_block_my_assessments extends behat_base {
         $DB->delete_records(years::TABLE, ['label' => $label]);
         $id = $DB->insert_record(years::TABLE, ['label' => $label, 'timestart' => $start,
             'timeend' => strtotime('+1 year', $start), 'timecreated' => time(), 'timemodified' => time()]);
-        set_config('defaultacademicyear', $id, 'block_my_assessments');
+        set_config('defaultacademicyear', $id, 'block_le_dashboard');
     }
 
     /**
@@ -437,7 +437,7 @@ class behat_block_my_assessments extends behat_base {
             ['n' => strtolower($type)],
             MUST_EXIST
         );
-        \block_my_assessments\local\adapter\registry::set_enabled($modname, $not === '');
+        \block_le_dashboard\local\adapter\registry::set_enabled($modname, $not === '');
     }
 
     /**
@@ -447,7 +447,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $modname
      */
     public function indexing_fails(string $modname): void {
-        set_config('testfailtypes', $modname, 'block_my_assessments');
+        set_config('testfailtypes', $modname, 'block_le_dashboard');
     }
 
     /**
@@ -645,8 +645,8 @@ class behat_block_my_assessments extends behat_base {
         $shortname = $DB->get_field('role', 'shortname', ['shortname' => $name])
             ?: $DB->get_field('role', 'shortname', ['name' => $name], MUST_EXIST);
         $setting = ['student' => 'studentrole', 'staff' => 'staffrole', 'module convenor' => 'moduleconvenorrole'][$kind];
-        $current = array_filter(explode(',', (string)get_config('block_my_assessments', $setting)));
-        set_config($setting, implode(',', array_unique(array_merge($current, [$shortname]))), 'block_my_assessments');
+        $current = array_filter(explode(',', (string)get_config('block_le_dashboard', $setting)));
+        set_config($setting, implode(',', array_unique(array_merge($current, [$shortname]))), 'block_le_dashboard');
     }
 
     /**
@@ -657,7 +657,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $view
      */
     public function last_opened(string $username, string $view): void {
-        set_user_preference('block_my_assessments_view', self::view_key($view), self::userid($username));
+        set_user_preference('block_le_dashboard_view', self::view_key($view), self::userid($username));
     }
 
     /**
@@ -698,7 +698,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function the_section_title_is_customised(string $title, string $text): void {
         global $CFG;
-        $strings = get_string_manager()->load_component_strings('block_my_assessments', 'en');
+        $strings = get_string_manager()->load_component_strings('block_le_dashboard', 'en');
         $keys = array_keys(array_filter(
             $strings,
             fn($v, $k) => $v === $title && str_starts_with($k, 'section_'),
@@ -710,7 +710,7 @@ class behat_block_my_assessments extends behat_base {
         foreach ($keys as $key) {
             $php .= '$string[' . var_export($key, true) . '] = ' . var_export($text, true) . ";\n";
         }
-        file_put_contents($dir . '/block_my_assessments.php', $php);
+        file_put_contents($dir . '/block_le_dashboard.php', $php);
         get_string_manager()->reset_caches();
     }
 
@@ -1000,7 +1000,7 @@ class behat_block_my_assessments extends behat_base {
     protected function allocate(cm_info $cm, int $userid, int $markerid): void {
         global $CFG;
         if ($cm->modname === 'assign') {
-            testing_util::get_data_generator()->get_plugin_generator('block_my_assessments')
+            testing_util::get_data_generator()->get_plugin_generator('block_le_dashboard')
                 ->allocate_assign($cm->id, $userid, $markerid);
         } else if ($cm->modname === 'coursework') {
             if ($markerid) {
@@ -1205,7 +1205,7 @@ class behat_block_my_assessments extends behat_base {
             'timestarted',
             time(),
             'classname = :c AND timestarted IS NULL',
-            ['c' => '\\block_my_assessments\\task\\reindex']
+            ['c' => '\\block_le_dashboard\\task\\reindex']
         );
     }
 
@@ -1231,7 +1231,7 @@ class behat_block_my_assessments extends behat_base {
         $DB->delete_records_select(
             'task_adhoc',
             'classname = :c AND timestarted IS NOT NULL',
-            ['c' => '\\block_my_assessments\\task\\reindex']
+            ['c' => '\\block_le_dashboard\\task\\reindex']
         );
     }
 
@@ -1247,7 +1247,7 @@ class behat_block_my_assessments extends behat_base {
     public function reindexed_twice_at_once(string $name): void {
         global $CFG;
         $cm = $this->cm($name);
-        $script = $CFG->dirroot . '/blocks/my_assessments/tests/fixtures/behat_reindex.php';
+        $script = $CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/behat_reindex.php';
         $procs = [];
         foreach ([1, 2] as $i) {
             $procs[$i] = proc_open([PHP_BINARY, $script, (string)$cm->id], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
@@ -1283,8 +1283,8 @@ class behat_block_my_assessments extends behat_base {
         global $DB;
         $cm = $this->cm($name);
         $expected = count(indexer::students((int)$cm->course));
-        $rows = $DB->count_records('block_my_assessments_stu', ['cmid' => $cm->id]);
-        if (!$DB->record_exists('block_my_assessments_cm', ['cmid' => $cm->id]) || $rows !== $expected) {
+        $rows = $DB->count_records('block_le_dashboard_stu', ['cmid' => $cm->id]);
+        if (!$DB->record_exists('block_le_dashboard_cm', ['cmid' => $cm->id]) || $rows !== $expected) {
             throw new ExpectationException("'$name' has $rows student rows, not $expected", $this->getSession());
         }
     }
@@ -1296,7 +1296,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $name
      */
     public function writing_fails_once(string $name): void {
-        set_config('testfailwrite', $this->cm($name)->id, 'block_my_assessments');
+        set_config('testfailwrite', $this->cm($name)->id, 'block_le_dashboard');
     }
 
     /**
@@ -1307,7 +1307,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function should_be_in_the_index(string $name): void {
         global $DB;
-        if (!$DB->record_exists('block_my_assessments_cm', ['cmid' => $this->cm($name)->id])) {
+        if (!$DB->record_exists('block_le_dashboard_cm', ['cmid' => $this->cm($name)->id])) {
             throw new ExpectationException("'$name' is not in the index", $this->getSession());
         }
     }
@@ -1405,8 +1405,8 @@ class behat_block_my_assessments extends behat_base {
         $cm = $this->cm($name);
         $userid = self::userid($username);
         $this->submit($cm, $userid);
-        $DB->delete_records('task_adhoc', ['classname' => '\\block_my_assessments\\task\\reindex']);
-        self::$savedrow = (array)$DB->get_record('block_my_assessments_stu', ['cmid' => $cm->id, 'userid' => $userid]);
+        $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\reindex']);
+        self::$savedrow = (array)$DB->get_record('block_le_dashboard_stu', ['cmid' => $cm->id, 'userid' => $userid]);
     }
 
     /**
@@ -1418,7 +1418,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function the_index_row_should_be_unchanged(string $username, string $name): void {
         global $DB;
-        $row = (array)$DB->get_record('block_my_assessments_stu', ['cmid' => $this->cm($name)->id,
+        $row = (array)$DB->get_record('block_le_dashboard_stu', ['cmid' => $this->cm($name)->id,
             'userid' => self::userid($username)]);
         unset($row['id'], self::$savedrow['id']);
         if ($row != self::$savedrow) {
@@ -1455,7 +1455,7 @@ class behat_block_my_assessments extends behat_base {
      * @param int $value
      */
     public function the_setting_is(string $setting, int $value): void {
-        set_config(self::SETTINGS[$setting], $value, 'block_my_assessments');
+        set_config(self::SETTINGS[$setting], $value, 'block_le_dashboard');
     }
 
     /**
@@ -1482,7 +1482,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function the_index_should_show(string $name, string $when = ''): void {
         global $DB;
-        $row = $DB->get_record('block_my_assessments_cm', ['cmid' => $this->cm($name)->id]);
+        $row = $DB->get_record('block_le_dashboard_cm', ['cmid' => $this->cm($name)->id]);
         if (!$row || $row->name !== $name) {
             throw new ExpectationException("The index doesn't show '$name'", $this->getSession());
         }
@@ -1512,7 +1512,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function reindexed_once(string $name): void {
         global $DB;
-        $time = (int)$DB->get_field('block_my_assessments_cm', 'timeindexed', ['cmid' => $this->cm($name)->id]);
+        $time = (int)$DB->get_field('block_le_dashboard_cm', 'timeindexed', ['cmid' => $this->cm($name)->id]);
         if ($time > time() - MINSECS) {
             throw new ExpectationException("'$name' was re-indexed again", $this->getSession());
         }
@@ -1535,7 +1535,7 @@ class behat_block_my_assessments extends behat_base {
      * @When /^the My assessments nightly reconcile runs$/
      */
     public function the_nightly_reconcile_runs(): void {
-        (new \block_my_assessments\task\reconcile())->execute();
+        (new \block_le_dashboard\task\reconcile())->execute();
     }
 
     /**
@@ -1564,9 +1564,9 @@ class behat_block_my_assessments extends behat_base {
         $shift = $minutes * MINSECS;
         // The index and the activities' own times move together, so a re-index agrees.
         $fields = [
-            'block_my_assessments_cm' => ['due', 'cutoff', 'markingdue', 'timeindexed'],
-            'block_my_assessments_stu' => ['due', 'cutoff', 'timesubmitted', 'timereleased'],
-            'block_my_assessments_mark' => ['timeready', 'unitdue', 'timemarked'],
+            'block_le_dashboard_cm' => ['due', 'cutoff', 'markingdue', 'timeindexed'],
+            'block_le_dashboard_stu' => ['due', 'cutoff', 'timesubmitted', 'timereleased'],
+            'block_le_dashboard_mark' => ['timeready', 'unitdue', 'timemarked'],
             'quiz' => ['timeclose'],
             'assign' => ['duedate', 'cutoffdate', 'gradingduedate', 'allowsubmissionsfromdate'],
             'assign_overrides' => ['duedate', 'cutoffdate'],
@@ -1648,7 +1648,7 @@ class behat_block_my_assessments extends behat_base {
         $this->i_log_in_and_view_my_dashboard($username);
         $this->open_view($view);
         if ($year !== '') {
-            $this->execute('behat_forms::i_set_the_field_to', [get_string('academicyear', 'block_my_assessments'), $year]);
+            $this->execute('behat_forms::i_set_the_field_to', [get_string('academicyear', 'block_le_dashboard'), $year]);
             $this->wait_for_pending_js();
         }
     }
@@ -1684,7 +1684,7 @@ class behat_block_my_assessments extends behat_base {
      * @return \Behat\Mink\Element\NodeElement|null
      */
     protected function view_tab(string $view): ?\Behat\Mink\Element\NodeElement {
-        return $this->getSession()->getPage()->find('xpath', "//div[contains(@class, 'block_my_assessments')]" .
+        return $this->getSession()->getPage()->find('xpath', "//div[contains(@class, 'block_le_dashboard')]" .
             "//button[@data-action='switch-view'][normalize-space(.) = " . behat_context_helper::escape($view) . "]");
     }
 
@@ -1696,7 +1696,7 @@ class behat_block_my_assessments extends behat_base {
      */
     protected static function view_key(string $label): string {
         foreach (['student', 'staff', 'convenor'] as $key) {
-            if (get_string('view_' . $key, 'block_my_assessments') === $label) {
+            if (get_string('view_' . $key, 'block_le_dashboard') === $label) {
                 return $key;
             }
         }
@@ -1894,7 +1894,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $url
      */
     public function the_guidance_link_is(string $url): void {
-        set_config('briefguidanceurl', $url, 'block_my_assessments');
+        set_config('briefguidanceurl', $url, 'block_le_dashboard');
     }
 
     /**
@@ -1905,8 +1905,8 @@ class behat_block_my_assessments extends behat_base {
      * @param int $hours
      */
     public function the_mitigate_window_is(int $days, int $hours): void {
-        set_config('mitigationopens', $days, 'block_my_assessments');
-        set_config('mitigationcloses', $hours, 'block_my_assessments');
+        set_config('mitigationopens', $days, 'block_le_dashboard');
+        set_config('mitigationcloses', $hours, 'block_le_dashboard');
     }
 
     /**
@@ -1917,8 +1917,8 @@ class behat_block_my_assessments extends behat_base {
      * @param string $url
      */
     public function the_feedback_contact_is(string $text, string $url): void {
-        set_config('feedbackcontact', $text, 'block_my_assessments');
-        set_config('feedbackcontacturl', $url, 'block_my_assessments');
+        set_config('feedbackcontact', $text, 'block_le_dashboard');
+        set_config('feedbackcontacturl', $url, 'block_le_dashboard');
     }
 
     /**
@@ -1976,7 +1976,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $names Comma-separated.
      */
     public function the_section_should_list(string $section, string $names): void {
-        $xpath = "//div[contains(@class, 'block_my_assessments')]//section[@data-region='ma-section']" .
+        $xpath = "//div[contains(@class, 'block_le_dashboard')]//section[@data-region='ma-section']" .
             "[.//h3[normalize-space(.) = " . behat_context_helper::escape($section) . "]]//a[contains(@class, 'ma-row-name')]";
         $found = array_map(fn($a) => trim($a->getText()), $this->find_all('xpath', $xpath));
         $expected = array_map('trim', explode(',', $names));
@@ -2022,7 +2022,7 @@ class behat_block_my_assessments extends behat_base {
             "XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute('data-tonecheck', '$id')");
         return (bool)$this->evaluate_script("return (function() {
             var el = document.querySelector('[data-tonecheck=\"$id\"]');
-            var root = el.closest('.block_my_assessments_dashboard');
+            var root = el.closest('.block_le_dashboard_dashboard');
             var get = function(e, p) { return getComputedStyle(e).getPropertyValue(p).trim(); };
             return get(el, '--ma-solid') === get(root, '--ma-$tone-solid');
         })()");
@@ -2086,7 +2086,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $url
      */
     public function the_late_penalty_link_is(string $url): void {
-        set_config('latenoteurl', $url, 'block_my_assessments');
+        set_config('latenoteurl', $url, 'block_le_dashboard');
     }
 
     /**
@@ -2160,7 +2160,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function should_come_before(string $first, string $rel, string $second): void {
         $regions = ['control bar' => 'ma-controls', 'freshness line' => 'ma-freshness', 'summary boxes' => 'ma-summary'];
-        $root = '.block_my_assessments [data-region="ma-view-root"]';
+        $root = '.block_le_dashboard [data-region="ma-view-root"]';
         $a = json_encode("$root [data-region=\"{$regions[$first]}\"]");
         $b = json_encode("$root [data-region=\"{$regions[$second]}\"]");
         $follows = $this->evaluate_script("return (function() {
@@ -2236,7 +2236,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function the_block_should_not_scroll_sideways(): void {
         $wide = $this->evaluate_script("return (function() {
-            var view = document.querySelector('.block_my_assessments [data-region=\"ma-view-root\"]');
+            var view = document.querySelector('.block_le_dashboard [data-region=\"ma-view-root\"]');
             return view ? view.scrollWidth - view.clientWidth : -1;
         })()");
         if ($wide < 0 || $wide > 0) {
@@ -2251,7 +2251,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function the_search_should_take_full_width(): void {
         $gap = $this->evaluate_script("return (function() {
-            var bar = document.querySelector('.block_my_assessments [data-region=\"ma-controls\"]');
+            var bar = document.querySelector('.block_le_dashboard [data-region=\"ma-controls\"]');
             var search = bar && bar.querySelector('.ma-search');
             return search ? Math.round(bar.clientWidth - search.getBoundingClientRect().width) : -1;
         })()");
@@ -2342,7 +2342,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $tomark
      */
     public function should_appear_in_section(string $name, string $not, string $section, string $tomark = ''): void {
-        $xpath = "//div[contains(@class, 'block_my_assessments')]//section[@data-region='ma-section']" .
+        $xpath = "//div[contains(@class, 'block_le_dashboard')]//section[@data-region='ma-section']" .
             "[.//h3[normalize-space(.) = " . behat_context_helper::escape($section) . "]]" .
             "//li[@data-region='ma-row'][.//a[contains(@class, 'ma-row-name')][normalize-space(.) = " .
             behat_context_helper::escape($name) . "]]";
@@ -2404,7 +2404,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $when
      */
     public function should_show_the_due_date(string $name, string $when): void {
-        $this->row_date($this->row($name), $name, get_string('date_due', 'block_my_assessments'), $when);
+        $this->row_date($this->row($name), $name, get_string('date_due', 'block_le_dashboard'), $when);
     }
 
     /**
@@ -2416,7 +2416,7 @@ class behat_block_my_assessments extends behat_base {
      */
     public function the_sections_should_be_in_the_order(string $titles): void {
         $actual = $this->evaluate_script("return Array.from(document.querySelectorAll(
-            '.block_my_assessments [data-region=\"ma-view-root\"] [data-region=\"ma-section\"] .ma-section-title'
+            '.block_le_dashboard [data-region=\"ma-view-root\"] [data-region=\"ma-section\"] .ma-section-title'
         )).map((e) => e.textContent.trim());");
         $expected = array_map('trim', explode(',', $titles));
         if ($actual !== $expected) {
@@ -2528,7 +2528,7 @@ class behat_block_my_assessments extends behat_base {
      * @param string $count
      */
     public function the_summary_count_should_be(string $box, string $count): void {
-        $xpath = "//div[contains(@class, 'block_my_assessments')]//div[@data-region='ma-box']" .
+        $xpath = "//div[contains(@class, 'block_le_dashboard')]//div[@data-region='ma-box']" .
             "[div/div[contains(@class, 'ma-box-label')][normalize-space(.) = " . behat_context_helper::escape($box) . "]]" .
             "//div[@data-region='ma-box-value']";
         $node = $this->find('xpath', $xpath, new ExpectationException("No '$box' summary", $this->getSession()));

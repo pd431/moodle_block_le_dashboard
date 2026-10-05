@@ -17,8 +17,8 @@
 /**
  * Scheduled tasks.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -26,7 +26,7 @@ defined('MOODLE_INTERNAL') || die();
 
 $tasks = [
     [
-        'classname' => '\block_my_assessments\task\reconcile',
+        'classname' => '\block_le_dashboard\task\reconcile',
         'blocking' => 0,
         'minute' => 'R',
         'hour' => '2',

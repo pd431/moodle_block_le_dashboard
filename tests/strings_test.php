@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments;
+namespace block_le_dashboard;
 
-use block_my_assessments\local\mitigation;
-use block_my_assessments\local\scope;
-use block_my_assessments\local\view\classifier;
-use block_my_assessments\local\view\staff;
-use block_my_assessments\local\view\student;
-use block_my_assessments\privacy\provider;
+use block_le_dashboard\local\mitigation;
+use block_le_dashboard\local\scope;
+use block_le_dashboard\local\view\classifier;
+use block_le_dashboard\local\view\staff;
+use block_le_dashboard\local\view\student;
+use block_le_dashboard\privacy\provider;
 
 /**
  * Every language string the block asks for exists, including keys built at runtime.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  * @coversNothing
  */
@@ -108,7 +108,7 @@ final class strings_test extends \advanced_testcase {
     public function test_built_keys_exist(): void {
         $sm = get_string_manager();
         foreach (self::built_keys() as $key) {
-            $this->assertTrue($sm->string_exists($key, 'block_my_assessments'), "Missing string '$key'");
+            $this->assertTrue($sm->string_exists($key, 'block_le_dashboard'), "Missing string '$key'");
         }
     }
 
@@ -118,12 +118,12 @@ final class strings_test extends \advanced_testcase {
     public function test_literal_keys_exist(): void {
         global $CFG;
         $sm = get_string_manager();
-        $dir = $CFG->dirroot . '/blocks/my_assessments';
+        $dir = $CFG->dirroot . '/blocks/le_dashboard';
         $patterns = [
-            '/get_string\(\s*\'([a-z0-9_:]+)\',\s*\'block_my_assessments\'/',
-            '/lang_string\(\s*\'([a-z0-9_:]+)\',\s*\'block_my_assessments\'/',
-            '/\{\{#str\}\}\s*([a-z0-9_:]+),\s*block_my_assessments/',
-            '/getString\(\s*\'([a-z0-9_:]+)\',\s*\'block_my_assessments\'/',
+            '/get_string\(\s*\'([a-z0-9_:]+)\',\s*\'block_le_dashboard\'/',
+            '/lang_string\(\s*\'([a-z0-9_:]+)\',\s*\'block_le_dashboard\'/',
+            '/\{\{#str\}\}\s*([a-z0-9_:]+),\s*block_le_dashboard/',
+            '/getString\(\s*\'([a-z0-9_:]+)\',\s*\'block_le_dashboard\'/',
         ];
         $found = 0;
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS));
@@ -140,7 +140,7 @@ final class strings_test extends \advanced_testcase {
                 foreach ($matches[1] as $key) {
                     $found++;
                     $this->assertTrue(
-                        $sm->string_exists($key, 'block_my_assessments'),
+                        $sm->string_exists($key, 'block_le_dashboard'),
                         "Missing string '$key' used in " . $file->getFilename()
                     );
                 }

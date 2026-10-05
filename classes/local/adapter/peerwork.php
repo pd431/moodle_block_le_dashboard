@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
-use block_my_assessments\local\index\cm_row;
-use block_my_assessments\local\index\marking_row;
+use block_le_dashboard\local\index\cm_row;
+use block_le_dashboard\local\index\marking_row;
 
 /**
  * Adapter for mod_peerwork (written against mod_peerwork 4.5.0, version 2025032200).
@@ -28,8 +28,8 @@ use block_my_assessments\local\index\marking_row;
  * released per submission (peerwork_submission.released is a timestamp)
  * and reach the gradebook only then.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class peerwork extends base {

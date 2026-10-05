@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard
 Feature: Students see only assessments they can actually access
   In order to trust that every assessment on my dashboard is one I can act on
   As a student
@@ -30,6 +30,7 @@ Feature: Students see only assessments they can actually access
       | student1 | GA    |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
+  @javascript
   Scenario Outline: A visible, tagged, unrestricted <activity> appears
     Given a summative "<activity>" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard
@@ -42,6 +43,7 @@ Feature: Students see only assessments they can actually access
       | assign     |
       | peerwork   |
 
+  @javascript
   Scenario Outline: A <activity> hidden from students does not appear
     Given a summative "<activity>" "A1" in "M1" is due "tomorrow"
     And "A1" is hidden from students
@@ -58,12 +60,14 @@ Feature: Students see only assessments they can actually access
     When I log in as "student1" and view my dashboard
     Then I should not see "A1" in the "My assessments" block
 
+  @javascript
   Scenario: An assessment in a section hidden from students does not appear
     Given a summative "coursework" "A1" in "M1" is due "tomorrow"
     And the section containing "A1" is hidden
     When I log in as "student1" and view my dashboard
     Then I should not see "A1" in the "My assessments" block
 
+  @javascript
   Scenario: An assessment restricted to a group I am not in does not appear, nor is it counted
     Given a summative "coursework" "A1" in "M1" is due "tomorrow"
     And "A1" is restricted to group "Group A"
@@ -71,6 +75,7 @@ Feature: Students see only assessments they can actually access
     Then I should not see "A1" in the "My assessments" block
     And the "Upcoming" count should be "0"
 
+  @javascript
   Scenario: An assessment restricted to my group appears
     Given a summative "coursework" "A1" in "M1" is due "tomorrow"
     And "A1" is restricted to group "Group A"
@@ -84,6 +89,7 @@ Feature: Students see only assessments they can actually access
     Then I should not see "A1" in the "My assessments" block
 
   # R1: any restriction hides the assessment, date restrictions included.
+  @javascript
   Scenario: An assessment that only has a date restriction is hidden until it opens
     Given a summative "coursework" "A1" in "M1" is due "in 14 days"
     And "A1" is only available from "in 3 days"
@@ -102,6 +108,7 @@ Feature: Students see only assessments they can actually access
     When I log in as "student1" and view my dashboard
     Then I should not see "A1" in the "My assessments" block
 
+  @javascript
   Scenario: A site-configured student role other than "student" is recognised
     Given the role "Distance learner" exists, based on "student"
     And the My assessments block treats "Distance learner" as a student role
@@ -120,6 +127,7 @@ Feature: Students see only assessments they can actually access
     Then "A1" should appear in the "Needs attention" section
     And the "Overdue" summary count should be "1"
 
+  @javascript
   Scenario: Searching filters rows but does not change the summary counts
     Given a summative "quiz" "A1" in "M1" was due "yesterday"
     And a summative "quiz" "A2" in "M1" was due "yesterday"
@@ -128,6 +136,7 @@ Feature: Students see only assessments they can actually access
     Then I should not see "A2" in the "My assessments" block
     And the "Overdue" summary count should be "2"
 
+  @javascript
   Scenario: The type filter switches the summary counts to that type
     Given a summative "quiz" "A1" in "M1" was due "yesterday"
     And a formative "quiz" "F1" in "M1" was due "yesterday"
@@ -137,6 +146,7 @@ Feature: Students see only assessments they can actually access
     And I should not see "A1" in the "My assessments" block
 
   # G12 (Pierre, 2026-10-03, Q2), replacing F7: the feedback date stays, with a hint once it passes.
+  @javascript
   Scenario: A passed feedback date stays, with a hint saying who to contact
     Given the My assessments feedback contact is "your module convenor" linking to "https://example.com/contact"
     And a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
@@ -149,6 +159,7 @@ Feature: Students see only assessments they can actually access
     And I should see "your module convenor" linking to "https://example.com/contact"
 
   # D9: the contact defaults to "your module convenor"; an admin who clears it gets no hint.
+  @javascript
   Scenario: The feedback contact defaults to the module convenor
     Given a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
     And "student1" submitted "A1" "11 days ago"
@@ -240,6 +251,7 @@ Feature: Students see only assessments they can actually access
   # ---------- Workflow gaps, beta7 (coordinator-approved scope, 2026-10-03) ----------
 
   # G13: a reopened attempt is open again, whatever the deadline, and nothing was missed.
+  @javascript
   Scenario: A reopened attempt can be resubmitted even after the overdue threshold
     Given the following "users" exist:
       | username | firstname | lastname |
@@ -305,6 +317,7 @@ Feature: Students see only assessments they can actually access
     Then "A1" should appear in the "Overdue" section
     And "A1" should show "You can still submit for 20 h"
 
+  @javascript
   Scenario Outline: Upcoming deadlines within a week show how soon
     Given a summative "assign" "A1" in "M1" is due "<due>"
     When I log in as "student1" and view my dashboard

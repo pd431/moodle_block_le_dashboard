@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
-use block_my_assessments\local\index\marking_row;
+use block_le_dashboard\local\index\marking_row;
 
 /**
  * The assign adapter agrees with assign's own rules.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\local\adapter\assign
+ * @covers     \block_le_dashboard\local\adapter\assign
  */
 final class assign_test extends \advanced_testcase {
     /**
@@ -153,7 +153,7 @@ final class assign_test extends \advanced_testcase {
             'assignsubmission_onlinetext_enabled' => 1, 'markingworkflow' => 1, 'markingallocation' => 1]);
         $agen->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid, 'onlinetext' => 'Mine']);
         $this->setAdminUser();
-        $gen->get_plugin_generator('block_my_assessments')->allocate_assign(
+        $gen->get_plugin_generator('block_le_dashboard')->allocate_assign(
             $a->cmid,
             $s1->id,
             $marker->id,
@@ -168,7 +168,7 @@ final class assign_test extends \advanced_testcase {
         $this->assertSame((int)$marker->id, $m->allocatedto);
         $this->assertFalse($m->marked);
 
-        $gen->get_plugin_generator('block_my_assessments')->allocate_assign(
+        $gen->get_plugin_generator('block_le_dashboard')->allocate_assign(
             $a->cmid,
             $s1->id,
             $marker->id,

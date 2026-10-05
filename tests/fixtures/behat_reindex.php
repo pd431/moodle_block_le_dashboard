@@ -18,8 +18,8 @@
  * Re-indexes one assessment on the Behat site, for the step that runs two at once
  * ("... is re-indexed twice at the same time"). Prints "ok" on success.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -27,12 +27,12 @@
 define('CLI_SCRIPT', true);
 define('BEHAT_TEST', 1);
 
-// The site's config.php: blocks/my_assessments/tests/fixtures, under public/ on Moodle 5.1+.
+// The site's config.php: blocks/le_dashboard/tests/fixtures, under public/ on Moodle 5.1+.
 $dir = __DIR__;
 while (!file_exists($dir . '/config.php') && dirname($dir) !== $dir) {
     $dir = dirname($dir);
 }
 require($dir . '/config.php');
 
-(new \block_my_assessments\local\index\indexer())->index_cm((int)$argv[1]);
+(new \block_le_dashboard\local\index\indexer())->index_cm((int)$argv[1]);
 echo "ok\n";

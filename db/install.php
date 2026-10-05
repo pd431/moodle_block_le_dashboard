@@ -17,19 +17,19 @@
 /**
  * Install steps.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 /**
  * Default academic years, default settings and the first fill of the index.
  */
-function xmldb_block_my_assessments_install() {
-    \block_my_assessments\local\years::create_defaults();
-    if (get_config('block_my_assessments', 'enabledtypes') === false) {
-        set_config('enabledtypes', \block_my_assessments\local\adapter\registry::DEFAULT_ENABLED, 'block_my_assessments');
+function xmldb_block_le_dashboard_install() {
+    \block_le_dashboard\local\years::create_defaults();
+    if (get_config('block_le_dashboard', 'enabledtypes') === false) {
+        set_config('enabledtypes', \block_le_dashboard\local\adapter\registry::DEFAULT_ENABLED, 'block_le_dashboard');
     }
-    \block_my_assessments\task\backfill::queue();
+    \block_le_dashboard\task\backfill::queue();
     return true;
 }

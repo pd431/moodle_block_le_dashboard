@@ -14,22 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments;
+namespace block_le_dashboard;
 
-use block_my_assessments\local\adapter\registry;
-use block_my_assessments\local\index\indexer;
+use block_le_dashboard\local\adapter\registry;
+use block_le_dashboard\local\index\indexer;
 
 /**
  * Keeping the index in step with the site.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\local\index\indexer
- * @covers     \block_my_assessments\observer
+ * @covers     \block_le_dashboard\local\index\indexer
+ * @covers     \block_le_dashboard\observer
  */
 final class indexer_test extends \advanced_testcase {
-    /** @var \block_my_assessments_generator */
+    /** @var \block_le_dashboard_generator */
     protected $ma;
 
     #[\Override]
@@ -39,7 +39,7 @@ final class indexer_test extends \advanced_testcase {
         // Index writers observe events after commit, and some tests roll back a write: no test transaction.
         $this->preventResetByRollback();
         $this->setAdminUser();
-        $this->ma = $this->getDataGenerator()->get_plugin_generator('block_my_assessments');
+        $this->ma = $this->getDataGenerator()->get_plugin_generator('block_le_dashboard');
         $this->ma->configure(['assign', 'quiz', 'forum', 'lti']);
     }
 
@@ -55,14 +55,14 @@ final class indexer_test extends \advanced_testcase {
         $a2 = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
         $this->ma->tag($a1->cmid, 'summative');
         (new indexer())->index_cm($a2->cmid);
-        $this->assertTrue($DB->record_exists('block_my_assessments_cm', ['cmid' => $a1->cmid, 'assesstype' => 'summative']));
-        $this->assertFalse($DB->record_exists('block_my_assessments_cm', ['cmid' => $a2->cmid]));
-        $this->assertTrue($DB->record_exists('block_my_assessments_stu', ['cmid' => $a1->cmid, 'userid' => $student->id]));
+        $this->assertTrue($DB->record_exists('block_le_dashboard_cm', ['cmid' => $a1->cmid, 'assesstype' => 'summative']));
+        $this->assertFalse($DB->record_exists('block_le_dashboard_cm', ['cmid' => $a2->cmid]));
+        $this->assertTrue($DB->record_exists('block_le_dashboard_stu', ['cmid' => $a1->cmid, 'userid' => $student->id]));
 
         \core_tag_tag::remove_all_item_tags('core', 'course_modules', $a1->cmid);
-        $this->runAdhocTasks('\block_my_assessments\task\reindex');
-        $this->assertFalse($DB->record_exists('block_my_assessments_cm', ['cmid' => $a1->cmid]));
-        $this->assertFalse($DB->record_exists('block_my_assessments_stu', ['cmid' => $a1->cmid]));
+        $this->runAdhocTasks('\block_le_dashboard\task\reindex');
+        $this->assertFalse($DB->record_exists('block_le_dashboard_cm', ['cmid' => $a1->cmid]));
+        $this->assertFalse($DB->record_exists('block_le_dashboard_stu', ['cmid' => $a1->cmid]));
     }
 
     /**
@@ -76,11 +76,11 @@ final class indexer_test extends \advanced_testcase {
         $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS,
             'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1]);
         $this->ma->tag($a->cmid);
-        $this->assertEquals(0, $DB->get_field('block_my_assessments_stu', 'submitted', ['cmid' => $a->cmid]));
+        $this->assertEquals(0, $DB->get_field('block_le_dashboard_stu', 'submitted', ['cmid' => $a->cmid]));
         $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $student->id, 'cmid' => $a->cmid,
             'onlinetext' => 'Done']);
-        $this->runAdhocTasks('\block_my_assessments\task\reindex');
-        $this->assertEquals(1, $DB->get_field('block_my_assessments_stu', 'submitted', ['cmid' => $a->cmid]));
+        $this->runAdhocTasks('\block_le_dashboard\task\reindex');
+        $this->assertEquals(1, $DB->get_field('block_le_dashboard_stu', 'submitted', ['cmid' => $a->cmid]));
     }
 
     /**
@@ -100,18 +100,18 @@ final class indexer_test extends \advanced_testcase {
         foreach ([$nodue, $forum, $forumnodue, $lti, $hidden] as $cm) {
             $this->ma->tag($cm->cmid);
         }
-        $indexed = $DB->get_records_menu('block_my_assessments_cm', null, '', 'cmid, adapter');
+        $indexed = $DB->get_records_menu('block_le_dashboard_cm', null, '', 'cmid, adapter');
         $this->assertArrayHasKey($nodue->cmid, $indexed);
         $this->assertSame('generic', $indexed[$forumnodue->cmid]);
-        $this->assertNull($DB->get_field('block_my_assessments_cm', 'due', ['cmid' => $nodue->cmid]));
-        $this->assertNull($DB->get_field('block_my_assessments_cm', 'due', ['cmid' => $forumnodue->cmid]));
+        $this->assertNull($DB->get_field('block_le_dashboard_cm', 'due', ['cmid' => $nodue->cmid]));
+        $this->assertNull($DB->get_field('block_le_dashboard_cm', 'due', ['cmid' => $forumnodue->cmid]));
         $this->assertArrayNotHasKey($lti->cmid, $indexed);
         $this->assertSame('generic', $indexed[$forum->cmid]);
         $this->assertNull(
-            $DB->get_field('block_my_assessments_stu', 'submitted', ['cmid' => $forum->cmid]),
+            $DB->get_field('block_le_dashboard_stu', 'submitted', ['cmid' => $forum->cmid]),
             'generic types do not know about submissions'
         );
-        $this->assertEquals(1, $DB->get_field('block_my_assessments_cm', 'hiddenfromstudents', ['cmid' => $hidden->cmid]));
+        $this->assertEquals(1, $DB->get_field('block_le_dashboard_cm', 'hiddenfromstudents', ['cmid' => $hidden->cmid]));
     }
 
     /**
@@ -137,12 +137,12 @@ final class indexer_test extends \advanced_testcase {
         $plugin->unenrol_user($enrol, $s2->id);
         (new indexer())->index_cm($a->cmid);
 
-        $rows = $DB->get_records('block_my_assessments_stu', ['cmid' => $a->cmid], '', 'userid, active, submitted, enrolstart');
+        $rows = $DB->get_records('block_le_dashboard_stu', ['cmid' => $a->cmid], '', 'userid, active, submitted, enrolstart');
         $this->assertSame([(int)$s1->id], array_map('intval', array_keys($rows)));
         $this->assertEquals(0, $rows[$s1->id]->active);
         $this->assertEquals(1, $rows[$s1->id]->submitted);
         $this->assertNotEmpty($rows[$s1->id]->enrolstart);
-        $this->assertEquals(1, $DB->count_records('block_my_assessments_mark', ['cmid' => $a->cmid, 'submitted' => 1]));
+        $this->assertEquals(1, $DB->count_records('block_le_dashboard_mark', ['cmid' => $a->cmid, 'submitted' => 1]));
     }
 
     /**
@@ -154,10 +154,10 @@ final class indexer_test extends \advanced_testcase {
         $course = $gen->create_course();
         $quiz = $gen->create_module('quiz', ['course' => $course->id, 'timeclose' => time() + DAYSECS]);
         $this->ma->tag($quiz->cmid);
-        $this->assertTrue($DB->record_exists('block_my_assessments_cm', ['cmid' => $quiz->cmid]));
+        $this->assertTrue($DB->record_exists('block_le_dashboard_cm', ['cmid' => $quiz->cmid]));
         registry::set_enabled('quiz', false);
         (new indexer())->reconcile();
-        $this->assertFalse($DB->record_exists('block_my_assessments_cm', ['cmid' => $quiz->cmid]));
+        $this->assertFalse($DB->record_exists('block_le_dashboard_cm', ['cmid' => $quiz->cmid]));
     }
 
     /**
@@ -170,17 +170,17 @@ final class indexer_test extends \advanced_testcase {
         $gen->create_and_enrol($course, 'student');
         $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
         $this->ma->tag($a->cmid);
-        $before = $DB->count_records('block_my_assessments_stu', ['cmid' => $a->cmid]);
+        $before = $DB->count_records('block_le_dashboard_stu', ['cmid' => $a->cmid]);
 
-        set_config('testfailtypes', 'assign', 'block_my_assessments');
+        set_config('testfailtypes', 'assign', 'block_le_dashboard');
         $this->assertTrue((new indexer())->index_cm($a->cmid));
         $this->assertDebuggingCalled();
-        $this->assertSame($before, $DB->count_records('block_my_assessments_stu', ['cmid' => $a->cmid]));
+        $this->assertSame($before, $DB->count_records('block_le_dashboard_stu', ['cmid' => $a->cmid]));
         $this->assertSame(1, registry::last_error('assign')->count);
         registry::flush_errors();
-        $this->assertSame(1, json_decode(get_config('block_my_assessments', 'lasterror_assign'))->count);
+        $this->assertSame(1, json_decode(get_config('block_le_dashboard', 'lasterror_assign'))->count);
 
-        unset_config('testfailtypes', 'block_my_assessments');
+        unset_config('testfailtypes', 'block_le_dashboard');
         (new indexer())->index_cm($a->cmid);
         $this->assertNull(registry::last_error('assign'));
     }
@@ -202,7 +202,7 @@ final class indexer_test extends \advanced_testcase {
         $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS,
             'availability' => $availability]);
         $this->ma->tag($a->cmid);
-        $access = $DB->get_records_menu('block_my_assessments_stu', ['cmid' => $a->cmid], '', 'userid, canaccess');
+        $access = $DB->get_records_menu('block_le_dashboard_stu', ['cmid' => $a->cmid], '', 'userid, canaccess');
         $this->assertEquals(1, $access[$in->id]);
         $this->assertEquals(0, $access[$out->id]);
     }
@@ -218,9 +218,9 @@ final class indexer_test extends \advanced_testcase {
         $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
         $this->ma->tag($a->cmid);
         delete_user($student);
-        $this->assertFalse($DB->record_exists('block_my_assessments_stu', ['userid' => $student->id]));
+        $this->assertFalse($DB->record_exists('block_le_dashboard_stu', ['userid' => $student->id]));
         delete_course($course, false);
-        $this->assertFalse($DB->record_exists('block_my_assessments_cm', ['cmid' => $a->cmid]));
+        $this->assertFalse($DB->record_exists('block_le_dashboard_cm', ['cmid' => $a->cmid]));
     }
 
     /**
@@ -245,7 +245,7 @@ final class indexer_test extends \advanced_testcase {
         $DB->insert_record('assign_user_flags', ['assignment' => $a->id, 'userid' => $s2->id, 'locked' => 0,
             'mailed' => 0, 'extensionduedate' => $extension, 'workflowstate' => '', 'allocatedmarker' => 0]);
         $this->ma->tag($a->cmid);
-        $unit = $DB->get_record('block_my_assessments_mark', ['cmid' => $a->cmid, 'unittype' => 'group']);
+        $unit = $DB->get_record('block_le_dashboard_mark', ['cmid' => $a->cmid, 'unittype' => 'group']);
         $this->assertEquals($group->id, $unit->unitid);
         $this->assertEquals($extension, $unit->unitdue);
     }
@@ -255,7 +255,7 @@ final class indexer_test extends \advanced_testcase {
      */
     public function test_queue_dedupes_waiting_only(): void {
         global $DB;
-        $params = ['classname' => '\\block_my_assessments\\task\\reindex'];
+        $params = ['classname' => '\\block_le_dashboard\\task\\reindex'];
         indexer::queue_cm(42);
         indexer::queue_cm(42);
         $this->assertSame(1, $DB->count_records('task_adhoc', $params));
@@ -280,12 +280,12 @@ final class indexer_test extends \advanced_testcase {
         $agen->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid, 'onlinetext' => 'One']);
         $agen->create_submission(['userid' => $s2->id, 'cmid' => $a->cmid, 'onlinetext' => 'Two']);
         // The submit events already updated both rows; start them from a stale index.
-        $DB->set_field('block_my_assessments_stu', 'submitted', 0, ['cmid' => $a->cmid]);
-        $DB->delete_records('block_my_assessments_mark', ['cmid' => $a->cmid]);
+        $DB->set_field('block_le_dashboard_stu', 'submitted', 0, ['cmid' => $a->cmid]);
+        $DB->delete_records('block_le_dashboard_mark', ['cmid' => $a->cmid]);
         $this->assertTrue((new indexer())->index_users($a->cmid, [$s1->id]));
-        $submitted = $DB->get_records_menu('block_my_assessments_stu', ['cmid' => $a->cmid], '', 'userid, submitted');
+        $submitted = $DB->get_records_menu('block_le_dashboard_stu', ['cmid' => $a->cmid], '', 'userid, submitted');
         $this->assertEquals([$s1->id => 1, $s2->id => 0], $submitted);
-        $this->assertSame(1, $DB->count_records('block_my_assessments_mark', ['cmid' => $a->cmid]));
+        $this->assertSame(1, $DB->count_records('block_le_dashboard_mark', ['cmid' => $a->cmid]));
     }
 
     /**
@@ -306,15 +306,15 @@ final class indexer_test extends \advanced_testcase {
         }
         $DB->set_field('assign', 'name', 'Renamed', ['id' => $z->id]);
         rebuild_course_cache($old->id, true);
-        $DB->delete_records('block_my_assessments_cm', ['cmid' => $a2->cmid]);
-        set_config('testfailwrite', $a1->cmid, 'block_my_assessments');
+        $DB->delete_records('block_le_dashboard_cm', ['cmid' => $a2->cmid]);
+        set_config('testfailwrite', $a1->cmid, 'block_le_dashboard');
         (new indexer())->reconcile();
         $this->assertDebuggingCalled();
-        $this->assertNotEquals('Renamed', $DB->get_field('block_my_assessments_cm', 'name', ['cmid' => $z->cmid]));
-        $this->assertTrue($DB->record_exists('block_my_assessments_cm', ['cmid' => $a2->cmid]), 'carried on after a1');
-        set_config('reconcilemonths', 0, 'block_my_assessments');
+        $this->assertNotEquals('Renamed', $DB->get_field('block_le_dashboard_cm', 'name', ['cmid' => $z->cmid]));
+        $this->assertTrue($DB->record_exists('block_le_dashboard_cm', ['cmid' => $a2->cmid]), 'carried on after a1');
+        set_config('reconcilemonths', 0, 'block_le_dashboard');
         (new indexer())->reconcile();
-        $this->assertEquals('Renamed', $DB->get_field('block_my_assessments_cm', 'name', ['cmid' => $z->cmid]));
+        $this->assertEquals('Renamed', $DB->get_field('block_le_dashboard_cm', 'name', ['cmid' => $z->cmid]));
     }
 
     /**
@@ -328,7 +328,7 @@ final class indexer_test extends \advanced_testcase {
         $gen->create_and_enrol($course, 'student');
         $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
         $this->ma->tag($a->cmid);
-        $this->runAdhocTasks('\\block_my_assessments\\task\\reindex');
+        $this->runAdhocTasks('\\block_le_dashboard\\task\\reindex');
         local\memo::reset();
         $item = \grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'assign', 'iteminstance' => $a->id,
             'courseid' => $course->id]);
@@ -336,7 +336,7 @@ final class indexer_test extends \advanced_testcase {
         $this->assertTrue($DB->record_exists_select(
             'task_adhoc',
             'classname = ? AND timestarted IS NULL',
-            ['\\block_my_assessments\\task\\reindex']
+            ['\\block_le_dashboard\\task\\reindex']
         ));
     }
 
@@ -346,12 +346,12 @@ final class indexer_test extends \advanced_testcase {
     public function test_settings_queue_backfill(): void {
         global $CFG, $DB;
         require_once($CFG->libdir . '/adminlib.php');
-        $DB->delete_records('task_adhoc', ['classname' => '\\block_my_assessments\\task\\backfill']);
-        unset_config('backfillpending', 'block_my_assessments');
-        admin_write_settings((object)['s_block_my_assessments_certaintags' => 'exam']);
-        $this->assertSame('exam', get_config('block_my_assessments', 'certaintags'));
-        $this->assertTrue($DB->record_exists('task_adhoc', ['classname' => '\\block_my_assessments\\task\\backfill']));
-        $this->assertNotEmpty(get_config('block_my_assessments', 'backfillpending'));
+        $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\backfill']);
+        unset_config('backfillpending', 'block_le_dashboard');
+        admin_write_settings((object)['s_block_le_dashboard_certaintags' => 'exam']);
+        $this->assertSame('exam', get_config('block_le_dashboard', 'certaintags'));
+        $this->assertTrue($DB->record_exists('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\backfill']));
+        $this->assertNotEmpty(get_config('block_le_dashboard', 'backfillpending'));
     }
 
     /**
@@ -367,9 +367,9 @@ final class indexer_test extends \advanced_testcase {
         $good = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
         $this->ma->tag($bad->cmid);
         $this->ma->tag($good->cmid);
-        $DB->set_field('block_my_assessments_cm', 'timeindexed', 12345);
+        $DB->set_field('block_le_dashboard_cm', 'timeindexed', 12345);
 
-        set_config('testfailwrite', $bad->cmid, 'block_my_assessments');
+        set_config('testfailwrite', $bad->cmid, 'block_le_dashboard');
         try {
             (new indexer())->index_cms([$bad->cmid, $good->cmid]);
             $this->fail('the failure is thrown at the end');
@@ -378,9 +378,9 @@ final class indexer_test extends \advanced_testcase {
         }
         $this->assertDebuggingCalled();
         $this->assertFalse($DB->is_transaction_started(), 'no transaction left open');
-        $this->assertEquals(12345, $DB->get_field('block_my_assessments_cm', 'timeindexed', ['cmid' => $bad->cmid]));
-        $this->assertSame(1, $DB->count_records('block_my_assessments_stu', ['cmid' => $bad->cmid]), 'old rows kept');
-        $this->assertNotEquals(12345, $DB->get_field('block_my_assessments_cm', 'timeindexed', ['cmid' => $good->cmid]));
+        $this->assertEquals(12345, $DB->get_field('block_le_dashboard_cm', 'timeindexed', ['cmid' => $bad->cmid]));
+        $this->assertSame(1, $DB->count_records('block_le_dashboard_stu', ['cmid' => $bad->cmid]), 'old rows kept');
+        $this->assertNotEquals(12345, $DB->get_field('block_le_dashboard_cm', 'timeindexed', ['cmid' => $good->cmid]));
         $this->assertSame(1, registry::last_error('assign')->count);
     }
 }

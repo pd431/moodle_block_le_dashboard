@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\view;
+namespace block_le_dashboard\local\view;
 
-use block_my_assessments\local\config;
-use block_my_assessments\local\output\format;
-use block_my_assessments\local\tags;
-use block_my_assessments\local\years;
+use block_le_dashboard\local\config;
+use block_le_dashboard\local\output\format;
+use block_le_dashboard\local\tags;
+use block_le_dashboard\local\years;
 
 /**
  * What the three views share: sections, the freshness line, the year picker and the filters.
  *
  * Every view's context has the same shape, so one set of templates renders them all.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 abstract class base {
@@ -49,7 +49,7 @@ abstract class base {
         $this->userid = $userid;
         $this->now = $now ?? time();
         if ($yearid === null) {
-            $saved = get_user_preferences('block_my_assessments_year', null, $userid);
+            $saved = get_user_preferences('block_le_dashboard_year', null, $userid);
             $yearid = ($saved !== null && ((int)$saved === 0 || years::get((int)$saved))) ? (int)$saved
                 : years::default_id($this->now);
         }
@@ -110,7 +110,7 @@ abstract class base {
         return [
             'key' => $key,
             'view' => $this->key(),
-            'title' => get_string('section_' . $this->key() . '_' . $key, 'block_my_assessments'),
+            'title' => get_string('section_' . $this->key() . '_' . $key, 'block_le_dashboard'),
             'count' => count($rows),
             'rows' => array_values($rows),
             'hasrows' => !empty($rows),
@@ -146,14 +146,14 @@ abstract class base {
      */
     protected function freshness(?int $oldest): array {
         // A queued Refresh that never finished stops showing after a while, so the button comes back (PR7).
-        $since = (int)get_user_preferences('block_my_assessments_refreshing', 0, $this->userid);
+        $since = (int)get_user_preferences('block_le_dashboard_refreshing', 0, $this->userid);
         $refreshing = $since > $this->now - self::REFRESHING_EXPIRES;
         return [
             'text' => format::updated($oldest, $this->now),
             'refreshing' => $refreshing,
             // Only while this view has nothing indexed yet, or the index has never been filled.
-            'preparing' => get_config('block_my_assessments', 'backfillpending')
-                && ($oldest === null || !get_config('block_my_assessments', 'backfilldone')),
+            'preparing' => get_config('block_le_dashboard', 'backfillpending')
+                && ($oldest === null || !get_config('block_le_dashboard', 'backfilldone')),
         ];
     }
 
@@ -163,7 +163,7 @@ abstract class base {
      * @return array
      */
     protected function years(): array {
-        $options = [['id' => 0, 'label' => get_string('allyears', 'block_my_assessments'), 'selected' => $this->yearid === 0]];
+        $options = [['id' => 0, 'label' => get_string('allyears', 'block_le_dashboard'), 'selected' => $this->yearid === 0]];
         foreach (years::all() as $year) {
             $options[] = ['id' => (int)$year->id, 'label' => format_string($year->label, true, ['escape' => false]),
                 'selected' => (int)$year->id === $this->yearid];
@@ -187,7 +187,7 @@ abstract class base {
             if ($date && $date >= $year->timestart && $date < $year->timeend) {
                 return get_string(
                     'courseinyear',
-                    'block_my_assessments',
+                    'block_le_dashboard',
                     ['course' => $course, 'year' => format_string($year->label, true, ['escape' => false])]
                 );
             }
@@ -224,7 +224,7 @@ abstract class base {
         $box = [
             'key' => $key,
             'view' => $this->key(),
-            'label' => get_string('box_' . $this->key() . '_' . $key, 'block_my_assessments'),
+            'label' => get_string('box_' . $this->key() . '_' . $key, 'block_le_dashboard'),
             'note' => $note,
             'hasoptions' => $options !== null,
             'options' => [],
@@ -264,8 +264,8 @@ abstract class base {
             'hassummary' => !empty($summary),
             'sections' => $sections,
             'hasrows' => $hasrows,
-            'empty' => get_string('empty_' . $this->key(), 'block_my_assessments'),
-            'searchplaceholder' => get_string('searchplaceholder_' . $this->key(), 'block_my_assessments'),
+            'empty' => get_string('empty_' . $this->key(), 'block_le_dashboard'),
+            'searchplaceholder' => get_string('searchplaceholder_' . $this->key(), 'block_le_dashboard'),
             'freshness' => $this->freshness($oldest),
             'hasyears' => false,
             'years' => [],

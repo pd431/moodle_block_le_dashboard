@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments;
+namespace block_le_dashboard;
 
-use block_my_assessments\local\config;
+use block_le_dashboard\local\config;
 
 /**
  * Tests for the settings the views read.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\local\config
+ * @covers     \block_le_dashboard\local\config
  */
 final class config_test extends \advanced_testcase {
     /**
@@ -40,8 +40,8 @@ final class config_test extends \advanced_testcase {
         $this->assertTrue(config::mitigation_open($now - 24 * HOURSECS, $now));
         $this->assertFalse(config::mitigation_open($now - 25 * HOURSECS, $now));
 
-        set_config('mitigationopens', 30, 'block_my_assessments');
-        set_config('mitigationcloses', 48, 'block_my_assessments');
+        set_config('mitigationopens', 30, 'block_le_dashboard');
+        set_config('mitigationcloses', 48, 'block_le_dashboard');
         $this->assertFalse(config::mitigation_open($now + 40 * DAYSECS, $now));
         $this->assertTrue(config::mitigation_open($now - 30 * HOURSECS, $now));
     }
@@ -52,7 +52,7 @@ final class config_test extends \advanced_testcase {
     public function test_grace(): void {
         $this->resetAfterTest();
         $this->assertSame(24 * HOURSECS, config::grace());
-        set_config('graceperiod', 0, 'block_my_assessments');
+        set_config('graceperiod', 0, 'block_le_dashboard');
         $this->assertSame(0, config::grace());
     }
 }

@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
-use block_my_assessments\local\index\cm_row;
-use block_my_assessments\local\index\student_row;
+use block_le_dashboard\local\index\cm_row;
+use block_le_dashboard\local\index\student_row;
 
 /**
  * Helpers shared by the adapters: gradebook release, group membership and override resolution.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 abstract class base implements adapter {

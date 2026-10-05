@@ -1,4 +1,4 @@
-# My assessments (block_my_assessments) 5.0.0-beta10
+# My assessments (block_le_dashboard) 5.0.0-beta10
 
 A dashboard block for Moodle 4.5 and 5.2. It shows students their assessments, markers their marking and
 module convenors the marking across their modules. This version is the plugin-agnostic remake: it
@@ -17,7 +17,7 @@ works without mod_coursework and reads each activity type through its own adapte
 
 ## Install
 
-1. Unzip into `blocks/my_assessments` and visit Site administration > Notifications.
+1. Unzip into `blocks/le_dashboard` and visit Site administration > Notifications.
 2. In Site administration > Plugins > Blocks > My assessments > Settings, set the summative and
    formative tags and the student, staff and module convenor roles.
 3. Tag activities `summative` or `formative` (or the tags you chose). Only tagged activities are
@@ -31,7 +31,7 @@ dashboard says it is being prepared.
 
 ## How it works
 
-- Three block-owned tables form an index: assessments (`block_my_assessments_cm`), students per
+- Three block-owned tables form an index: assessments (`block_le_dashboard_cm`), students per
   assessment (`_stu`) and marking units per stage (`_mark`). Each type's adapter fills them through
   that plugin's own rules (`classes/local/adapter/`).
 - The index is updated by events, by the Refresh button (inline for small scopes, queued for large
@@ -64,8 +64,8 @@ custom properties at the top of the file. Which state gets which colour is one m
 
 ## Tests
 
-- PHPUnit: `vendor/bin/phpunit --filter block_my_assessments`.
+- PHPUnit: `vendor/bin/phpunit --filter block_le_dashboard`.
 - CI: `.github/workflows/ci.yml` runs moodle-plugin-ci on Moodle 4.5 and 5.2 with PostgreSQL and
   MariaDB.
-- Behat: `--tags @block_my_assessments`. Scenarios that need mod_coursework skip on sites without
+- Behat: `--tags @block_le_dashboard`. Scenarios that need mod_coursework skip on sites without
   it. The `*-assign.feature` files run the same coursework rules with Assignment instead.

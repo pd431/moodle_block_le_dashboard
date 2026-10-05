@@ -17,8 +17,8 @@
 /**
  * Library callbacks.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -28,44 +28,44 @@
  *
  * @return array
  */
-function block_my_assessments_user_preferences(): array {
+function block_le_dashboard_user_preferences(): array {
     return [
-        'block_my_assessments_view' => [
+        'block_le_dashboard_view' => [
             'type' => PARAM_ALPHA,
             'null' => NULL_NOT_ALLOWED,
             'default' => '',
             'choices' => ['', 'student', 'staff', 'convenor'],
             'permissioncallback' => [core_user::class, 'is_current_user'],
         ],
-        'block_my_assessments_showgrades' => [
+        'block_le_dashboard_showgrades' => [
             'type' => PARAM_INT,
             'null' => NULL_NOT_ALLOWED,
             'default' => 0,
             'choices' => [0, 1],
             'permissioncallback' => [core_user::class, 'is_current_user'],
         ],
-        'block_my_assessments_window' => [
+        'block_le_dashboard_window' => [
             'type' => PARAM_INT,
             'null' => NULL_NOT_ALLOWED,
             'default' => 5,
             'choices' => [1, 3, 5, 7, 15],
             'permissioncallback' => [core_user::class, 'is_current_user'],
         ],
-        'block_my_assessments_range' => [
+        'block_le_dashboard_range' => [
             'type' => PARAM_ALPHANUM,
             'null' => NULL_NOT_ALLOWED,
             'default' => '2weeks',
             'choices' => ['1week', '2weeks', 'month', 'year', 'ever'],
             'permissioncallback' => [core_user::class, 'is_current_user'],
         ],
-        'block_my_assessments_type' => [
+        'block_le_dashboard_type' => [
             'type' => PARAM_ALPHA,
             'null' => NULL_NOT_ALLOWED,
             'default' => 'both',
             'choices' => ['both', 'summative', 'formative'],
             'permissioncallback' => [core_user::class, 'is_current_user'],
         ],
-        'block_my_assessments_year' => [
+        'block_le_dashboard_year' => [
             'type' => PARAM_INT,
             'null' => NULL_ALLOWED,
             'default' => null,

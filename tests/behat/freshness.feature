@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: Dashboard data is cached, says how fresh it is, and can be refreshed
   In order to get fast dashboards without being misled by old numbers
   As a student, marker or convenor

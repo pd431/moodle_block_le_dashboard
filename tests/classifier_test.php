@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments;
+namespace block_le_dashboard;
 
-use block_my_assessments\local\view\classifier as c;
+use block_le_dashboard\local\view\classifier as c;
 
 /**
  * Tests for the section rules.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\local\view\classifier
+ * @covers     \block_le_dashboard\local\view\classifier
  */
 final class classifier_test extends \basic_testcase {
     /** @var int Fixed "now". */
@@ -151,7 +151,7 @@ final class classifier_test extends \basic_testcase {
      * One unit, rounded down, switching before it would reach 0 (G5).
      */
     public function test_duration(): void {
-        $f = fn($s) => \block_my_assessments\local\output\format::duration($s);
+        $f = fn($s) => \block_le_dashboard\local\output\format::duration($s);
         $this->assertSame('less than a minute', $f(59));
         $this->assertSame('1 min', $f(60));
         $this->assertSame('59 min', $f(HOURSECS - 1));

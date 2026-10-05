@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
-use block_my_assessments\local\index\cm_row;
-use block_my_assessments\local\index\marking_row;
-use block_my_assessments\local\index\student_row;
+use block_le_dashboard\local\index\cm_row;
+use block_le_dashboard\local\index\marking_row;
+use block_le_dashboard\local\index\student_row;
 
 /**
  * Adapter for mod_assign.
@@ -34,8 +34,8 @@ use block_my_assessments\local\index\student_row;
  * (markercount). Each marker's own mark is a stage (marker1..n, from assign_mark),
  * and with the manual method someone then sets the final grade (agreed).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class assign extends base {

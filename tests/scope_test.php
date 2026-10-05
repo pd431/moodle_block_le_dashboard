@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments;
+namespace block_le_dashboard;
 
-use block_my_assessments\local\scope;
+use block_le_dashboard\local\scope;
 
 /**
  * View routing (rc6 style): staff and convenor roles give only the staff views.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\local\scope
+ * @covers     \block_le_dashboard\local\scope
  */
 final class scope_test extends \advanced_testcase {
     /**
@@ -53,7 +53,7 @@ final class scope_test extends \advanced_testcase {
         global $DB;
         $this->resetAfterTest();
         $gen = $this->getDataGenerator();
-        $convenorrole = $gen->get_plugin_generator('block_my_assessments')->configure(['assign']);
+        $convenorrole = $gen->get_plugin_generator('block_le_dashboard')->configure(['assign']);
         $user = $gen->create_user();
         foreach ($roles as $role) {
             $roleid = $role === 'convenor' ? $convenorrole : (int)$DB->get_field('role', 'id', ['shortname' => $role]);
@@ -68,7 +68,7 @@ final class scope_test extends \advanced_testcase {
     public function test_ended_staff_enrolment(): void {
         $this->resetAfterTest();
         $gen = $this->getDataGenerator();
-        $gen->get_plugin_generator('block_my_assessments')->configure(['assign']);
+        $gen->get_plugin_generator('block_le_dashboard')->configure(['assign']);
         $user = $gen->create_user();
         $gen->enrol_user($user->id, $gen->create_course()->id, 'student');
         $gen->enrol_user($user->id, $gen->create_course()->id, 'editingteacher', 'manual', 0, time() - DAYSECS);
@@ -81,7 +81,7 @@ final class scope_test extends \advanced_testcase {
     public function test_default_view_ignores_saved_student_view(): void {
         $this->resetAfterTest();
         $user = $this->getDataGenerator()->create_user();
-        set_user_preference('block_my_assessments_view', scope::STUDENT, $user);
+        set_user_preference('block_le_dashboard_view', scope::STUDENT, $user);
         $this->assertSame(scope::STAFF, scope::default_view($user->id, [scope::STAFF, scope::CONVENOR]));
     }
 }

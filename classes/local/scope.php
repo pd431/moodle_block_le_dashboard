@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local;
+namespace block_le_dashboard\local;
 
 /**
  * Who sees which view, and over which courses.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class scope {
@@ -117,7 +117,7 @@ class scope {
      * @return string
      */
     public static function default_view(int $userid, array $views): string {
-        $last = get_user_preferences('block_my_assessments_view', '', $userid);
+        $last = get_user_preferences('block_le_dashboard_view', '', $userid);
         if (in_array($last, $views)) {
             return $last;
         }

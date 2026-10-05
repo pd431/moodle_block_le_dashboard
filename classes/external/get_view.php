@@ -14,19 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\external;
+namespace block_le_dashboard\external;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
-use block_my_assessments\local\view\factory;
+use block_le_dashboard\local\view\factory;
 
 /**
  * Renders one view of the dashboard for the current user.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class get_view extends external_api {
@@ -64,7 +64,7 @@ class get_view extends external_api {
         self::validate_context($context);
         $object = factory::make($view, (int)$USER->id, $yearid < 0 ? null : $yearid);
         $output = $PAGE->get_renderer('core');
-        return ['html' => $output->render_from_template('block_my_assessments/view', $object->export())];
+        return ['html' => $output->render_from_template('block_le_dashboard/view', $object->export())];
     }
 
     /**

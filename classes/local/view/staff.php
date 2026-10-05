@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\view;
+namespace block_le_dashboard\local\view;
 
-use block_my_assessments\local\config;
-use block_my_assessments\local\output\format;
-use block_my_assessments\local\scope;
+use block_le_dashboard\local\config;
+use block_le_dashboard\local\output\format;
+use block_le_dashboard\local\scope;
 
 /**
  * The marker view: marking that is mine, whatever the plugin (R3: hidden activities included, flagged).
@@ -27,8 +27,8 @@ use block_my_assessments\local\scope;
  * allocation in courses where I hold a staff role. Unallocated units of
  * activities with allocation are for convenors only (D6).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class staff extends base {
@@ -101,8 +101,8 @@ class staff extends base {
                                             MAX(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
                                                 AS lastready,
                                             MAX(CASE WHEN m.markedby = :me2 THEN m.timemarked ELSE NULL END) AS lastmarked
-                                       FROM {block_my_assessments_mark} m
-                                       JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                       FROM {block_le_dashboard_mark} m
+                                       JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                        " . base::LIVE . "
                                       WHERE $where
                                    GROUP BY m.cmid, m.stage", $params);
@@ -152,8 +152,8 @@ class staff extends base {
         [$where, $params] = $this->mine_sql(true);
         $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
         return array_map('intval', $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                                FROM {block_my_assessments_mark} m
-                                                                JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                                                FROM {block_le_dashboard_mark} m
+                                                                JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                                                 " . base::LIVE . "
                                                                WHERE m.flagged = 1 AND $where
                                                             GROUP BY m.cmid", $params));
@@ -229,8 +229,8 @@ class staff extends base {
         global $DB;
         $params += ['now1' => $now, 'now2' => $now - config::grace()];
         $records = $DB->get_records_sql("SELECT s.cmid, COUNT(1) AS students, MAX(s.due) AS latest
-                                           FROM {block_my_assessments_stu} s
-                                           JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
+                                           FROM {block_le_dashboard_stu} s
+                                           JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            " . base::LIVE . "
                                           WHERE s.canaccess = 1 AND s.active = 1 AND s.due > c.due
                                                 AND ((s.submitted = 1 AND s.due >= :now1)
@@ -252,10 +252,10 @@ class staff extends base {
         return format::hint(
             $rowid,
             'extensions',
-            get_string('hint_extensions_text', 'block_my_assessments', format::datetime((int)$pending->latest)),
+            get_string('hint_extensions_text', 'block_le_dashboard', format::datetime((int)$pending->latest)),
             null,
-            $n === 1 ? get_string('hint_extensions_one', 'block_my_assessments')
-                : get_string('hint_extensions_many', 'block_my_assessments', $n)
+            $n === 1 ? get_string('hint_extensions_one', 'block_le_dashboard')
+                : get_string('hint_extensions_many', 'block_le_dashboard', $n)
         );
     }
 
@@ -274,8 +274,8 @@ class staff extends base {
         $params['multi'] = '%marker%';
         $rs = $DB->get_recordset_sql("SELECT m.id, m.cmid, m.unitid, m.unittype, m.stage, m.submitted, m.marked,
                                              m.markedby, m.timemarked, m.timeready, m.unitdue
-                                        FROM {block_my_assessments_mark} m
-                                        JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                        FROM {block_le_dashboard_mark} m
+                                        JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                         " . base::LIVE . "
                                        WHERE c.hasallocation = 0 AND " . $DB->sql_like('c.stages', ':multi') . "
                                              AND c.courseid $insql
@@ -346,12 +346,12 @@ class staff extends base {
             $params += $laterparams;
         }
         $records = $DB->get_records_sql("SELECT c.*,
-                                            (SELECT COUNT(1) FROM {block_my_assessments_stu} s
+                                            (SELECT COUNT(1) FROM {block_le_dashboard_stu} s
                                               WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1) AS students,
-                                            (SELECT COUNT(1) FROM {block_my_assessments_stu} s
+                                            (SELECT COUNT(1) FROM {block_le_dashboard_stu} s
                                               WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1
                                                     AND s.submitted = 1) AS submissions
-                                       FROM {block_my_assessments_cm} c
+                                       FROM {block_le_dashboard_cm} c
                                        " . base::LIVE . "
                                       WHERE " . implode(' OR ', $where) . "
                                    ORDER BY c.due ASC", $params);
@@ -366,7 +366,7 @@ class staff extends base {
             return [];
         }
         [$insql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED);
-        return array_map('intval', $DB->get_fieldset_select('block_my_assessments_cm', 'cmid', "courseid $insql", $params));
+        return array_map('intval', $DB->get_fieldset_select('block_le_dashboard_cm', 'cmid', "courseid $insql", $params));
     }
 
     #[\Override]
@@ -387,7 +387,7 @@ class staff extends base {
         $cms = [];
         if ($cmids) {
             [$insql, $params] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED);
-            $cms = $DB->get_records_select('block_my_assessments_cm', "cmid $insql", $params, '', '*');
+            $cms = $DB->get_records_select('block_le_dashboard_cm', "cmid $insql", $params, '', '*');
             $cms = array_column(array_values($cms), null, 'cmid');
         }
         $names = format::course_names(array_column($cms, 'courseid'));
@@ -440,14 +440,14 @@ class staff extends base {
                     'unallocated',
                     get_string(
                         $unallocated === 1 ? 'hint_unallocated_one' : 'hint_unallocated_many',
-                        'block_my_assessments',
+                        'block_le_dashboard',
                         $unallocated
                     )
                 );
             }
             // Work that arrived after I last marked here: the row came back (G6).
             if ($tomark && $lastmarked && $lastready >= $lastmarked) {
-                $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_my_assessments'));
+                $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_le_dashboard'));
             }
             if (isset($pending[$cmid])) {
                 $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
@@ -500,7 +500,7 @@ class staff extends base {
             // Generic types can't know about submissions (R5).
             $row['bars'] = $cm->adapter === 'generic' ? [] : [format::bar(
                 'submitted',
-                get_string('bar_submitted', 'block_my_assessments'),
+                get_string('bar_submitted', 'block_le_dashboard'),
                 (int)$cm->submissions,
                 (int)$cm->students
             )];
@@ -518,18 +518,18 @@ class staff extends base {
         }
         unset($rows);
 
-        $window = (int)get_user_preferences('block_my_assessments_window', self::DEFAULT_WINDOW, $this->userid);
+        $window = (int)get_user_preferences('block_le_dashboard_window', self::DEFAULT_WINDOW, $this->userid);
         $window = in_array($window, self::WINDOWS) ? $window : self::DEFAULT_WINDOW;
         $windowoptions = [];
         foreach (self::WINDOWS as $days) {
-            $windowoptions[$days] = $days === 1 ? get_string('withinday', 'block_my_assessments')
-                : get_string('withindays', 'block_my_assessments', $days);
+            $windowoptions[$days] = $days === 1 ? get_string('withinday', 'block_le_dashboard')
+                : get_string('withindays', 'block_le_dashboard', $days);
         }
-        $range = get_user_preferences('block_my_assessments_range', self::DEFAULT_RANGE, $this->userid);
+        $range = get_user_preferences('block_le_dashboard_range', self::DEFAULT_RANGE, $this->userid);
         $range = isset(self::RANGES[$range]) ? $range : self::DEFAULT_RANGE;
         $rangeoptions = [];
         foreach (array_keys(self::RANGES) as $key) {
-            $rangeoptions[$key] = get_string('range_' . $key, 'block_my_assessments');
+            $rangeoptions[$key] = get_string('range_' . $key, 'block_le_dashboard');
         }
 
         $summary = [
@@ -591,8 +591,8 @@ class staff extends base {
             }
         }
         $records = $DB->get_records_sql("SELECT c.assesstype, " . implode(', ', $select) . "
-                                           FROM {block_my_assessments_mark} m
-                                           JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                           FROM {block_le_dashboard_mark} m
+                                           JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                            " . base::LIVE . "
                                           WHERE m.markedby = :me AND m.marked = 1
                                        GROUP BY c.assesstype", $params);

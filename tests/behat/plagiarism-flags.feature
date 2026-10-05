@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard
 Feature: Staff see how many submissions are flagged for plagiarism
   In order to follow up academic conduct cases while marking
   As a marker or module convenor
@@ -46,7 +46,7 @@ Feature: Staff see how many submissions are flagged for plagiarism
       | convenor | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: The convenor sees how many submissions are flagged, in every section
     Given a summative "coursework" "C1" in "M1" was due "2 days ago"
     And a summative "coursework" "C2" in "M1" is due "in 5 days"
@@ -62,7 +62,7 @@ Feature: Staff see how many submissions are flagged for plagiarism
     When I click on the plagiarism hint of "C1"
     Then I should see "2 submissions are flagged for an academic conduct check in Coursework." in the "My assessments" block
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: A marker sees only the flags on their own marking
     Given a summative "coursework" "C1" in "M1" with marker allocation was due "2 days ago"
     And "student1" and "student2" have submitted "C1"
@@ -74,7 +74,7 @@ Feature: Staff see how many submissions are flagged for plagiarism
     When I log in as "marker2" and view the "My marking"
     Then "C1" should show "1 flagged"
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: A cleared case no longer counts
     Given a summative "coursework" "C1" in "M1" was due "2 days ago"
     And "student1" has submitted "C1"
@@ -82,7 +82,7 @@ Feature: Staff see how many submissions are flagged for plagiarism
     When I log in as "convenor" and view the "Convenor view"
     Then "C1" should not have a plagiarism hint
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: Students never see the flag
     Given a summative "coursework" "C1" in "M1" was due "2 days ago"
     And "student1" has submitted "C1"
@@ -91,6 +91,7 @@ Feature: Staff see how many submissions are flagged for plagiarism
     Then "C1" should not have a plagiarism hint
     And I should not see "flagged" in the "My assessments" block
 
+  @javascript
   Scenario: Without coursework, nothing is flagged and nothing breaks
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And "student1" has submitted "A1"

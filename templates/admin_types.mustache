@@ -15,27 +15,27 @@
     along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 }}
 {{!
-    @template block_my_assessments/admin_types
+    @template block_le_dashboard/admin_types
 
     Activity types admin page.
 
     Example context (json):
     {
-        "action": "https://example.com/blocks/my_assessments/admin/types.php",
+        "action": "https://example.com/blocks/le_dashboard/admin/types.php",
         "sesskey": "abc",
         "rows": [{"modname": "assign", "name": "Assignment", "support": "Full", "supportdesc": "Submissions, marking and release", "enabled": true, "error": null}]
     }
 }}
-<p>{{#str}}activitytypes_desc, block_my_assessments{{/str}}</p>
+<p>{{#str}}activitytypes_desc, block_le_dashboard{{/str}}</p>
 <form method="post" action="{{action}}">
     <input type="hidden" name="sesskey" value="{{sesskey}}">
     <table class="table table-sm generaltable" data-region="ma-types">
         <thead>
             <tr>
-                <th scope="col">{{#str}}activity, block_my_assessments{{/str}}</th>
-                <th scope="col">{{#str}}support, block_my_assessments{{/str}}</th>
-                <th scope="col">{{#str}}enabled, block_my_assessments{{/str}}</th>
-                <th scope="col">{{#str}}lastindexingerror, block_my_assessments{{/str}}</th>
+                <th scope="col">{{#str}}activity, block_le_dashboard{{/str}}</th>
+                <th scope="col">{{#str}}support, block_le_dashboard{{/str}}</th>
+                <th scope="col">{{#str}}enabled, block_le_dashboard{{/str}}</th>
+                <th scope="col">{{#str}}lastindexingerror, block_le_dashboard{{/str}}</th>
             </tr>
         </thead>
         <tbody>
@@ -46,7 +46,7 @@
                 <td>
                     <input type="checkbox" class="form-check-input position-static" name="enabled[{{modname}}]" value="1"
                            id="ma-type-{{modname}}" {{#enabled}}checked{{/enabled}}
-                           aria-label="{{#str}}enabletype, block_my_assessments, {{name}}{{/str}}">
+                           aria-label="{{#str}}enabletype, block_le_dashboard, {{name}}{{/str}}">
                 </td>
                 <td>{{#error}}<span class="text-danger">{{error}}</span>{{/error}}</td>
             </tr>

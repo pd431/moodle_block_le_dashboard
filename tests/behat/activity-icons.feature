@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: Activity icons say what the activity is and what applies to me
   In order to understand a row's icon without guessing
   As a student, marker or convenor
@@ -36,6 +36,7 @@ Feature: Activity icons say what the activity is and what applies to me
       | marker1  | M1     | teacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
+  @javascript
   Scenario Outline: The icon's tooltip names the activity and what applies
     Given a summative "<activity>" "A1" in "M1" is due "<due>"
     And <event>
@@ -51,7 +52,7 @@ Feature: Activity icons say what the activity is and what applies to me
       | assign   | tomorrow   | "student1" has an extension on "A1" to "in 10 days" | Assignment. Extension granted. |
       | assign   | tomorrow   | nothing happens                            | Assignment. Due soon.          |
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: A self-certified coursework that was submitted late
     Given a summative "coursework" "A1" in "M1" was due "3 days ago"
     And "student1" self-certified "A1" to "yesterday"
@@ -60,6 +61,7 @@ Feature: Activity icons say what the activity is and what applies to me
     And I click on the activity icon of "A1"
     Then the activity icon tooltip of "A1" should say "Coursework. Self-certification applied. Submitted late."
 
+  @javascript
   Scenario: The tooltip opens from the keyboard and closes with Escape
     Given a summative "quiz" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
@@ -68,12 +70,14 @@ Feature: Activity icons say what the activity is and what applies to me
     When I press the escape key
     Then the activity icon tooltip of "A1" should not be visible
 
+  @javascript
   Scenario: Hovering the icon does not open the tooltip
     Given a summative "quiz" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
     And I hover over the activity icon of "A1"
     Then the activity icon tooltip of "A1" should not be visible
 
+  @javascript
   Scenario: Clicking elsewhere closes the tooltip
     Given a summative "quiz" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
@@ -81,6 +85,7 @@ Feature: Activity icons say what the activity is and what applies to me
     And I click on "My assessments" "block"
     Then the activity icon tooltip of "A1" should not be visible
 
+  @javascript
   Scenario: Markers get the activity type, and the hidden flag when it applies
     Given a summative "assign" "A1" in "M1" was due "yesterday"
     And "A1" is hidden from students

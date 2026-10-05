@@ -17,17 +17,17 @@
 /**
  * Academic years: list, add, edit and delete.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require(__DIR__ . '/../../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
-use block_my_assessments\local\years;
+use block_le_dashboard\local\years;
 
-admin_externalpage_setup('block_my_assessments_years');
+admin_externalpage_setup('block_le_dashboard_years');
 
 $id = optional_param('id', 0, PARAM_INT);
 $delete = optional_param('delete', 0, PARAM_INT);
@@ -38,7 +38,7 @@ if ($delete && !$confirm) {
     $year = $DB->get_record(years::TABLE, ['id' => $delete], '*', MUST_EXIST);
     echo $OUTPUT->header();
     echo $OUTPUT->confirm(
-        get_string('confirmdeleteyear', 'block_my_assessments', format_string($year->label)),
+        get_string('confirmdeleteyear', 'block_le_dashboard', format_string($year->label)),
         new single_button(
             new moodle_url($PAGE->url, ['delete' => $delete, 'confirm' => 1]),
             get_string('delete'),
@@ -52,14 +52,14 @@ if ($delete && !$confirm) {
 }
 if ($delete && $confirm && data_submitted() && confirm_sesskey()) {
     $DB->delete_records(years::TABLE, ['id' => $delete]);
-    if ((int)get_config('block_my_assessments', 'defaultacademicyear') === $delete) {
-        set_config('defaultacademicyear', 0, 'block_my_assessments');
+    if ((int)get_config('block_le_dashboard', 'defaultacademicyear') === $delete) {
+        set_config('defaultacademicyear', 0, 'block_le_dashboard');
     }
-    redirect($PAGE->url, get_string('yeardeleted', 'block_my_assessments'), null, \core\output\notification::NOTIFY_SUCCESS);
+    redirect($PAGE->url, get_string('yeardeleted', 'block_le_dashboard'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
 
 $record = $id ? $DB->get_record(years::TABLE, ['id' => $id], '*', MUST_EXIST) : null;
-$form = new \block_my_assessments\form\year($PAGE->url->out(false));
+$form = new \block_le_dashboard\form\year($PAGE->url->out(false));
 if ($record) {
     $form->set_data($record);
 }
@@ -89,8 +89,8 @@ foreach (years::all() as $year) {
 }
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('academicyears', 'block_my_assessments'));
-echo $OUTPUT->render_from_template('block_my_assessments/admin_years', ['rows' => $rows, 'hasrows' => !empty($rows)]);
-echo $OUTPUT->heading(get_string($record ? 'edityear' : 'addyear', 'block_my_assessments'), 3);
+echo $OUTPUT->heading(get_string('academicyears', 'block_le_dashboard'));
+echo $OUTPUT->render_from_template('block_le_dashboard/admin_years', ['rows' => $rows, 'hasrows' => !empty($rows)]);
+echo $OUTPUT->heading(get_string($record ? 'edityear' : 'addyear', 'block_le_dashboard'), 3);
 $form->display();
 echo $OUTPUT->footer();

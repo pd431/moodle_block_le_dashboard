@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
-use block_my_assessments\local\index\cm_row;
-use block_my_assessments\local\index\marking_row;
-use block_my_assessments\local\index\student_row;
+use block_le_dashboard\local\index\cm_row;
+use block_le_dashboard\local\index\marking_row;
+use block_le_dashboard\local\index\student_row;
 
 /**
  * An adapter turns one activity plugin's own data into index rows.
@@ -27,8 +27,8 @@ use block_my_assessments\local\index\student_row;
  * on page load, so they may use the plugin's own API. They must batch by
  * assessment, not by student.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 interface adapter {

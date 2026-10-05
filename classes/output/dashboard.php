@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\output;
+namespace block_le_dashboard\output;
 
-use block_my_assessments\local\scope;
-use block_my_assessments\local\view\factory;
+use block_le_dashboard\local\scope;
+use block_le_dashboard\local\view\factory;
 
 /**
  * The whole dashboard: view tabs and the open view.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class dashboard implements \renderable, \templatable {
@@ -46,7 +46,7 @@ class dashboard implements \renderable, \templatable {
         foreach ($views as $key) {
             $tabs[] = [
                 'key' => $key,
-                'label' => get_string('view_' . $key, 'block_my_assessments'),
+                'label' => get_string('view_' . $key, 'block_le_dashboard'),
                 'active' => $key === $active,
             ];
         }

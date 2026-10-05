@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard
 Feature: Work stays visible when people and assessments move at awkward moments
   In order not to lose track of work that still needs doing
   As a student, marker or module convenor
@@ -42,6 +42,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
 
   # ---------- EC1: work allocated to a marker who left ----------
 
+  @javascript
   Scenario: Unmarked work of a marker who left the module falls to the convenor
     Given a summative "assign" "A1" in "M1" with marker allocation was due "2 days ago"
     And "student1" and "student2" have submitted "A1"
@@ -59,6 +60,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And I press "Show markers" in the "My assessments" block
     And I should see "Mo Marker (no longer on this module)" in the "My assessments" block
 
+  @javascript
   Scenario: Work already marked by a marker who left stays credited to them
     Given a summative "assign" "A1" in "M1" with marker allocation was due "2 days ago"
     And "student1" has submitted "A1"
@@ -120,6 +122,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     When I log in as "marker1" and view the "My marking"
     Then "Old essay" should not appear in the "Completed marking" section
 
+  @javascript
   Scenario: The convenor sees last year's unfinished marking in In progress
     Given the following "courses" exist:
       | fullname | shortname | startdate     |
@@ -134,6 +137,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
 
   # ---------- EC5: assignments with no online submission ----------
 
+  @javascript
   Scenario: A student is never Overdue on an assignment with no online submission
     Given a summative "assign" "Presentation" in "M1" with no online submission was due "2 days ago"
     And the My assessments index is up to date
@@ -150,6 +154,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     When I log in as "student1" and view my dashboard
     Then "Presentation" should show "Feedback released"
 
+  @javascript
   Scenario: Markers see an assignment with no online submission once its deadline passes
     Given a summative "assign" "Presentation" in "M1" with no online submission was due "2 days ago"
     And the My assessments index is up to date
@@ -176,6 +181,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And I log in as "student2" and view my dashboard
     Then "T1" should not show "Submitted"
 
+  @javascript
   Scenario: Disabling an enrolment method updates the counts without waiting for the night
     Given the "self" enrolment method of "M1" is enabled
     And the following "users" exist:
@@ -193,6 +199,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
 
   # ---------- EC7: activity being deleted ----------
 
+  @javascript
   Scenario: An activity being deleted leaves My marking at once
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And "student1" has submitted "A1"
@@ -251,6 +258,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
   # Start date only: its start year. End date only (start date 0): its end year.
   # Neither: only "All years", as in beta9.
 
+  @javascript
   Scenario: A January to December course appears under both academic years it spans
     Given the academic year "2025/26" starts on "##2025-09-01##"
     And the academic year "2026/27" starts on "##2026-09-01##"
@@ -266,6 +274,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     When I log in as "convenor" and view the "Convenor view" for academic year "2026/27"
     Then "Portfolio" should appear in the "Upcoming" section
 
+  @javascript
   Scenario: A course with only a start date appears under its start year only
     Given the academic year "2025/26" starts on "##2025-09-01##"
     And the academic year "2026/27" starts on "##2026-09-01##"
@@ -280,6 +289,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     When I log in as "convenor" and view the "Convenor view" for academic year "2025/26"
     Then I should not see "Essay 2" in the "My assessments" block
 
+  @javascript
   Scenario: A course with only an end date appears under its end year only
     Given the academic year "2025/26" starts on "##2025-09-01##"
     And the academic year "2026/27" starts on "##2026-09-01##"
@@ -303,6 +313,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
   # date are now listed (this replaces R8's "not listed" for tagged activities).
   # The convenor gets a "No deadline" hint on the row, wherever it sits, pointing to the activity's settings.
 
+  @javascript
   Scenario: An assignment whose due date is switched off before anyone submits moves to Undated
     Given a summative "assign" "A1" in "M1" is due "in 3 days"
     And the My assessments index is up to date
@@ -317,6 +328,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     Then "A1" should appear in the "Undated" section
     And "A1" should have a no deadline hint
 
+  @javascript
   Scenario: Switching off the due date mid-marking keeps the marking where it was
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And "student1" and "student2" have submitted "A1"
@@ -333,6 +345,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     Then "A1" should appear in the "In progress" section
     And "A1" should have a no deadline hint
 
+  @javascript
   Scenario: The no deadline hint tells the convenor where to add one
     Given a summative "assign" "A2" in "M1" with no due date exists
     And the My assessments index is up to date
@@ -355,6 +368,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     When I log in as "student1" and view my dashboard
     Then I should not see "Undated" in the "My assessments" block
 
+  @javascript
   Scenario: Untagged activities without a deadline are still not listed
     Given an "assign" activity with grade items exists in "M1"
     And the My assessments index is up to date
@@ -375,6 +389,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And I log in as "marker1" and view the "My marking"
     Then "A1" should appear in the "Marking in progress" section with "2" to mark
 
+  @javascript
   Scenario: Work of a student whose enrolment ended still counts after the nightly run
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
     And "student1" has submitted "A1"
@@ -396,6 +411,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And I log in as "marker1" and view the "My marking"
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
 
+  @javascript
   Scenario: An assessment whose students have all left goes to Past, not back to In progress
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And "student1" has submitted "A1"

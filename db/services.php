@@ -17,16 +17,16 @@
 /**
  * Web services, all AJAX-only and acting on the logged-in user.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 $functions = [
-    'block_my_assessments_get_view' => [
-        'classname' => '\block_my_assessments\external\get_view',
+    'block_le_dashboard_get_view' => [
+        'classname' => '\block_le_dashboard\external\get_view',
         'description' => 'Render one view of the My assessments dashboard for the current user.',
         'type' => 'read',
         'ajax' => true,
@@ -34,8 +34,8 @@ $functions = [
         // Rendering never writes the session, so it doesn't wait for a Refresh in another request (PR10).
         'readonlysession' => true,
     ],
-    'block_my_assessments_refresh' => [
-        'classname' => '\block_my_assessments\external\refresh',
+    'block_le_dashboard_refresh' => [
+        'classname' => '\block_le_dashboard\external\refresh',
         'description' => 'Re-index the current user\'s scope for one view, inline or queued.',
         'type' => 'write',
         'ajax' => true,

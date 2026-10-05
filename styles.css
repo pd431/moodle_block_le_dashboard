@@ -1,5 +1,5 @@
-/* block_my_assessments styles. Compiled from scss/styles.scss with Dart Sass; edit that file, not this one. */
-.block_my_assessments_dashboard {
+/* block_le_dashboard styles. Compiled from scss/styles.scss with Dart Sass; edit that file, not this one. */
+.block_le_dashboard_dashboard {
   container: ma/inline-size;
   box-sizing: border-box;
   --ma-text: #1d2125;
@@ -44,7 +44,7 @@
   font-size: 0.8203rem;
 }
 @supports not (color: oklch(from red l c h)) {
-  .block_my_assessments_dashboard {
+  .block_le_dashboard_dashboard {
     --ma-primary-fill: rgb(218, 236, 236);
     --ma-primary-hover: rgb(204, 228, 227);
     --ma-primary-border: rgb(145, 186, 186);
@@ -71,130 +71,130 @@
     --ma-danger-ink: rgb(109, 0, 0);
   }
 }
-.block_my_assessments_dashboard * {
+.block_le_dashboard_dashboard * {
   box-sizing: border-box;
 }
-.block_my_assessments_dashboard strong,
-.block_my_assessments_dashboard b {
+.block_le_dashboard_dashboard strong,
+.block_le_dashboard_dashboard b {
   font-weight: 600;
 }
-.block_my_assessments_dashboard .text-muted {
+.block_le_dashboard_dashboard .text-muted {
   color: var(--ma-text-muted) !important;
 }
-.block_my_assessments_dashboard .ma-freshness-text,
-.block_my_assessments_dashboard .ma-box-label,
-.block_my_assessments_dashboard .ma-row-meta,
-.block_my_assessments_dashboard .ma-row-date-label,
-.block_my_assessments_dashboard .ma-row-date-note,
-.block_my_assessments_dashboard .ma-row-note,
-.block_my_assessments_dashboard .ma-bar-label {
+.block_le_dashboard_dashboard .ma-freshness-text,
+.block_le_dashboard_dashboard .ma-box-label,
+.block_le_dashboard_dashboard .ma-row-meta,
+.block_le_dashboard_dashboard .ma-row-date-label,
+.block_le_dashboard_dashboard .ma-row-date-note,
+.block_le_dashboard_dashboard .ma-row-note,
+.block_le_dashboard_dashboard .ma-bar-label {
   color: var(--ma-text-muted);
 }
-.block_my_assessments_dashboard .ma-tabs {
+.block_le_dashboard_dashboard .ma-tabs {
   flex-wrap: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
 }
-.block_my_assessments_dashboard .ma-tabs .nav-link {
+.block_le_dashboard_dashboard .ma-tabs .nav-link {
   white-space: nowrap;
 }
-.block_my_assessments_dashboard .ma-tabs .nav-link:focus,
-.block_my_assessments_dashboard .ma-btn:focus,
-.block_my_assessments_dashboard .ma-filter-btn:focus,
-.block_my_assessments_dashboard .ma-row-iconbtn:focus {
+.block_le_dashboard_dashboard .ma-tabs .nav-link:focus,
+.block_le_dashboard_dashboard .ma-btn:focus,
+.block_le_dashboard_dashboard .ma-filter-btn:focus,
+.block_le_dashboard_dashboard .ma-row-iconbtn:focus {
   outline: 0;
   box-shadow: none;
 }
-.block_my_assessments_dashboard .ma-tabs .nav-link:focus-visible,
-.block_my_assessments_dashboard .ma-btn:focus-visible,
-.block_my_assessments_dashboard .ma-filter-btn:focus-visible,
-.block_my_assessments_dashboard .ma-row-iconbtn:focus-visible {
+.block_le_dashboard_dashboard .ma-tabs .nav-link:focus-visible,
+.block_le_dashboard_dashboard .ma-btn:focus-visible,
+.block_le_dashboard_dashboard .ma-filter-btn:focus-visible,
+.block_le_dashboard_dashboard .ma-row-iconbtn:focus-visible {
   box-shadow: var(--ma-focus-ring);
 }
-.block_my_assessments_dashboard .ma-tabs .nav-link:focus-visible {
+.block_le_dashboard_dashboard .ma-tabs .nav-link:focus-visible {
   box-shadow: inset var(--ma-focus-ring);
 }
-.block_my_assessments_dashboard .ma-tabs,
-.block_my_assessments_dashboard .ma-controls,
-.block_my_assessments_dashboard .ma-freshness,
-.block_my_assessments_dashboard .ma-summary {
+.block_le_dashboard_dashboard .ma-tabs,
+.block_le_dashboard_dashboard .ma-controls,
+.block_le_dashboard_dashboard .ma-freshness,
+.block_le_dashboard_dashboard .ma-summary {
   margin-bottom: 0.75rem;
 }
-.block_my_assessments_dashboard .ma-controls,
-.block_my_assessments_dashboard .ma-freshness {
+.block_le_dashboard_dashboard .ma-controls,
+.block_le_dashboard_dashboard .ma-freshness {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }
-.block_my_assessments_dashboard .ma-freshness {
+.block_le_dashboard_dashboard .ma-freshness {
   justify-content: flex-end;
 }
-.block_my_assessments_dashboard .ma-control {
+.block_le_dashboard_dashboard .ma-control {
   flex: 0 1 auto;
 }
-.block_my_assessments_dashboard .ma-search {
+.block_le_dashboard_dashboard .ma-search {
   flex: 1 1 12rem;
 }
-.block_my_assessments_dashboard .ma-control--apart {
+.block_le_dashboard_dashboard .ma-control--apart {
   padding-inline-start: 0.5rem;
   border-inline-start: 1px solid var(--ma-rule);
 }
 @container ma (width < 40rem) {
-  .block_my_assessments_dashboard .ma-control--apart {
+  .block_le_dashboard_dashboard .ma-control--apart {
     padding-inline-start: 0;
     border-inline-start: 0;
   }
 }
-.block_my_assessments_dashboard .ma-pressed-mark,
-.block_my_assessments_dashboard [aria-pressed=true] > .ma-unpressed-mark {
+.block_le_dashboard_dashboard .ma-pressed-mark,
+.block_le_dashboard_dashboard [aria-pressed=true] > .ma-unpressed-mark {
   display: none;
 }
-.block_my_assessments_dashboard [aria-pressed=true] > .ma-pressed-mark {
+.block_le_dashboard_dashboard [aria-pressed=true] > .ma-pressed-mark {
   display: inline-block;
 }
-.block_my_assessments_dashboard .ma-search .input-group-text {
+.block_le_dashboard_dashboard .ma-search .input-group-text {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
-.block_my_assessments_dashboard .ma-icon {
+.block_le_dashboard_dashboard .ma-icon {
   margin-inline-end: 0.25rem;
 }
-.block_my_assessments_dashboard .ma-summary {
+.block_le_dashboard_dashboard .ma-summary {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
 }
-.block_my_assessments_dashboard .ma-box {
+.block_le_dashboard_dashboard .ma-box {
   flex: 1 1 6rem;
 }
-.block_my_assessments_dashboard .ma-box--options {
+.block_le_dashboard_dashboard .ma-box--options {
   flex-basis: 11rem;
 }
-.block_my_assessments_dashboard .ma-box .card-body {
+.block_le_dashboard_dashboard .ma-box .card-body {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 0.5rem 0.75rem;
   text-align: center;
 }
-.block_my_assessments_dashboard .ma-box-label {
+.block_le_dashboard_dashboard .ma-box-label {
   font-weight: 600;
 }
-.block_my_assessments_dashboard .ma-box-value {
+.block_le_dashboard_dashboard .ma-box-value {
   font-size: 1.5rem;
   font-weight: 700;
   line-height: 1.2;
 }
-.block_my_assessments_dashboard .ma-box-note {
+.block_le_dashboard_dashboard .ma-box-note {
   font-size: 0.8203rem;
   color: var(--ma-text-muted);
 }
-.block_my_assessments_dashboard .ma-box-select {
+.block_le_dashboard_dashboard .ma-box-select {
   width: 100%;
   margin-top: auto;
 }
-.block_my_assessments_dashboard .ma-btn {
+.block_le_dashboard_dashboard .ma-btn {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
@@ -203,65 +203,65 @@
   background-color: var(--ma-fill);
   color: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-btn:hover, .block_my_assessments_dashboard .ma-btn:focus {
+.block_le_dashboard_dashboard .ma-btn:hover, .block_le_dashboard_dashboard .ma-btn:focus {
   background-color: var(--ma-hover);
   color: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-btn:active, .block_my_assessments_dashboard .ma-btn.active, .block_my_assessments_dashboard .ma-btn[aria-pressed=true], .block_my_assessments_dashboard .ma-btn[aria-expanded=true] {
+.block_le_dashboard_dashboard .ma-btn:active, .block_le_dashboard_dashboard .ma-btn.active, .block_le_dashboard_dashboard .ma-btn[aria-pressed=true], .block_le_dashboard_dashboard .ma-btn[aria-expanded=true] {
   background-color: var(--ma-solid);
   color: var(--ma-on-solid);
 }
-.block_my_assessments_dashboard .ma-btn:disabled, .block_my_assessments_dashboard .ma-btn.disabled {
+.block_le_dashboard_dashboard .ma-btn:disabled, .block_le_dashboard_dashboard .ma-btn.disabled {
   --ma-fill: var(--ma-grey-fill);
   --ma-hover: var(--ma-grey-hover);
   --ma-border: var(--ma-grey-border);
   --ma-ink: var(--ma-grey-ink);
   --ma-solid: var(--ma-grey-solid);
 }
-.block_my_assessments_dashboard .ma-btn--submit {
+.block_le_dashboard_dashboard .ma-btn--submit {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
 }
-.block_my_assessments_dashboard .ma-filter-btn {
+.block_le_dashboard_dashboard .ma-filter-btn {
   border: 1px solid #8f959e;
   background-color: transparent;
   color: var(--ma-text);
   font-weight: 400;
 }
-.block_my_assessments_dashboard .ma-filter-btn:hover {
+.block_le_dashboard_dashboard .ma-filter-btn:hover {
   background-color: #f8f9fa;
   color: var(--ma-text);
 }
-.block_my_assessments_dashboard .ma-filter-btn.active, .block_my_assessments_dashboard .ma-filter-btn[aria-pressed=true] {
+.block_le_dashboard_dashboard .ma-filter-btn.active, .block_le_dashboard_dashboard .ma-filter-btn[aria-pressed=true] {
   z-index: 1;
   border-color: var(--ma-primary-solid);
   background-color: var(--ma-primary-solid);
   color: var(--ma-on-solid);
 }
-.block_my_assessments_dashboard .ma-mitigate .dropdown-menu {
+.block_le_dashboard_dashboard .ma-mitigate .dropdown-menu {
   min-width: min(12rem, 100cqi);
   max-width: min(22rem, 100cqi);
 }
-.block_my_assessments_dashboard .ma-mitigate-item {
+.block_le_dashboard_dashboard .ma-mitigate-item {
   white-space: normal;
 }
-.block_my_assessments_dashboard .ma-btn--mitigate,
-.block_my_assessments_dashboard .ma-btn--hint[data-hint=plagiarism] {
+.block_le_dashboard_dashboard .ma-btn--mitigate,
+.block_le_dashboard_dashboard .ma-btn--hint[data-hint=plagiarism] {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
   --ma-ink: var(--ma-attention-ink);
   --ma-solid: var(--ma-attention-solid);
 }
-.block_my_assessments_dashboard .ma-btn--mitigate[aria-expanded=true] {
+.block_le_dashboard_dashboard .ma-btn--mitigate[aria-expanded=true] {
   background-color: var(--ma-hover);
   box-shadow: inset 0 0 0 2px var(--ma-border);
   color: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-section {
+.block_le_dashboard_dashboard .ma-section {
   --ma-fill: var(--ma-grey-fill);
   --ma-hover: var(--ma-grey-hover);
   --ma-border: var(--ma-grey-border);
@@ -269,70 +269,70 @@
   --ma-solid: var(--ma-grey-solid);
   margin-bottom: 0.75rem;
 }
-.block_my_assessments_dashboard .ma-view--student .ma-section--overdue {
+.block_le_dashboard_dashboard .ma-view--student .ma-section--overdue {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
   --ma-ink: var(--ma-attention-ink);
   --ma-solid: var(--ma-attention-solid);
 }
-.block_my_assessments_dashboard .ma-view--student .ma-section--upcoming {
+.block_le_dashboard_dashboard .ma-view--student .ma-section--upcoming {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
 }
-.block_my_assessments_dashboard .ma-view--student .ma-section--undated {
+.block_le_dashboard_dashboard .ma-view--student .ma-section--undated {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-view--staff .ma-section--tomark {
+.block_le_dashboard_dashboard .ma-view--staff .ma-section--tomark {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
 }
-.block_my_assessments_dashboard .ma-view--staff .ma-section--upcoming {
+.block_le_dashboard_dashboard .ma-view--staff .ma-section--upcoming {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-view--staff .ma-section--undated {
+.block_le_dashboard_dashboard .ma-view--staff .ma-section--undated {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-view--convenor .ma-section--upcoming {
+.block_le_dashboard_dashboard .ma-view--convenor .ma-section--upcoming {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
 }
-.block_my_assessments_dashboard .ma-view--convenor .ma-section--inprogress {
+.block_le_dashboard_dashboard .ma-view--convenor .ma-section--inprogress {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
 }
-.block_my_assessments_dashboard .ma-view--convenor .ma-section--undated {
+.block_le_dashboard_dashboard .ma-view--convenor .ma-section--undated {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-section-header {
+.block_le_dashboard_dashboard .ma-section-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -341,56 +341,62 @@
   background-color: var(--ma-fill);
   color: var(--ma-ink);
 }
-.block_my_assessments_dashboard .ma-section-title {
+.block_le_dashboard_dashboard .ma-section-title {
   margin: 0;
   font-size: 0.9375rem;
   font-weight: 600;
   color: inherit;
 }
-.block_my_assessments_dashboard .ma-section-count {
+.block_le_dashboard_dashboard .ma-section-count {
   background-color: var(--ma-surface);
   color: var(--ma-ink);
   font-size: 0.8203rem;
   font-weight: 600;
 }
-.block_my_assessments_dashboard .ma-section-toggle {
+.block_le_dashboard_dashboard .ma-section-toggle {
   margin-left: auto;
   padding: 0 0.25rem;
   color: var(--ma-ink);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .block_my_assessments_dashboard .ma-section-toggle .fa {
+  .block_le_dashboard_dashboard .ma-section-toggle .fa {
     transition: transform 0.15s;
   }
 }
-.block_my_assessments_dashboard .ma-section--collapsed .ma-section-header {
+.block_le_dashboard_dashboard .ma-section--collapsed .ma-section-header {
   border-bottom: 0;
   border-radius: calc(0.5rem - 1px);
 }
-.block_my_assessments_dashboard .ma-section--collapsed .ma-section-toggle .fa {
+.block_le_dashboard_dashboard .ma-section--collapsed .ma-section-toggle .fa {
   transform: rotate(-90deg);
 }
-.block_my_assessments_dashboard .ma-section-footer {
+.block_le_dashboard_dashboard .ma-section-footer {
   padding: 0.25rem 0.75rem;
   background-color: transparent;
   text-align: center;
 }
-.block_my_assessments_dashboard .ma-more[aria-expanded=true] .ma-more-label,
-.block_my_assessments_dashboard .ma-more[aria-expanded=false] .ma-less-label {
+.block_le_dashboard_dashboard .ma-section > .ma-rows {
+  border-bottom-width: 0;
+}
+.block_le_dashboard_dashboard .ma-section > .ma-rows + .ma-section-footer {
+  border-top: 1px solid var(--ma-border);
+}
+.block_le_dashboard_dashboard .ma-more[aria-expanded=true] .ma-more-label,
+.block_le_dashboard_dashboard .ma-more[aria-expanded=false] .ma-less-label {
   display: none;
 }
-.block_my_assessments_dashboard .ma-filter-empty,
-.block_my_assessments_dashboard .ma-empty {
+.block_le_dashboard_dashboard .ma-filter-empty,
+.block_le_dashboard_dashboard .ma-empty {
   margin: 0;
   padding: 0.75rem 0;
 }
-.block_my_assessments_dashboard .ma-rows > .ma-row {
+.block_le_dashboard_dashboard .ma-rows > .ma-row {
   border-width: 0;
 }
-.block_my_assessments_dashboard .ma-rows > .ma-row:not([hidden]) ~ .ma-row {
+.block_le_dashboard_dashboard .ma-rows > .ma-row:not([hidden]) ~ .ma-row {
   border-top-width: 1px;
 }
-.block_my_assessments_dashboard .ma-row {
+.block_le_dashboard_dashboard .ma-row {
   --ma-row-columns: 2rem minmax(0, 1fr) 11.5rem 8.5rem var(--ma-actions-width);
   --ma-row-areas: "icon info dates status actions";
   display: grid;
@@ -400,62 +406,62 @@
   gap: 0.25rem 0.75rem;
   padding: 0.5rem 0.75rem;
 }
-.block_my_assessments_dashboard .ma-row-actions {
+.block_le_dashboard_dashboard .ma-row-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.25rem;
   grid-area: actions;
 }
-.block_my_assessments_dashboard .ma-view--staff .ma-row,
-.block_my_assessments_dashboard .ma-view--convenor .ma-row {
+.block_le_dashboard_dashboard .ma-view--staff .ma-row,
+.block_le_dashboard_dashboard .ma-view--convenor .ma-row {
   --ma-row-columns: 2rem minmax(0, 1fr) minmax(13rem, 1.2fr) var(--ma-actions-width);
   --ma-row-areas: "icon info status actions" "icon dates status actions";
 }
-.block_my_assessments_dashboard .ma-view--staff .ma-row .ma-row-date-label,
-.block_my_assessments_dashboard .ma-view--convenor .ma-row .ma-row-date-label {
+.block_le_dashboard_dashboard .ma-view--staff .ma-row .ma-row-date-label,
+.block_le_dashboard_dashboard .ma-view--convenor .ma-row .ma-row-date-label {
   display: block;
 }
 @container ma (width < 62rem) {
-  .block_my_assessments_dashboard .ma-view--student .ma-row {
+  .block_le_dashboard_dashboard .ma-view--student .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr) 11.5rem var(--ma-actions-width);
     --ma-row-areas: "icon info status actions" "icon info dates actions";
     grid-template-rows: auto 1fr;
   }
 }
 @container ma (width < 44rem) {
-  .block_my_assessments_dashboard .ma-view--student .ma-row {
+  .block_le_dashboard_dashboard .ma-view--student .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr) minmax(0, 1fr) var(--ma-actions-width);
     --ma-row-areas: "icon info info actions" "icon dates status status";
     grid-template-rows: none;
   }
 }
 @container ma (width < 40rem) {
-  .block_my_assessments_dashboard .ma-view--staff .ma-row,
-  .block_my_assessments_dashboard .ma-view--convenor .ma-row {
+  .block_le_dashboard_dashboard .ma-view--staff .ma-row,
+  .block_le_dashboard_dashboard .ma-view--convenor .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr) var(--ma-actions-width);
     --ma-row-areas: "icon info actions" "icon dates dates" "icon status status";
   }
-  .block_my_assessments_dashboard .ma-markers {
+  .block_le_dashboard_dashboard .ma-markers {
     --ma-marker-columns: minmax(0, 1fr);
   }
 }
 @container ma (width < 34rem) {
-  .block_my_assessments_dashboard .ma-view .ma-row {
+  .block_le_dashboard_dashboard .ma-view .ma-row {
     --ma-row-columns: 2rem minmax(0, 1fr);
     --ma-row-areas: "icon info" "icon dates" "icon status" "icon actions";
   }
-  .block_my_assessments_dashboard .ma-row-actions {
+  .block_le_dashboard_dashboard .ma-row-actions {
     justify-content: flex-start;
   }
 }
-.block_my_assessments_dashboard .ma-row-icon {
+.block_le_dashboard_dashboard .ma-row-icon {
   position: relative;
   grid-area: icon;
   align-self: start;
   margin-top: 0.125rem;
 }
-.block_my_assessments_dashboard .ma-row-iconbtn {
+.block_le_dashboard_dashboard .ma-row-iconbtn {
   position: relative;
   display: flex;
   align-items: center;
@@ -470,14 +476,14 @@
   font-size: 1.25rem;
   cursor: pointer;
 }
-.block_my_assessments_dashboard .ma-row-modifiers {
+.block_le_dashboard_dashboard .ma-row-modifiers {
   position: absolute;
   right: -0.375rem;
   bottom: -0.3125rem;
   display: flex;
   gap: 0.0625rem;
 }
-.block_my_assessments_dashboard .ma-row-overlay {
+.block_le_dashboard_dashboard .ma-row-overlay {
   --ma-fill: var(--ma-grey-fill);
   --ma-hover: var(--ma-grey-hover);
   --ma-border: var(--ma-grey-border);
@@ -494,14 +500,14 @@
   font-size: 0.875rem;
   line-height: 1;
 }
-.block_my_assessments_dashboard .ma-row-overlay--overdue {
+.block_le_dashboard_dashboard .ma-row-overlay--overdue {
   --ma-fill: var(--ma-danger-fill);
   --ma-hover: var(--ma-danger-hover);
   --ma-border: var(--ma-danger-border);
   --ma-ink: var(--ma-danger-ink);
   --ma-solid: var(--ma-danger-solid);
 }
-.block_my_assessments_dashboard .ma-row-overlay--duesoon {
+.block_le_dashboard_dashboard .ma-row-overlay--duesoon {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
@@ -510,7 +516,7 @@
   --ma-on-solid: var(--ma-ink);
   --ma-glyph: var(--ma-attention-glyph);
 }
-.block_my_assessments_dashboard .ma-row-overlay--selfcert {
+.block_le_dashboard_dashboard .ma-row-overlay--selfcert {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
@@ -519,7 +525,7 @@
   --ma-on-solid: var(--ma-ink);
   --ma-glyph: var(--ma-attention-glyph);
 }
-.block_my_assessments_dashboard .ma-row-overlay--extension {
+.block_le_dashboard_dashboard .ma-row-overlay--extension {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
@@ -528,37 +534,37 @@
   --ma-on-solid: var(--ma-ink);
   --ma-glyph: var(--ma-attention-glyph);
 }
-.block_my_assessments_dashboard .ma-row-meta > span {
+.block_le_dashboard_dashboard .ma-row-meta > span {
   white-space: nowrap;
 }
-.block_my_assessments_dashboard .ma-row-meta--stacked > span {
+.block_le_dashboard_dashboard .ma-row-meta--stacked > span {
   display: block;
   white-space: normal;
 }
-.block_my_assessments_dashboard .ma-row-info {
+.block_le_dashboard_dashboard .ma-row-info {
   position: relative;
   grid-area: info;
   min-width: 0;
 }
-.block_my_assessments_dashboard .ma-row-name {
+.block_le_dashboard_dashboard .ma-row-name {
   display: block;
   font-size: 0.9375rem;
   overflow-wrap: anywhere;
 }
-.block_my_assessments_dashboard .ma-row-dates {
+.block_le_dashboard_dashboard .ma-row-dates {
   grid-area: dates;
 }
-.block_my_assessments_dashboard .ma-row-dates time {
+.block_le_dashboard_dashboard .ma-row-dates time {
   white-space: nowrap;
 }
-.block_my_assessments_dashboard .ma-row-date-note {
+.block_le_dashboard_dashboard .ma-row-date-note {
   display: block;
 }
-.block_my_assessments_dashboard .ma-row-alert {
+.block_le_dashboard_dashboard .ma-row-alert {
   color: var(--ma-attention-ink);
   font-weight: 600;
 }
-.block_my_assessments_dashboard .ma-row-status {
+.block_le_dashboard_dashboard .ma-row-status {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -566,22 +572,22 @@
   grid-area: status;
   min-width: 0;
 }
-.block_my_assessments_dashboard .ma-grade {
+.block_le_dashboard_dashboard .ma-grade {
   display: none;
 }
-.block_my_assessments_dashboard .ma-view--showgrades .ma-grade {
+.block_le_dashboard_dashboard .ma-view--showgrades .ma-grade {
   display: block;
 }
-.block_my_assessments_dashboard .ma-markers {
+.block_le_dashboard_dashboard .ma-markers {
   grid-column: 2/-1;
   margin: 0;
 }
-.block_my_assessments_dashboard .ma-markers.show, .block_my_assessments_dashboard .ma-markers.collapsing {
+.block_le_dashboard_dashboard .ma-markers.show, .block_le_dashboard_dashboard .ma-markers.collapsing {
   display: grid;
   grid-template-columns: subgrid;
   grid-column: info-start/status-end;
 }
-.block_my_assessments_dashboard .ma-marker {
+.block_le_dashboard_dashboard .ma-marker {
   display: grid;
   grid-template-columns: var(--ma-marker-columns, subgrid);
   grid-column: 1/-1;
@@ -590,10 +596,10 @@
   padding: 0.25rem 0;
   border-top: 1px solid var(--ma-rule);
 }
-.block_my_assessments_dashboard .ma-marker-name {
+.block_le_dashboard_dashboard .ma-marker-name {
   font-weight: 600;
 }
-.block_my_assessments_dashboard .ma-pill {
+.block_le_dashboard_dashboard .ma-pill {
   --ma-fill: var(--ma-grey-fill);
   --ma-hover: var(--ma-grey-hover);
   --ma-border: var(--ma-grey-border);
@@ -607,7 +613,7 @@
   text-align: left;
   white-space: normal;
 }
-.block_my_assessments_dashboard .ma-pill--pending {
+.block_le_dashboard_dashboard .ma-pill--pending {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
@@ -616,7 +622,7 @@
   --ma-on-solid: var(--ma-ink);
   --ma-glyph: var(--ma-attention-glyph);
 }
-.block_my_assessments_dashboard .ma-pill--reopened {
+.block_le_dashboard_dashboard .ma-pill--reopened {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
@@ -625,35 +631,35 @@
   --ma-on-solid: var(--ma-ink);
   --ma-glyph: var(--ma-attention-glyph);
 }
-.block_my_assessments_dashboard .ma-pill--submitted {
+.block_le_dashboard_dashboard .ma-pill--submitted {
   --ma-fill: var(--ma-success-fill);
   --ma-hover: var(--ma-success-hover);
   --ma-border: var(--ma-success-border);
   --ma-ink: var(--ma-success-ink);
   --ma-solid: var(--ma-success-solid);
 }
-.block_my_assessments_dashboard .ma-pill--received {
+.block_le_dashboard_dashboard .ma-pill--received {
   --ma-fill: var(--ma-success-fill);
   --ma-hover: var(--ma-success-hover);
   --ma-border: var(--ma-success-border);
   --ma-ink: var(--ma-success-ink);
   --ma-solid: var(--ma-success-solid);
 }
-.block_my_assessments_dashboard .ma-pill--inmarking {
+.block_le_dashboard_dashboard .ma-pill--inmarking {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-pill--released {
+.block_le_dashboard_dashboard .ma-pill--released {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-bar {
+.block_le_dashboard_dashboard .ma-bar {
   --ma-fill: var(--ma-success-fill);
   --ma-hover: var(--ma-success-hover);
   --ma-border: var(--ma-success-border);
@@ -666,14 +672,14 @@
   align-self: stretch;
   max-width: 26rem;
 }
-.block_my_assessments_dashboard .ma-bar--submitted {
+.block_le_dashboard_dashboard .ma-bar--submitted {
   --ma-fill: var(--ma-primary-fill);
   --ma-hover: var(--ma-primary-hover);
   --ma-border: var(--ma-primary-border);
   --ma-ink: var(--ma-primary-ink);
   --ma-solid: var(--ma-primary-solid);
 }
-.block_my_assessments_dashboard .ma-bar--unallocated {
+.block_le_dashboard_dashboard .ma-bar--unallocated {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
@@ -682,36 +688,36 @@
   --ma-on-solid: var(--ma-ink);
   --ma-glyph: var(--ma-attention-glyph);
 }
-.block_my_assessments_dashboard .ma-bar--moderated {
+.block_le_dashboard_dashboard .ma-bar--moderated {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-bar--released {
+.block_le_dashboard_dashboard .ma-bar--released {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);
   --ma-ink: var(--ma-info-ink);
   --ma-solid: var(--ma-info-solid);
 }
-.block_my_assessments_dashboard .ma-bar-track {
+.block_le_dashboard_dashboard .ma-bar-track {
   height: 0.5rem;
   background-color: var(--ma-surface);
   box-shadow: inset 0 0 0 1px var(--ma-rule);
 }
-.block_my_assessments_dashboard .ma-bar-text {
+.block_le_dashboard_dashboard .ma-bar-text {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.block_my_assessments_dashboard .ma-bar-fill {
+.block_le_dashboard_dashboard .ma-bar-fill {
   background-color: var(--ma-border);
 }
-.block_my_assessments_dashboard .ma-tip-wrap {
+.block_le_dashboard_dashboard .ma-tip-wrap {
   position: relative;
 }
-.block_my_assessments_dashboard .ma-tip {
+.block_le_dashboard_dashboard .ma-tip {
   position: absolute;
   z-index: 1000;
   top: -0.25rem;
@@ -729,10 +735,10 @@
   text-align: left;
   white-space: normal;
 }
-.block_my_assessments_dashboard .ma-tip-wrap--row {
+.block_le_dashboard_dashboard .ma-tip-wrap--row {
   position: static;
 }
-.block_my_assessments_dashboard .ma-tip--wide {
+.block_le_dashboard_dashboard .ma-tip--wide {
   top: calc(100% + 0.25rem);
   right: 0;
   left: 0;

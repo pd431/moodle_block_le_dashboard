@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments;
+namespace block_le_dashboard;
 
-use block_my_assessments\local\adapter\registry;
-use block_my_assessments\local\index\indexer;
-use block_my_assessments\local\memo;
+use block_le_dashboard\local\adapter\registry;
+use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\memo;
 
 /**
  * Event observers: queue a re-index of whatever an event changed.
@@ -28,8 +28,8 @@ use block_my_assessments\local\memo;
  * activity, whose rows are updated at once (F4). The adapters' own events are listed in
  * db/events.php from each adapter's events() list.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class observer {
@@ -39,7 +39,7 @@ class observer {
      * @return bool
      */
     protected static function active(): bool {
-        return (bool)(get_config('block_my_assessments', 'certaintags') || get_config('block_my_assessments', 'formativetags'));
+        return (bool)(get_config('block_le_dashboard', 'certaintags') || get_config('block_le_dashboard', 'formativetags'));
     }
 
     /**
@@ -55,11 +55,11 @@ class observer {
         $cmid = (int)$event->contextinstanceid;
         // A student's own action (a submission, say) shows on their dashboard at once (F4): their
         // rows now, everyone else's in the queued task.
-        if ($event->userid && $DB->record_exists('block_my_assessments_stu', ['cmid' => $cmid, 'userid' => $event->userid])) {
+        if ($event->userid && $DB->record_exists('block_le_dashboard_stu', ['cmid' => $cmid, 'userid' => $event->userid])) {
             try {
                 (new indexer())->index_users($cmid, [(int)$event->userid]);
             } catch (\Throwable $e) {
-                debugging('block_my_assessments: updating the student\'s own rows failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+                debugging('block_le_dashboard: updating the student\'s own rows failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
             }
         }
         indexer::queue_cm($cmid);
@@ -182,7 +182,7 @@ class observer {
                    FROM {grade_items} gi
                    JOIN {modules} m ON m.name = gi.itemmodule
                    JOIN {course_modules} cm ON cm.module = m.id AND cm.instance = gi.iteminstance
-                   JOIN {block_my_assessments_cm} i ON i.cmid = cm.id
+                   JOIN {block_le_dashboard_cm} i ON i.cmid = cm.id
                   WHERE gi.id = :itemid AND gi.itemtype = 'mod'",
                 ['itemid' => $itemid]
             );

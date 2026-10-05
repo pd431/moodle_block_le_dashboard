@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\privacy;
+namespace block_le_dashboard\privacy;
 
 use core_privacy\local\request\approved_contextlist;
 use core_privacy\local\request\writer;
@@ -23,10 +23,10 @@ use core_privacy\tests\provider_testcase;
 /**
  * Privacy provider.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\privacy\provider
+ * @covers     \block_le_dashboard\privacy\provider
  */
 final class provider_test extends provider_testcase {
     /**
@@ -37,28 +37,28 @@ final class provider_test extends provider_testcase {
         $this->resetAfterTest();
         $this->setAdminUser();
         $gen = $this->getDataGenerator();
-        $gen->get_plugin_generator('block_my_assessments')->configure();
+        $gen->get_plugin_generator('block_le_dashboard')->configure();
         $course = $gen->create_course();
         $student = $gen->create_and_enrol($course, 'student');
         $other = $gen->create_and_enrol($course, 'student');
         $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
-        $gen->get_plugin_generator('block_my_assessments')->tag($a->cmid);
-        set_user_preference('block_my_assessments_view', 'student', $student);
+        $gen->get_plugin_generator('block_le_dashboard')->tag($a->cmid);
+        set_user_preference('block_le_dashboard_view', 'student', $student);
 
         $context = \context_user::instance($student->id);
         $contexts = provider::get_contexts_for_userid($student->id);
         $this->assertEquals([$context->id], $contexts->get_contextids());
 
-        provider::export_user_data(new approved_contextlist($student, 'block_my_assessments', [$context->id]));
-        $data = writer::with_context($context)->get_data([get_string('pluginname', 'block_my_assessments')]);
+        provider::export_user_data(new approved_contextlist($student, 'block_le_dashboard', [$context->id]));
+        $data = writer::with_context($context)->get_data([get_string('pluginname', 'block_le_dashboard')]);
         $this->assertCount(1, $data->assessments);
         provider::export_user_preferences($student->id);
-        $prefs = writer::with_context(\context_system::instance())->get_user_preferences('block_my_assessments');
+        $prefs = writer::with_context(\context_system::instance())->get_user_preferences('block_le_dashboard');
         $this->assertNotEmpty((array)$prefs);
 
-        provider::delete_data_for_user(new approved_contextlist($student, 'block_my_assessments', [$context->id]));
-        $this->assertFalse($DB->record_exists('block_my_assessments_stu', ['userid' => $student->id]));
-        $this->assertTrue($DB->record_exists('block_my_assessments_stu', ['userid' => $other->id]));
+        provider::delete_data_for_user(new approved_contextlist($student, 'block_le_dashboard', [$context->id]));
+        $this->assertFalse($DB->record_exists('block_le_dashboard_stu', ['userid' => $student->id]));
+        $this->assertTrue($DB->record_exists('block_le_dashboard_stu', ['userid' => $other->id]));
     }
 
     /**
@@ -72,21 +72,21 @@ final class provider_test extends provider_testcase {
         $student = $gen->create_and_enrol($course, 'student');
         $marker = $gen->create_user();
         $keep = $gen->create_user();
-        $DB->insert_record('block_my_assessments_stu', (object)['cmid' => 5, 'userid' => $student->id,
+        $DB->insert_record('block_le_dashboard_stu', (object)['cmid' => 5, 'userid' => $student->id,
             'allocatedto' => ",{$marker->id},{$keep->id},", 'canaccess' => 1, 'individual' => 0, 'reopened' => 0]);
-        $DB->insert_record('block_my_assessments_stu', (object)['cmid' => 6, 'userid' => $student->id,
+        $DB->insert_record('block_le_dashboard_stu', (object)['cmid' => 6, 'userid' => $student->id,
             'allocatedto' => ",{$marker->id},", 'canaccess' => 1, 'individual' => 0, 'reopened' => 0]);
 
         $context = \context_user::instance($marker->id);
         $this->assertEquals([$context->id], provider::get_contexts_for_userid($marker->id)->get_contextids());
-        provider::export_user_data(new approved_contextlist($marker, 'block_my_assessments', [$context->id]));
-        $data = writer::with_context($context)->get_data([get_string('pluginname', 'block_my_assessments')]);
+        provider::export_user_data(new approved_contextlist($marker, 'block_le_dashboard', [$context->id]));
+        $data = writer::with_context($context)->get_data([get_string('pluginname', 'block_le_dashboard')]);
         $this->assertCount(2, $data->allocated);
 
-        provider::delete_data_for_user(new approved_contextlist($marker, 'block_my_assessments', [$context->id]));
+        provider::delete_data_for_user(new approved_contextlist($marker, 'block_le_dashboard', [$context->id]));
         $this->assertEquals(
             [5 => ",{$keep->id},", 6 => null],
-            $DB->get_records_menu('block_my_assessments_stu', ['userid' => $student->id], 'cmid', 'cmid, allocatedto')
+            $DB->get_records_menu('block_le_dashboard_stu', ['userid' => $student->id], 'cmid', 'cmid, allocatedto')
         );
         $this->assertEmpty(provider::get_contexts_for_userid($marker->id)->get_contextids());
     }

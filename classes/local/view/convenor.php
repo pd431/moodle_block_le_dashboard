@@ -14,20 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\view;
+namespace block_le_dashboard\local\view;
 
-use block_my_assessments\local\config;
-use block_my_assessments\local\index\indexer;
-use block_my_assessments\local\output\format;
-use block_my_assessments\local\scope;
+use block_le_dashboard\local\config;
+use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\output\format;
+use block_le_dashboard\local\scope;
 
 /**
  * The module convenor view: every assessment in my modules, with progress for
  * each marking stage the activity actually has, unallocated work (D6) and
  * release (D4). Hidden activities are included and flagged (R3).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class convenor extends base {
@@ -61,7 +61,7 @@ class convenor extends base {
             return [];
         }
         [$insql, $params] = $DB->get_in_or_equal($this->courses(), SQL_PARAMS_NAMED);
-        return array_map('intval', $DB->get_fieldset_select('block_my_assessments_cm', 'cmid', "courseid $insql", $params));
+        return array_map('intval', $DB->get_fieldset_select('block_le_dashboard_cm', 'cmid', "courseid $insql", $params));
     }
 
     #[\Override]
@@ -82,7 +82,7 @@ class convenor extends base {
         $inyear = array_flip($this->courses());
         [$insql, $params] = $DB->get_in_or_equal($this->courses(true), SQL_PARAMS_NAMED);
         $cms = $DB->get_records_sql("SELECT c.*
-                                       FROM {block_my_assessments_cm} c
+                                       FROM {block_le_dashboard_cm} c
                                        " . self::LIVE . "
                                       WHERE c.courseid $insql
                                    ORDER BY c.due ASC", $params);
@@ -97,8 +97,8 @@ class convenor extends base {
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
                                                           THEN 1 ELSE 0 END) AS submitted
-                                            FROM {block_my_assessments_stu} s
-                                            JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
+                                            FROM {block_le_dashboard_stu} s
+                                            JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            WHERE c.courseid $insql
                                         GROUP BY s.cmid", $params);
         // Marking units per stage. Work counts once its unit's deadline has passed (G9).
@@ -116,8 +116,8 @@ class convenor extends base {
                                              MAX(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
                                                  AS lastready,
                                              MAX(m.timemarked) AS lastmarked
-                                        FROM {block_my_assessments_mark} m
-                                        JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                        FROM {block_le_dashboard_mark} m
+                                        JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                        WHERE c.courseid $insql
                                     GROUP BY m.cmid, m.stage", $params);
         foreach ($rs as $r) {
@@ -127,14 +127,14 @@ class convenor extends base {
         // Units with marking outstanding at any stage, for the marking deadline call-out (G10).
         $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
         $unmarked = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                 FROM {block_my_assessments_mark} m
-                                                 JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                                 FROM {block_le_dashboard_mark} m
+                                                 JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                                 WHERE c.courseid $insql AND $ready AND m.marked = 0
                                              GROUP BY m.cmid", $params);
         // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43).
         $flagged = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                FROM {block_my_assessments_mark} m
-                                                JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                                FROM {block_le_dashboard_mark} m
+                                                JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                                WHERE c.courseid $insql AND m.flagged = 1
                                             GROUP BY m.cmid", $params);
         // Per marker, per stage.
@@ -144,8 +144,8 @@ class convenor extends base {
         $rs = $DB->get_recordset_sql("SELECT m.cmid, $marker AS allocatedto, m.stage,
                                              SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS ready,
                                              SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
-                                        FROM {block_my_assessments_mark} m
-                                        JOIN {block_my_assessments_cm} c ON c.cmid = m.cmid
+                                        FROM {block_le_dashboard_mark} m
+                                        JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                        WHERE c.courseid $insql AND m.allocatedto IS NOT NULL
                                     GROUP BY m.cmid, $marker, m.stage", $params);
         $markerids = [];
@@ -181,7 +181,7 @@ class convenor extends base {
             if ($cm->adapter !== 'generic') {
                 $bars[] = format::bar(
                     'submitted',
-                    get_string('bar_submitted', 'block_my_assessments'),
+                    get_string('bar_submitted', 'block_le_dashboard'),
                     (int)($s->submitted ?? 0),
                     (int)($s->total ?? 0)
                 );
@@ -191,7 +191,7 @@ class convenor extends base {
             if ($cm->hasallocation && $submittedunits > 0) {
                 $bars[] = format::bar(
                     'unallocated',
-                    get_string('bar_unallocated', 'block_my_assessments'),
+                    get_string('bar_unallocated', 'block_le_dashboard'),
                     (int)$first->unallocated,
                     $submittedunits,
                     $groups
@@ -205,7 +205,7 @@ class convenor extends base {
                     $bars[] = format::bar($stage, format::stage($stage), $marked, $units, $groups);
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
-                $bars[] = format::bar('released', get_string('bar_released', 'block_my_assessments'), $released, $units, $groups);
+                $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
                 $outstanding += $units - $released;
             }
 
@@ -239,11 +239,11 @@ class convenor extends base {
             $row['markers'] = [];
             foreach ($upcoming ? [] : $markers[$cmid] ?? [] as $markerid => $bystage) {
                 $person = $people[$markerid] ?? null;
-                $name = $person ? fullname($person) : get_string('unknownuser', 'block_my_assessments');
+                $name = $person ? fullname($person) : get_string('unknownuser', 'block_le_dashboard');
                 // Someone who marked here and has since left the module (EC1).
                 $active[$cm->courseid] ??= array_flip(indexer::markers((int)$cm->courseid));
                 if ($person && !isset($active[$cm->courseid][$markerid])) {
-                    $name = get_string('formermarker', 'block_my_assessments', $name);
+                    $name = get_string('formermarker', 'block_le_dashboard', $name);
                 }
                 $markerbars = [];
                 foreach ($bystage as $stage => $r) {
@@ -271,7 +271,7 @@ class convenor extends base {
                 $lastmarked = max($lastmarked, (int)$r->lastmarked);
             }
             if ($section === classifier::INPROGRESS && $lastmarked && $lastready >= $lastmarked) {
-                $text = get_string('hint_returned_convenor', 'block_my_assessments');
+                $text = get_string('hint_returned_convenor', 'block_le_dashboard');
                 $row['hints'][] = format::hint($row['id'], 'returned', $text);
             }
             if (isset($pending[$cmid])) {
@@ -283,7 +283,7 @@ class convenor extends base {
             // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
             $late = (int)($unmarked[$cmid] ?? 0);
             if ($cm->markingdue && (int)$cm->markingdue < $this->now && $late && !$upcoming) {
-                $row['alert'] = get_string('unmarkedafterdeadline', 'block_my_assessments', $late);
+                $row['alert'] = get_string('unmarkedafterdeadline', 'block_le_dashboard', $late);
             }
             $row['sortkey'] = [(int)($cm->markingdue ?: PHP_INT_MAX), (int)$cm->due];
             $sections[$section][] = $row;
@@ -307,13 +307,13 @@ class convenor extends base {
     protected function nodeadline_hint(string $rowid, int $cmid): array {
         $link = \html_writer::link(
             new \moodle_url('/course/modedit.php', ['update' => $cmid]),
-            get_string('hint_nodeadline_settings', 'block_my_assessments')
+            get_string('hint_nodeadline_settings', 'block_le_dashboard')
         );
         return format::hint(
             $rowid,
             'nodeadline',
-            get_string('hint_nodeadline_text', 'block_my_assessments'),
-            get_string('hint_nodeadline_link', 'block_my_assessments', $link)
+            get_string('hint_nodeadline_text', 'block_le_dashboard'),
+            get_string('hint_nodeadline_link', 'block_le_dashboard', $link)
         );
     }
 
@@ -324,15 +324,15 @@ class convenor extends base {
      * @return array
      */
     protected function brief_hint(string $rowid): array {
-        $url = (string)get_config('block_my_assessments', 'briefguidanceurl');
+        $url = (string)get_config('block_le_dashboard', 'briefguidanceurl');
         $link = null;
         if ($url !== '') {
-            $link = get_string('briefhint_link', 'block_my_assessments', \html_writer::link(
+            $link = get_string('briefhint_link', 'block_le_dashboard', \html_writer::link(
                 new \moodle_url($url),
-                get_string('briefhint_guidance', 'block_my_assessments')
+                get_string('briefhint_guidance', 'block_le_dashboard')
             ));
         }
-        return format::hint($rowid, 'brief', get_string('briefhint_text', 'block_my_assessments'), $link);
+        return format::hint($rowid, 'brief', get_string('briefhint_text', 'block_le_dashboard'), $link);
     }
 
     /**

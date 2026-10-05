@@ -21,8 +21,8 @@
  * module only shows the right number. Search and the type filter hide rows;
  * search never changes the summary counts.
  *
- * @module     block_my_assessments/dashboard
- * @copyright  2026 onwards block_my_assessments contributors
+ * @module     block_le_dashboard/dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -113,7 +113,7 @@ class Dashboard {
             this.setTip(target, open);
         } else if (action === 'filter-type') {
             this.type = target.dataset.type;
-            setUserPreference('block_my_assessments_type', this.type).catch(Notification.exception);
+            setUserPreference('block_le_dashboard_type', this.type).catch(Notification.exception);
             this.apply();
         } else if (action === 'toggle-section') {
             const key = target.closest(SELECTORS.section).dataset.section;
@@ -136,12 +136,12 @@ class Dashboard {
             const show = !view.classList.contains('ma-view--showgrades');
             view.classList.toggle('ma-view--showgrades', show);
             target.setAttribute('aria-pressed', show ? 'true' : 'false');
-            setUserPreference('block_my_assessments_showgrades', show ? 1 : 0).catch(Notification.exception);
+            setUserPreference('block_le_dashboard_showgrades', show ? 1 : 0).catch(Notification.exception);
         } else if (action === 'switch-view') {
-            this.load('block_my_assessments_get_view', target.dataset.view);
-            setUserPreference('block_my_assessments_view', target.dataset.view).catch(Notification.exception);
+            this.load('block_le_dashboard_get_view', target.dataset.view);
+            setUserPreference('block_le_dashboard_view', target.dataset.view).catch(Notification.exception);
         } else if (action === 'refresh') {
-            this.load('block_my_assessments_refresh', this.viewKey, this.yearId());
+            this.load('block_le_dashboard_refresh', this.viewKey, this.yearId());
         }
     }
 
@@ -252,14 +252,14 @@ class Dashboard {
         const action = e.target.dataset.action;
         if (action === 'box-option') {
             const box = e.target.closest(SELECTORS.box);
-            const pref = {duesoon: 'block_my_assessments_window', marked: 'block_my_assessments_range'}[box.dataset.box];
+            const pref = {duesoon: 'block_le_dashboard_window', marked: 'block_le_dashboard_range'}[box.dataset.box];
             if (pref) {
                 setUserPreference(pref, e.target.value).catch(Notification.exception);
             }
             this.apply();
         } else if (action === 'year') {
-            setUserPreference('block_my_assessments_year', e.target.value).catch(Notification.exception);
-            this.load('block_my_assessments_get_view', this.viewKey, this.yearId());
+            setUserPreference('block_le_dashboard_year', e.target.value).catch(Notification.exception);
+            this.load('block_le_dashboard_get_view', this.viewKey, this.yearId());
         }
     }
 
@@ -281,7 +281,7 @@ class Dashboard {
      * @param {number} yearid
      */
     async load(methodname, view, yearid = -1) {
-        const isrefresh = methodname === 'block_my_assessments_refresh';
+        const isrefresh = methodname === 'block_le_dashboard_refresh';
         if (isrefresh && this.refreshing) {
             // A second press while the first is running would only re-index the same again.
             return;
@@ -332,8 +332,8 @@ class Dashboard {
             }
             // A short message for screen readers, not the whole view.
             status.textContent = isrefresh
-                ? await getString('statusrefreshed', 'block_my_assessments')
-                : await getString('statusloaded', 'block_my_assessments', label || this.viewKey);
+                ? await getString('statusrefreshed', 'block_le_dashboard')
+                : await getString('statusloaded', 'block_le_dashboard', label || this.viewKey);
         } catch (error) {
             Notification.exception(error);
         } finally {

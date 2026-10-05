@@ -1,4 +1,4 @@
-/* block_my_assessments styles. Compiled from scss/styles.scss with Dart Sass; edit that file, not this one. */
+/* block_le_dashboard styles. Compiled from scss/styles.scss with Dart Sass; edit that file, not this one. */
 
 @use "sass:color";
 @use "sass:list";
@@ -148,7 +148,7 @@ $ma-dark-ink-on-solid: ("attention");
   }
 }
 
-.block_my_assessments_dashboard {
+.block_le_dashboard_dashboard {
   // Rows are laid out by the block's width, not the screen's: the block can
   // sit in a narrow column or a side region.
   container: ma / inline-size;
@@ -534,6 +534,18 @@ $ma-dark-ink-on-solid: ("attention");
     padding: 0.25rem 0.75rem;
     background-color: transparent;
     text-align: center;
+  }
+
+  // Bootstrap gives a card's list group the card's bottom border unless the list is the
+  // card's last child. The footer always follows it (hidden without Show more), so the last
+  // row doubled up with the card's border. The rule goes on the footer instead. The
+  // extra .ma-section outranks Bootstrap's .card > .list-group rules, which load later.
+  .ma-section > .ma-rows {
+    border-bottom-width: 0;
+  }
+
+  .ma-section > .ma-rows + .ma-section-footer {
+    border-top: 1px solid var(--ma-border);
   }
 
   .ma-more[aria-expanded="true"] .ma-more-label,

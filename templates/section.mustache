@@ -15,7 +15,7 @@
     along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 }}
 {{!
-    @template block_my_assessments/section
+    @template block_le_dashboard/section
 
     A section: one card shape for every section in every view. CSS hooks on the modifier class
     (.ma-view--{view} .ma-section--{key}); JS hooks on data-section only.
@@ -39,16 +39,16 @@
         <button type="button" class="btn btn-link btn-sm ma-section-toggle" data-action="toggle-section"
                 aria-expanded="true" aria-controls="ma-{{view}}-{{key}}-list">
             <i class="fa fa-chevron-down" aria-hidden="true"></i>
-            <span class="accesshide">{{#str}}togglesection, block_my_assessments, {{title}}{{/str}}</span>
+            <span class="accesshide">{{#str}}togglesection, block_le_dashboard, {{title}}{{/str}}</span>
         </button>
     </div>
     <ul class="list-group list-group-flush ma-rows" id="ma-{{view}}-{{key}}-list" aria-labelledby="ma-{{view}}-{{key}}-title">
-        {{#rows}}{{> block_my_assessments/row }}{{/rows}}
+        {{#rows}}{{> block_le_dashboard/row }}{{/rows}}
     </ul>
     <div class="card-footer ma-section-footer" data-region="ma-more" {{^hasmore}}hidden{{/hasmore}}>
         <button type="button" class="btn btn-link btn-sm ma-more" data-action="show-more" aria-expanded="false">
-            <span class="ma-more-label"><i class="fa-solid fa-chevron-down ma-icon" aria-hidden="true"></i>{{#str}}showmore, block_my_assessments{{/str}}</span>
-            <span class="ma-less-label"><i class="fa-solid fa-chevron-up ma-icon" aria-hidden="true"></i>{{#str}}showless, block_my_assessments{{/str}}</span>
+            <span class="ma-more-label"><i class="fa-solid fa-chevron-down ma-icon" aria-hidden="true"></i>{{#str}}showmore, block_le_dashboard{{/str}}</span>
+            <span class="ma-less-label"><i class="fa-solid fa-chevron-up ma-icon" aria-hidden="true"></i>{{#str}}showless, block_le_dashboard{{/str}}</span>
         </button>
     </div>
 </section>

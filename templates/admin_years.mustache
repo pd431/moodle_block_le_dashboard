@@ -15,7 +15,7 @@
     along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 }}
 {{!
-    @template block_my_assessments/admin_years
+    @template block_le_dashboard/admin_years
 
     Academic years admin list.
 
@@ -26,9 +26,9 @@
 <table class="table table-sm generaltable">
     <thead>
         <tr>
-            <th scope="col">{{#str}}yearlabel, block_my_assessments{{/str}}</th>
-            <th scope="col">{{#str}}yearstart, block_my_assessments{{/str}}</th>
-            <th scope="col">{{#str}}yearlastday, block_my_assessments{{/str}}</th>
+            <th scope="col">{{#str}}yearlabel, block_le_dashboard{{/str}}</th>
+            <th scope="col">{{#str}}yearstart, block_le_dashboard{{/str}}</th>
+            <th scope="col">{{#str}}yearlastday, block_le_dashboard{{/str}}</th>
             <th scope="col"><span class="accesshide">{{#str}}actions{{/str}}</span></th>
         </tr>
     </thead>
@@ -44,4 +44,4 @@
     </tbody>
 </table>
 {{/hasrows}}
-{{^hasrows}}<p>{{#str}}noyears, block_my_assessments{{/str}}</p>{{/hasrows}}
+{{^hasrows}}<p>{{#str}}noyears, block_le_dashboard{{/str}}</p>{{/hasrows}}

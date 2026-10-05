@@ -1,4 +1,4 @@
-@block @block_my_assessments @block_my_assessments_mirror @javascript
+@block @block_le_dashboard @block_le_dashboard_mirror
 Feature: Dashboard data is cached, says how fresh it is, and can be refreshed (assign mirror)
   In order to get fast dashboards without being misled by old numbers
   As a student, marker or convenor
@@ -43,6 +43,7 @@ Feature: Dashboard data is cached, says how fresh it is, and can be refreshed (a
     And I view my dashboard again
     Then "A1" should show "1" to mark
 
+  @javascript
   Scenario: Refresh updates a marker's own figures without waiting for the background task
     Given I log in as "marker1" and view my dashboard
     And "marker1" marks the submission of "student1" for "A1"
@@ -50,6 +51,7 @@ Feature: Dashboard data is cached, says how fresh it is, and can be refreshed (a
     Then "A1" should show "1" to mark
     And I should see "Updated" with the time "now"
 
+  @javascript
   Scenario: A large convenor refresh is queued and says so
     Given "convenor" convenes 200 modules with tagged assessments
     And I log in as "convenor" and view the "Convenor view"

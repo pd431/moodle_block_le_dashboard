@@ -18,8 +18,8 @@
  * A stand-in for block_rhb's request link, for Behat scenarios tagged @block_rhb on
  * sites without block_rhb. Loaded only on a Behat site (see mitigation::available()).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 

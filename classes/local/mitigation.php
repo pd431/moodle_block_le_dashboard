@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local;
+namespace block_le_dashboard\local;
 
 /**
  * Optional integration with block_rhb (self-certification and the student
  * request form). Everything here does nothing when block_rhb is absent.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class mitigation {
@@ -36,9 +36,9 @@ class mitigation {
     protected static function available(): bool {
         global $CFG;
         $lib = $CFG->dirroot . '/blocks/rhb/lib.php';
-        if (!file_exists($lib) && defined('BEHAT_SITE_RUNNING') && get_config('block_my_assessments', 'behatrhbstub')) {
+        if (!file_exists($lib) && defined('BEHAT_SITE_RUNNING') && get_config('block_le_dashboard', 'behatrhbstub')) {
             // Scenarios tagged @block_rhb on a site without it.
-            $lib = $CFG->dirroot . '/blocks/my_assessments/tests/fixtures/rhb_stub.php';
+            $lib = $CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/rhb_stub.php';
         }
         if (!file_exists($lib)) {
             return false;
@@ -147,7 +147,7 @@ class mitigation {
      * @return string
      */
     public static function setting(string $name): string {
-        $value = get_config('block_my_assessments', $name);
+        $value = get_config('block_le_dashboard', $name);
         return $value === false || $value === '' ? self::SELFCERT_SETTINGS[$name] : (string)$value;
     }
 }

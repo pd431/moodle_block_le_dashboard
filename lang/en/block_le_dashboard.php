@@ -17,8 +17,8 @@
 /**
  * English strings. Every visible label comes from here; templates use {{#str}} and PHP get_string().
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
@@ -38,6 +38,7 @@ $string['allyears'] = 'All years';
 $string['bar_released'] = 'Released';
 $string['bar_submitted'] = 'Submitted';
 $string['bar_unallocated'] = 'Unallocated';
+$string['blocktitle'] = 'My assessments';
 $string['both'] = 'Both';
 $string['box_staff_duesoon'] = 'Student deadlines';
 $string['box_staff_marked'] = 'Marked by me';
@@ -133,14 +134,14 @@ $string['mitigationopens'] = 'Mitigate opens before the deadline';
 $string['mitigationopens_desc'] = 'Days before a student\'s deadline, including an extension, when the Mitigate menu appears on their row.';
 $string['moduleconvenorrole'] = 'Module convenor roles';
 $string['moduleconvenorrole_desc'] = 'People with one of these roles in a course see the convenor view for it: all marking, by every marker.';
-$string['my_assessments:addinstance'] = 'Add a new My assessments block';
-$string['my_assessments:myaddinstance'] = 'Add a new My assessments block to the Dashboard';
+$string['le_dashboard:addinstance'] = 'Add a new My assessments block';
+$string['le_dashboard:myaddinstance'] = 'Add a new My assessments block to the Dashboard';
 $string['noaccesstoview'] = 'You cannot open this view.';
 $string['nomatches'] = 'No assessments match your search.';
 $string['noyears'] = 'There are no academic years yet.';
 $string['overduetopastthreshold'] = 'Days overdue before moving to Past';
 $string['overduetopastthreshold_desc'] = 'An unsubmitted assessment stays in Overdue for this many days after its deadline, then moves to Past.';
-$string['pluginname'] = 'My assessments';
+$string['pluginname'] = 'le_dashboard';
 $string['preparing'] = 'Preparing your assessments. This page will be complete once the first update has run.';
 $string['privacy:metadata:mark'] = 'Marking state per student or group and marking stage, derived from the activities.';
 $string['privacy:metadata:mark:allocatedto'] = 'The marker allocated to the submission.';

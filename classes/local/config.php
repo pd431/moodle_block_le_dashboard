@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local;
+namespace block_le_dashboard\local;
 
 /**
  * The block's settings, read in one place.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class config {
@@ -40,7 +40,7 @@ class config {
      * @return int
      */
     public static function number(string $name): int {
-        $value = get_config('block_my_assessments', $name);
+        $value = get_config('block_le_dashboard', $name);
         return $value === false || $value === '' ? self::NUMBERS[$name] : max(0, (int)$value);
     }
 
@@ -74,7 +74,7 @@ class config {
      * @return string[]
      */
     protected static function csv(string $name, bool $lowercase = false): array {
-        $value = (string)get_config('block_my_assessments', $name);
+        $value = (string)get_config('block_le_dashboard', $name);
         $items = array_filter(array_map('trim', explode(',', $value)), fn($v) => $v !== '' && $v !== '0');
         if ($lowercase) {
             $items = array_map(fn($v) => \core_text::strtolower($v), $items);
@@ -138,7 +138,7 @@ class config {
      * @return int
      */
     public static function overdue_threshold_days(): int {
-        $value = get_config('block_my_assessments', 'overduetopastthreshold');
+        $value = get_config('block_le_dashboard', 'overduetopastthreshold');
         return $value === false || $value === '' ? self::DEFAULT_THRESHOLD : max(0, (int)$value);
     }
 
@@ -157,7 +157,7 @@ class config {
      * @return int
      */
     public static function inline_refresh_limit(): int {
-        $value = (int)get_config('block_my_assessments', 'inlinerefreshlimit');
+        $value = (int)get_config('block_le_dashboard', 'inlinerefreshlimit');
         return $value > 0 ? $value : 30;
     }
 }

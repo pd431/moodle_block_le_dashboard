@@ -14,12 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\index;
+namespace block_le_dashboard\local\index;
 
-use block_my_assessments\local\adapter\registry;
-use block_my_assessments\local\config;
-use block_my_assessments\local\memo;
-use block_my_assessments\local\tags;
+use block_le_dashboard\local\adapter\registry;
+use block_le_dashboard\local\config;
+use block_le_dashboard\local\memo;
+use block_le_dashboard\local\tags;
 
 /**
  * Fills the three index tables from the adapters.
@@ -29,17 +29,17 @@ use block_my_assessments\local\tags;
  * are kept (stale is better than missing), the error is recorded for the
  * admin page, and other assessments carry on.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class indexer {
     /** Assessment table. */
-    const CM = 'block_my_assessments_cm';
+    const CM = 'block_le_dashboard_cm';
     /** Student table. */
-    const STU = 'block_my_assessments_stu';
+    const STU = 'block_le_dashboard_stu';
     /** Marking table. */
-    const MARK = 'block_my_assessments_mark';
+    const MARK = 'block_le_dashboard_mark';
 
     /** @var int|null Fixed time, for tests. */
     protected ?int $now;
@@ -162,10 +162,10 @@ class indexer {
      * @return bool
      */
     protected function locked(int $cmid, callable $index): bool {
-        $factory = \core\lock\lock_config::get_lock_factory('block_my_assessments');
+        $factory = \core\lock\lock_config::get_lock_factory('block_le_dashboard');
         $lock = $factory->get_lock('cm' . $cmid, self::LOCK_WAIT);
         if (!$lock) {
-            throw new \moodle_exception('locktimeout', 'block_my_assessments', '', $cmid);
+            throw new \moodle_exception('locktimeout', 'block_le_dashboard', '', $cmid);
         }
         try {
             return $index();
@@ -233,7 +233,7 @@ class indexer {
         } catch (\Throwable $e) {
             registry::record_error($cm->modname, $e);
             debugging(
-                "block_my_assessments: indexing cm $cmid ({$cm->modname}) failed: " . $e->getMessage(),
+                "block_le_dashboard: indexing cm $cmid ({$cm->modname}) failed: " . $e->getMessage(),
                 DEBUG_DEVELOPER
             );
             return $DB->record_exists(self::CM, ['cmid' => $cmid]);
@@ -337,7 +337,7 @@ class indexer {
                 $this->delete_unit_rows($cmid, $only, $groupids);
             }
             if ($failwrite) {
-                throw new \moodle_exception('testfailure', 'block_my_assessments', '', 'cm ' . $cmid);
+                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'cm ' . $cmid);
             }
             if ($stu) {
                 $DB->insert_records(self::STU, $stu);
@@ -573,7 +573,7 @@ class indexer {
             try {
                 $this->index_cm((int)$cmid);
             } catch (\Throwable $e) {
-                debugging("block_my_assessments: writing the index for cm $cmid failed: " . $e->getMessage(), DEBUG_DEVELOPER);
+                debugging("block_le_dashboard: writing the index for cm $cmid failed: " . $e->getMessage(), DEBUG_DEVELOPER);
                 $failure = $failure ?? $e;
             }
         }
@@ -717,7 +717,7 @@ class indexer {
      */
     protected static function queue(array $data): void {
         global $DB;
-        $task = new \block_my_assessments\task\reindex();
+        $task = new \block_le_dashboard\task\reindex();
         $task->set_custom_data($data);
         $waiting = $DB->record_exists_select(
             'task_adhoc',

@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
 /**
  * The coursework adapter's plagiarism flags, against a stand-in for mod_coursework's flags table,
  * since mod_coursework can't be installed where these tests run.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\local\adapter\coursework
+ * @covers     \block_le_dashboard\local\adapter\coursework
  */
 final class coursework_test extends \advanced_testcase {
     /** The flags table mod_coursework keeps. */

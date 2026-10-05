@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard
 Feature: Convenors are nudged to attach a brief or description
   In order to give students instructions in a consistent place
   As a module convenor
@@ -31,6 +31,7 @@ Feature: Convenors are nudged to attach a brief or description
       | convenor | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
+  @javascript
   Scenario: An assessment with no brief or description shows the hint to its convenor
     Given a summative "assign" "A1" in "M1" with no description is due "tomorrow"
     When I log in as "convenor" and view the "Convenor view"
@@ -38,6 +39,7 @@ Feature: Convenors are nudged to attach a brief or description
     Then I should see "This assessment has no brief or description attached." in the "My assessments" block
     And I should see "Including the assessment brief within the activity will help students find instructions in a consistent place, but isn't a requirement." in the "My assessments" block
 
+  @javascript
   Scenario: The hint links to the guidance when a link is set
     Given the My assessments block guidance link is "https://example.com/briefs"
     And a summative "assign" "A1" in "M1" with no description is due "tomorrow"
@@ -45,6 +47,7 @@ Feature: Convenors are nudged to attach a brief or description
     And I click on the brief hint of "A1"
     Then "guidance" "link" should exist in the "My assessments" "block"
 
+  @javascript
   Scenario: Without a guidance link the hint has no link sentence
     Given a summative "assign" "A1" in "M1" with no description is due "tomorrow"
     When I log in as "convenor" and view the "Convenor view"

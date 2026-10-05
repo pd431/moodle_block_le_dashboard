@@ -14,18 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local;
+namespace block_le_dashboard\local;
 
 /**
  * Academic years, which scope the staff and convenor views by course start date.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class years {
     /** Table name. */
-    const TABLE = 'block_my_assessments_year';
+    const TABLE = 'block_le_dashboard_year';
 
     /**
      * Every year, oldest first.
@@ -56,7 +56,7 @@ class years {
      */
     protected static function lookup_default_id(int $now): int {
         global $DB;
-        $configured = (int)get_config('block_my_assessments', 'defaultacademicyear');
+        $configured = (int)get_config('block_le_dashboard', 'defaultacademicyear');
         if ($configured && $DB->record_exists(self::TABLE, ['id' => $configured])) {
             return $configured;
         }

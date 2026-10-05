@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\external;
+namespace block_le_dashboard\external;
 
 use core_external\external_api;
 use core_external\external_function_parameters;
 use core_external\external_single_structure;
 use core_external\external_value;
-use block_my_assessments\local\config;
-use block_my_assessments\local\index\indexer;
-use block_my_assessments\local\scope;
-use block_my_assessments\local\view\factory;
+use block_le_dashboard\local\config;
+use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\scope;
+use block_le_dashboard\local\view\factory;
 
 /**
  * Refresh (R4): re-indexes the viewer's own scope. Small scopes (a student,
  * most markers) are done inline; a large one (a convenor of many modules)
  * is queued, and the view says "Refreshing" until the task has run.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class refresh extends external_api {
@@ -65,26 +65,26 @@ class refresh extends external_api {
         $year = $yearid < 0 ? null : $yearid;
         $object = factory::make($view, (int)$USER->id, $year);
         $cmids = $object->refresh_cmids();
-        $last = (int)get_user_preferences('block_my_assessments_lastrefresh', 0, $USER->id);
+        $last = (int)get_user_preferences('block_le_dashboard_lastrefresh', 0, $USER->id);
         if ($last > time() - self::MIN_INTERVAL) {
             // Pressed again within the minute: the index is as fresh as it gets (F9).
             $status = 'done';
         } else if ($view === scope::STUDENT) {
             // A student's Refresh rewrites only their own rows (F4).
-            set_user_preference('block_my_assessments_lastrefresh', time());
+            set_user_preference('block_le_dashboard_lastrefresh', time());
             $indexer = new indexer();
             foreach ($cmids as $cmid) {
                 $indexer->index_users($cmid, [(int)$USER->id]);
             }
             $status = 'done';
         } else if (count($cmids) <= config::inline_refresh_limit()) {
-            set_user_preference('block_my_assessments_lastrefresh', time());
+            set_user_preference('block_le_dashboard_lastrefresh', time());
             (new indexer())->index_cms($cmids);
             $status = 'done';
         } else {
-            set_user_preference('block_my_assessments_lastrefresh', time());
-            set_user_preference('block_my_assessments_refreshing', time());
-            $task = new \block_my_assessments\task\reindex();
+            set_user_preference('block_le_dashboard_lastrefresh', time());
+            set_user_preference('block_le_dashboard_refreshing', time());
+            $task = new \block_le_dashboard\task\reindex();
             $task->set_custom_data(['cmids' => array_values($cmids), 'userid' => (int)$USER->id]);
             \core\task\manager::queue_adhoc_task($task, true);
             $status = 'queued';
@@ -93,7 +93,7 @@ class refresh extends external_api {
         $output = $PAGE->get_renderer('core');
         return [
             'status' => $status,
-            'html' => $output->render_from_template('block_my_assessments/view', $object->export()),
+            'html' => $output->render_from_template('block_le_dashboard/view', $object->export()),
         ];
     }
 

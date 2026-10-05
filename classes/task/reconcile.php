@@ -14,22 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\task;
+namespace block_le_dashboard\task;
 
-use block_my_assessments\local\adapter\registry;
-use block_my_assessments\local\index\indexer;
+use block_le_dashboard\local\adapter\registry;
+use block_le_dashboard\local\index\indexer;
 
 /**
  * Nightly reconcile: re-indexes everything, catching missed events and direct database edits.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class reconcile extends \core\task\scheduled_task {
     #[\Override]
     public function get_name() {
-        return get_string('task_reconcile', 'block_my_assessments');
+        return get_string('task_reconcile', 'block_le_dashboard');
     }
 
     #[\Override]
@@ -39,7 +39,7 @@ class reconcile extends \core\task\scheduled_task {
         } finally {
             registry::flush_errors();
         }
-        unset_config('backfillpending', 'block_my_assessments');
-        set_config('backfilldone', time(), 'block_my_assessments');
+        unset_config('backfillpending', 'block_le_dashboard');
+        set_config('backfilldone', time(), 'block_le_dashboard');
     }
 }

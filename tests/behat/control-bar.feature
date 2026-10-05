@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: The dashboard's controls sit together in one control bar
   In order to find and use the dashboard's controls in one place
   As a student, marker or module convenor
@@ -38,6 +38,7 @@ Feature: The dashboard's controls sit together in one control bar
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
     And the academic year "2026/27" starts on "2026-09-01"
 
+  @javascript
   Scenario: Students see the type filter, Show grades and search together above the summary
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
     And "student1" has submitted "A1"
@@ -48,21 +49,25 @@ Feature: The dashboard's controls sit together in one control bar
     And the control bar should come before the summary boxes
     And the freshness line should come after the control bar
 
+  @javascript
   Scenario: Show grades only appears once a grade has been released
     Given a summative "assign" "A1" in "M1" is due "in 3 days"
     When I log in as "student1" and view my dashboard
     Then the control bar should hold "Type filter, Search"
 
+  @javascript
   Scenario: Markers see the academic year first in the control bar
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     When I log in as "marker1" and view the "My marking"
     Then the control bar should hold "Academic year, Type filter, Search"
 
+  @javascript
   Scenario: Convenors see the academic year first in the control bar
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     When I log in as "convenor" and view the "Convenor view"
     Then the control bar should hold "Academic year, Type filter, Search"
 
+  @javascript
   Scenario: Show grades in the control bar still shows and hides grades, and says whether it is on
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
     And "student1" has submitted "A1"
@@ -75,6 +80,7 @@ Feature: The dashboard's controls sit together in one control bar
     When I press "Show grades"
     Then "Show grades" should not be pressed
 
+  @javascript
   Scenario: The type filter in the control bar still switches the summary counts
     Given a summative "assign" "A1" in "M1" is due "in 3 days"
     And a formative "assign" "F1" in "M1" is due "in 3 days"
@@ -84,6 +90,7 @@ Feature: The dashboard's controls sit together in one control bar
     And I should not see "F1" in the "My assessments" block
     And the "Upcoming" summary box should show "1"
 
+  @javascript
   Scenario: The control bar wraps on a phone without scrolling sideways
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And I change viewport size to "360x800"

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local;
+namespace block_le_dashboard\local;
 
 /**
  * Per-request memo for lookups that a page or a regrade repeats many times: role ids,
@@ -22,8 +22,8 @@ namespace block_my_assessments\local;
  *
  * A request cache, so it never outlives the request, and test resets clear it.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class memo {
@@ -58,6 +58,6 @@ class memo {
      * @return \cache
      */
     protected static function cache(): \cache {
-        return \cache::make_from_params(\cache_store::MODE_REQUEST, 'block_my_assessments', 'memo', [], ['simplekeys' => false]);
+        return \cache::make_from_params(\cache_store::MODE_REQUEST, 'block_le_dashboard', 'memo', [], ['simplekeys' => false]);
     }
 }

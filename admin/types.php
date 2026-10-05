@@ -17,19 +17,19 @@
 /**
  * Activity types (R5): every type with gradebook items, what the block can know about it, and a checkbox.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 require(__DIR__ . '/../../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
-use block_my_assessments\local\adapter\adapter;
-use block_my_assessments\local\adapter\registry;
-use block_my_assessments\local\index\indexer;
+use block_le_dashboard\local\adapter\adapter;
+use block_le_dashboard\local\adapter\registry;
+use block_le_dashboard\local\index\indexer;
 
-admin_externalpage_setup('block_my_assessments_types');
+admin_externalpage_setup('block_le_dashboard_types');
 
 $types = registry::listable_types();
 if (data_submitted() && confirm_sesskey()) {
@@ -39,7 +39,7 @@ if (data_submitted() && confirm_sesskey()) {
         registry::set_enabled($modname, !empty($enabled[$modname]));
     }
     if ($before != registry::enabled_types()) {
-        \core\task\manager::queue_adhoc_task(new \block_my_assessments\task\backfill(), true);
+        \core\task\manager::queue_adhoc_task(new \block_le_dashboard\task\backfill(), true);
     }
     redirect($PAGE->url, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
@@ -51,21 +51,21 @@ foreach ($types as $modname => $support) {
     $rows[] = [
         'modname' => $modname,
         'name' => get_string('modulename', $modname),
-        'support' => get_string($support === adapter::SUPPORT_FULL ? 'support_full' : 'support_generic', 'block_my_assessments'),
+        'support' => get_string($support === adapter::SUPPORT_FULL ? 'support_full' : 'support_generic', 'block_le_dashboard'),
         'supportdesc' => get_string(
             ($support === adapter::SUPPORT_FULL ? 'support_full' : 'support_generic') . '_desc',
-            'block_my_assessments'
+            'block_le_dashboard'
         ),
         'enabled' => in_array($modname, $enabled),
-        'error' => $error ? get_string((($error->count ?? 1) > 1) ? 'lasterrorcount' : 'lasterror', 'block_my_assessments', [
+        'error' => $error ? get_string((($error->count ?? 1) > 1) ? 'lasterrorcount' : 'lasterror', 'block_le_dashboard', [
             'time' => userdate($error->time), 'message' => $error->message, 'count' => $error->count ?? 1]) : null,
     ];
 }
 usort($rows, fn($a, $b) => strcmp($a['name'], $b['name']));
 
 echo $OUTPUT->header();
-echo $OUTPUT->heading(get_string('activitytypes', 'block_my_assessments'));
-echo $OUTPUT->render_from_template('block_my_assessments/admin_types', [
+echo $OUTPUT->heading(get_string('activitytypes', 'block_le_dashboard'));
+echo $OUTPUT->render_from_template('block_le_dashboard/admin_types', [
     'action' => $PAGE->url->out(false),
     'sesskey' => sesskey(),
     'rows' => $rows,

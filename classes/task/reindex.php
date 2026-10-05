@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\task;
+namespace block_le_dashboard\task;
 
-use block_my_assessments\local\adapter\registry;
-use block_my_assessments\local\index\indexer;
+use block_le_dashboard\local\adapter\registry;
+use block_le_dashboard\local\index\indexer;
 
 /**
  * Re-indexes one assessment, a course, or a list of assessments (a queued Refresh).
  *
  * Custom data: cmid, or courseid, or cmids plus userid (the person who pressed Refresh).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class reindex extends \core\task\adhoc_task {
     #[\Override]
     public function get_name() {
-        return get_string('task_reindex', 'block_my_assessments');
+        return get_string('task_reindex', 'block_le_dashboard');
     }
 
     #[\Override]
@@ -51,7 +51,7 @@ class reindex extends \core\task\adhoc_task {
         } finally {
             // Refresh is over whether or not every activity indexed: the button comes back (PR7).
             if (!empty($data['userid'])) {
-                unset_user_preference('block_my_assessments_refreshing', (int)$data['userid']);
+                unset_user_preference('block_le_dashboard_refreshing', (int)$data['userid']);
             }
             registry::flush_errors();
         }

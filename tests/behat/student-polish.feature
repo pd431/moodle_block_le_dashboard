@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard
 Feature: Finished work goes to Past, and student rows say only what is unusual
   In order to see at a glance what is different about my work
   As a student, marker or module convenor
@@ -61,6 +61,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     Then "A1" should appear in the "Past" section
     And "A2" should appear in the "Undated" section
 
+  @javascript
   Scenario: A student's undated work, once handed in, is Received until it has a grade
     Given a summative "assign" "A1" in "M1" with no due date exists
     And "student1" has submitted "A1"
@@ -118,6 +119,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     Then "A1" should appear in the "Past" section
     And the activity icon of "A1" should have no modifiers
 
+  @javascript
   Scenario: Overdue work carries a red clock
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     When I log in as "student1" and view my dashboard
@@ -125,6 +127,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     And the activity icon of "A1" should have the "overdue" modifier
     And the "overdue" modifier of "A1" should be a "fa-clock" icon in the "danger" tone
 
+  @javascript
   Scenario: Work handed in late carries a grey clock in Past
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
     And "student1" submitted "A1" "2 days ago"
@@ -140,6 +143,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     Then the activity icon of "A1" should not have the "late" modifier
     And the activity icon of "A1" should have the "extension" modifier
 
+  @javascript
   Scenario: Two modifiers sit side by side
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
     And "student1" has an extension on "A1" to "3 days ago"
@@ -150,7 +154,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     And the modifiers of "A1" should sit side by side
 
   # Mitigate needs block_rhb's links: without block_rhb, a stand-in gives one.
-  @block_rhb
+  @block_rhb @javascript
   Scenario: Every Mitigate icon shares the Mitigate colour
     Given a summative "assign" "A1" in "M1" is due "in 2 days"
     And a summative "assign" "A2" in "M1" was due "5 days ago"
@@ -159,6 +163,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     Then the Mitigate button of "A1" should show a "fa-hand-holding-heart" icon in the "attention" tone
     And the "extension" modifier of "A2" should be a "fa-calendar-plus" icon in the "attention" tone
 
+  @javascript
   Scenario: Due soon keeps its own icon, distinct from late
     Given a summative "assign" "A1" in "M1" is due "in 2 days"
     When I log in as "student1" and view my dashboard
@@ -166,6 +171,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
 
   # ---------- Late penalties next to the mark ----------
 
+  @javascript
   Scenario: A late mark has a popover explaining late penalties
     Given the My assessments late penalty link is "https://example.com/late"
     And a summative "assign" "A1" in "M1" was due "3 days ago"

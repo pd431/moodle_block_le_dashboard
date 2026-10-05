@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
 /**
  * Which adapter serves which activity type, and which types the site has enabled (R5).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class registry {
@@ -55,7 +55,7 @@ class registry {
      * @return string[]
      */
     public static function enabled_types(): array {
-        $value = get_config('block_my_assessments', 'enabledtypes');
+        $value = get_config('block_le_dashboard', 'enabledtypes');
         if ($value === false) {
             $value = self::DEFAULT_ENABLED;
         }
@@ -74,7 +74,7 @@ class registry {
             $types[] = $modname;
         }
         sort($types);
-        set_config('enabledtypes', implode(',', $types), 'block_my_assessments');
+        set_config('enabledtypes', implode(',', $types), 'block_le_dashboard');
     }
 
     /**
@@ -128,9 +128,9 @@ class registry {
      */
     public static function check_test_failure(string $modname): void {
         if ((defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
-            $failing = explode(',', (string)get_config('block_my_assessments', 'testfailtypes'));
+            $failing = explode(',', (string)get_config('block_le_dashboard', 'testfailtypes'));
             if (in_array($modname, $failing)) {
-                throw new \moodle_exception('testfailure', 'block_my_assessments', '', $modname);
+                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', $modname);
             }
         }
     }
@@ -146,8 +146,8 @@ class registry {
     public static function take_test_write_failure(int $cmid): bool {
         $testing = (defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('BEHAT_TEST') && BEHAT_TEST)
             || (defined('PHPUNIT_TEST') && PHPUNIT_TEST);
-        if ($testing && (int)get_config('block_my_assessments', 'testfailwrite') === $cmid) {
-            unset_config('testfailwrite', 'block_my_assessments');
+        if ($testing && (int)get_config('block_le_dashboard', 'testfailwrite') === $cmid) {
+            unset_config('testfailwrite', 'block_le_dashboard');
             return true;
         }
         return false;
@@ -174,7 +174,7 @@ class registry {
             'count' => (self::$errors[$modname]->count ?? 0) + 1,
         ];
         if (CLI_SCRIPT && !(defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
-            mtrace("block_my_assessments: indexing $modname failed: " . $e->getMessage());
+            mtrace("block_le_dashboard: indexing $modname failed: " . $e->getMessage());
         }
     }
 
@@ -183,7 +183,7 @@ class registry {
      */
     public static function flush_errors(): void {
         foreach (self::$errors as $modname => $error) {
-            set_config('lasterror_' . $modname, json_encode($error), 'block_my_assessments');
+            set_config('lasterror_' . $modname, json_encode($error), 'block_le_dashboard');
         }
         self::$errors = [];
     }
@@ -194,8 +194,8 @@ class registry {
      * @param string $modname
      */
     public static function clear_error(string $modname): void {
-        if (!isset(self::$errors[$modname]) && get_config('block_my_assessments', 'lasterror_' . $modname) !== false) {
-            unset_config('lasterror_' . $modname, 'block_my_assessments');
+        if (!isset(self::$errors[$modname]) && get_config('block_le_dashboard', 'lasterror_' . $modname) !== false) {
+            unset_config('lasterror_' . $modname, 'block_le_dashboard');
         }
     }
 
@@ -209,7 +209,7 @@ class registry {
         if (isset(self::$errors[$modname])) {
             return self::$errors[$modname];
         }
-        $value = get_config('block_my_assessments', 'lasterror_' . $modname);
+        $value = get_config('block_le_dashboard', 'lasterror_' . $modname);
         return $value ? json_decode($value) : null;
     }
 }

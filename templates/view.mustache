@@ -15,7 +15,7 @@
     along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 }}
 {{!
-    @template block_my_assessments/view
+    @template block_le_dashboard/view
 
     One view (student, staff or convenor). Every view has the same shape.
 
@@ -38,34 +38,34 @@
 }}
 <div class="ma-view ma-view--{{key}}{{#showgrades}} ma-view--showgrades{{/showgrades}}" data-region="ma-view-root" data-view="{{key}}" tabindex="-1">
     {{#freshness.preparing}}
-    <div class="alert alert-info ma-preparing" role="status">{{#str}}preparing, block_my_assessments{{/str}}</div>
+    <div class="alert alert-info ma-preparing" role="status">{{#str}}preparing, block_le_dashboard{{/str}}</div>
     {{/freshness.preparing}}
     {{! One bar for every control, above the summary its type filter switches. }}
     <div class="ma-controls" data-region="ma-controls">
         {{#hasyears}}
         <div class="ma-control ma-year">
-            <label class="accesshide" for="{{uniqid}}-year">{{#str}}academicyear, block_my_assessments{{/str}}</label>
+            <label class="accesshide" for="{{uniqid}}-year">{{#str}}academicyear, block_le_dashboard{{/str}}</label>
             <select id="{{uniqid}}-year" class="{{selectclass}}" data-action="year">
                 {{#years}}<option value="{{id}}"{{#selected}} selected{{/selected}}>{{label}}</option>{{/years}}
             </select>
         </div>
         {{/hasyears}}
-        <div class="btn-group btn-group-sm ma-control ma-type-filter" role="group" aria-label="{{#str}}filtertype, block_my_assessments{{/str}}">
-            <button type="button" class="btn ma-filter-btn active" aria-pressed="true" data-action="filter-type" data-type="both">{{#str}}both, block_my_assessments{{/str}}</button>
-            <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="summative">{{#str}}summative, block_my_assessments{{/str}}</button>
-            <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="formative">{{#str}}formative, block_my_assessments{{/str}}</button>
+        <div class="btn-group btn-group-sm ma-control ma-type-filter" role="group" aria-label="{{#str}}filtertype, block_le_dashboard{{/str}}">
+            <button type="button" class="btn ma-filter-btn active" aria-pressed="true" data-action="filter-type" data-type="both">{{#str}}both, block_le_dashboard{{/str}}</button>
+            <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="summative">{{#str}}summative, block_le_dashboard{{/str}}</button>
+            <button type="button" class="btn ma-filter-btn" aria-pressed="false" data-action="filter-type" data-type="formative">{{#str}}formative, block_le_dashboard{{/str}}</button>
         </div>
         {{#hasgradestoggle}}
         {{! Set apart from the type buttons, so it never reads as a fourth type. }}
         <div class="ma-control ma-control--apart">
             <button type="button" class="btn btn-sm ma-filter-btn ma-grades-toggle" data-action="toggle-grades"
                     aria-pressed="{{#showgrades}}true{{/showgrades}}{{^showgrades}}false{{/showgrades}}">
-                <i class="fa fa-eye ma-icon ma-pressed-mark" aria-hidden="true"></i><i class="fa fa-eye-slash ma-icon ma-unpressed-mark" aria-hidden="true"></i>{{#str}}showgrades, block_my_assessments{{/str}}
+                <i class="fa fa-eye ma-icon ma-pressed-mark" aria-hidden="true"></i><i class="fa fa-eye-slash ma-icon ma-unpressed-mark" aria-hidden="true"></i>{{#str}}showgrades, block_le_dashboard{{/str}}
             </button>
         </div>
         {{/hasgradestoggle}}
         <div class="ma-control ma-search">
-            <label class="accesshide" for="{{uniqid}}-search">{{#str}}search, block_my_assessments{{/str}}</label>
+            <label class="accesshide" for="{{uniqid}}-search">{{#str}}search, block_le_dashboard{{/str}}</label>
             <div class="input-group input-group-sm">
                 <span class="input-group-text" aria-hidden="true"><i class="fa fa-search"></i></span>
                 <input type="search" id="{{uniqid}}-search" class="form-control" data-action="search"
@@ -77,26 +77,26 @@
     <div class="ma-freshness" data-region="ma-freshness">
         {{#freshness.refreshing}}
         <span class="ma-freshness-text">
-            <span class="spinner-border spinner-border-sm ma-icon" aria-hidden="true"></span>{{#str}}refreshing, block_my_assessments{{/str}}
+            <span class="spinner-border spinner-border-sm ma-icon" aria-hidden="true"></span>{{#str}}refreshing, block_le_dashboard{{/str}}
         </span>
         {{/freshness.refreshing}}
         {{^freshness.refreshing}}
         <span class="ma-freshness-text">{{freshness.text}}</span>
         <button type="button" class="btn btn-sm ma-btn ma-btn--refresh" data-action="refresh">
-            <i class="fa fa-rotate-right ma-icon" aria-hidden="true"></i>{{#str}}refresh, block_my_assessments{{/str}}
+            <i class="fa fa-rotate-right ma-icon" aria-hidden="true"></i>{{#str}}refresh, block_le_dashboard{{/str}}
         </button>
         {{/freshness.refreshing}}
     </div>
 
     {{#hassummary}}
     <div class="ma-summary" data-region="ma-summary">
-        {{#summary}}{{> block_my_assessments/summary_box }}{{/summary}}
+        {{#summary}}{{> block_le_dashboard/summary_box }}{{/summary}}
     </div>
     {{/hassummary}}
 
     {{#hasrows}}
-    {{#sections}}{{> block_my_assessments/section }}{{/sections}}
-    <p class="ma-filter-empty text-muted" data-region="ma-filter-empty" hidden>{{#str}}nomatches, block_my_assessments{{/str}}</p>
+    {{#sections}}{{> block_le_dashboard/section }}{{/sections}}
+    <p class="ma-filter-empty text-muted" data-region="ma-filter-empty" hidden>{{#str}}nomatches, block_le_dashboard{{/str}}</p>
     {{/hasrows}}
     {{^hasrows}}
     <div class="ma-empty text-muted">{{empty}}</div>

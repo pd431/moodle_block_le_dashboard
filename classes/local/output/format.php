@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\output;
+namespace block_le_dashboard\local\output;
 
 /**
  * Small formatting helpers shared by the three views.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class format {
@@ -49,7 +49,7 @@ class format {
      * @return string
      */
     public static function datetime(int $time): string {
-        return userdate($time, get_string('strftimedue', 'block_my_assessments'));
+        return userdate($time, get_string('strftimedue', 'block_le_dashboard'));
     }
 
     /**
@@ -64,8 +64,8 @@ class format {
         $sm = get_string_manager();
         return [
             'key' => $key,
-            'label' => $sm->string_exists('date_' . $key, 'block_my_assessments')
-                ? get_string('date_' . $key, 'block_my_assessments') : null,
+            'label' => $sm->string_exists('date_' . $key, 'block_le_dashboard')
+                ? get_string('date_' . $key, 'block_le_dashboard') : null,
             'text' => self::datetime($time),
             'iso' => date('c', $time),
             'note' => $note,
@@ -82,17 +82,17 @@ class format {
     public static function duration(int $seconds): string {
         $seconds = max(0, $seconds);
         if ($seconds < MINSECS) {
-            return get_string('duration_lessminute', 'block_my_assessments');
+            return get_string('duration_lessminute', 'block_le_dashboard');
         }
         if ($seconds < HOURSECS) {
-            return get_string('duration_minutes', 'block_my_assessments', (int)floor($seconds / MINSECS));
+            return get_string('duration_minutes', 'block_le_dashboard', (int)floor($seconds / MINSECS));
         }
         if ($seconds < DAYSECS) {
-            return get_string('duration_hours', 'block_my_assessments', (int)floor($seconds / HOURSECS));
+            return get_string('duration_hours', 'block_le_dashboard', (int)floor($seconds / HOURSECS));
         }
         $days = (int)floor($seconds / DAYSECS);
-        return $days === 1 ? get_string('duration_day', 'block_my_assessments')
-            : get_string('duration_days', 'block_my_assessments', $days);
+        return $days === 1 ? get_string('duration_day', 'block_le_dashboard')
+            : get_string('duration_days', 'block_le_dashboard', $days);
     }
 
     /**
@@ -104,19 +104,19 @@ class format {
      */
     public static function updated(?int $time, int $now): string {
         if (!$time) {
-            return get_string('updatednever', 'block_my_assessments');
+            return get_string('updatednever', 'block_le_dashboard');
         }
         $diff = max(0, $now - $time);
         if ($diff < MINSECS) {
-            return get_string('updatedjustnow', 'block_my_assessments');
+            return get_string('updatedjustnow', 'block_le_dashboard');
         }
         if ($diff < HOURSECS) {
-            return get_string('updatedminutes', 'block_my_assessments', (int)floor($diff / MINSECS));
+            return get_string('updatedminutes', 'block_le_dashboard', (int)floor($diff / MINSECS));
         }
         if ($diff < DAYSECS) {
-            return get_string('updatedhours', 'block_my_assessments', (int)floor($diff / HOURSECS));
+            return get_string('updatedhours', 'block_le_dashboard', (int)floor($diff / HOURSECS));
         }
-        return get_string('updatedon', 'block_my_assessments', self::datetime($time));
+        return get_string('updatedon', 'block_le_dashboard', self::datetime($time));
     }
 
     /**
@@ -127,11 +127,11 @@ class format {
      */
     public static function stage(string $stage): string {
         if (preg_match('/^marker(\d+)$/', $stage, $m)) {
-            return get_string('stage_markern', 'block_my_assessments', $m[1]);
+            return get_string('stage_markern', 'block_le_dashboard', $m[1]);
         }
         $sm = get_string_manager();
-        return $sm->string_exists('stage_' . $stage, 'block_my_assessments')
-            ? get_string('stage_' . $stage, 'block_my_assessments') : $stage;
+        return $sm->string_exists('stage_' . $stage, 'block_le_dashboard')
+            ? get_string('stage_' . $stage, 'block_le_dashboard') : $stage;
     }
 
     /**
@@ -152,7 +152,7 @@ class format {
             'value' => $value,
             'max' => $max,
             'percent' => $percent,
-            'text' => get_string($groups ? 'xofygroups' : 'xofy', 'block_my_assessments', ['x' => $value, 'y' => $max]),
+            'text' => get_string($groups ? 'xofygroups' : 'xofy', 'block_le_dashboard', ['x' => $value, 'y' => $max]),
         ];
     }
 
@@ -173,7 +173,7 @@ class format {
             'id' => $rowid . '-hint-' . $key,
             'key' => $key,
             'icon' => self::HINT_ICONS[$key] ?? 'fa-circle-info',
-            'label' => $label ?? get_string('hint_' . $key, 'block_my_assessments'),
+            'label' => $label ?? get_string('hint_' . $key, 'block_le_dashboard'),
             'text' => $text,
             'link' => $link,
         ];
@@ -194,10 +194,10 @@ class format {
         return self::hint(
             $rowid,
             'plagiarism',
-            $n === 1 ? get_string('hint_plagiarism_text_one', 'block_my_assessments')
-                : get_string('hint_plagiarism_text_many', 'block_my_assessments', $n),
+            $n === 1 ? get_string('hint_plagiarism_text_one', 'block_le_dashboard')
+                : get_string('hint_plagiarism_text_many', 'block_le_dashboard', $n),
             null,
-            get_string('hint_plagiarism', 'block_my_assessments', $n)
+            get_string('hint_plagiarism', 'block_le_dashboard', $n)
         );
     }
 
@@ -230,7 +230,7 @@ class format {
      * @return string
      */
     public static function tip(string $modlabel, array $parts): string {
-        return implode(' ', array_merge([get_string('tipsentence', 'block_my_assessments', $modlabel)], $parts));
+        return implode(' ', array_merge([get_string('tipsentence', 'block_le_dashboard', $modlabel)], $parts));
     }
 
     /**
@@ -256,13 +256,13 @@ class format {
             'modlabel' => $modname,
             'faicon' => self::ICONS[$cm->modname] ?? self::ICON_FALLBACK,
             'assesstype' => $cm->assesstype,
-            'typelabel' => get_string($cm->assesstype, 'block_my_assessments'),
-            'typeline' => get_string('rowtype', 'block_my_assessments', [
+            'typelabel' => get_string($cm->assesstype, 'block_le_dashboard'),
+            'typeline' => get_string('rowtype', 'block_le_dashboard', [
                 'mod' => $modname,
-                'type' => get_string($cm->assesstype, 'block_my_assessments'),
+                'type' => get_string($cm->assesstype, 'block_le_dashboard'),
             ]),
             'hidden' => !empty($cm->hiddenfromstudents),
-            'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_my_assessments')] : []),
+            'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_le_dashboard')] : []),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),
         ];
     }
@@ -287,7 +287,7 @@ class format {
     public static function action(string $key, string $url): array {
         return [
             'key' => $key,
-            'label' => get_string('action_' . $key, 'block_my_assessments'),
+            'label' => get_string('action_' . $key, 'block_le_dashboard'),
             'icon' => self::ACTION_ICONS[$key],
             'url' => $url,
         ];

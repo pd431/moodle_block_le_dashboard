@@ -14,21 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments;
+namespace block_le_dashboard;
 
-use block_my_assessments\local\view\convenor;
-use block_my_assessments\local\view\staff;
-use block_my_assessments\local\view\student;
+use block_le_dashboard\local\view\convenor;
+use block_le_dashboard\local\view\staff;
+use block_le_dashboard\local\view\student;
 
 /**
  * The three views, end to end from the index.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
- * @covers     \block_my_assessments\local\view\student
- * @covers     \block_my_assessments\local\view\staff
- * @covers     \block_my_assessments\local\view\convenor
+ * @covers     \block_le_dashboard\local\view\student
+ * @covers     \block_le_dashboard\local\view\staff
+ * @covers     \block_le_dashboard\local\view\convenor
  */
 final class views_test extends \advanced_testcase {
     /** @var array Users by name. */
@@ -45,7 +45,7 @@ final class views_test extends \advanced_testcase {
         $this->preventResetByRollback();
         $this->setAdminUser();
         $gen = $this->getDataGenerator();
-        $ma = $gen->get_plugin_generator('block_my_assessments');
+        $ma = $gen->get_plugin_generator('block_le_dashboard');
         $convenorrole = $ma->configure(['assign', 'quiz', 'forum']);
         $course = $gen->create_course(['shortname' => 'M1']);
         foreach (['s1', 's2'] as $name) {
@@ -150,7 +150,7 @@ final class views_test extends \advanced_testcase {
      */
     public function test_extensions(): void {
         global $DB;
-        $ma = $this->getDataGenerator()->get_plugin_generator('block_my_assessments');
+        $ma = $this->getDataGenerator()->get_plugin_generator('block_le_dashboard');
         $cmid = $this->a['overdue']->cmid;
         $ma->allocate_assign($cmid, $this->u['s1']->id, $this->u['marker']->id);
         $extension = time() + 2 * DAYSECS;
@@ -164,11 +164,11 @@ final class views_test extends \advanced_testcase {
             'cmid' => $cmid, 'onlinetext' => 'early']);
         (new local\index\indexer())->index_cm($cmid);
 
-        $unit = $DB->get_record('block_my_assessments_mark', ['cmid' => $cmid, 'unitid' => $this->u['s1']->id]);
+        $unit = $DB->get_record('block_le_dashboard_mark', ['cmid' => $cmid, 'unitid' => $this->u['s1']->id]);
         $this->assertEquals($extension, $unit->unitdue);
         $this->assertGreaterThanOrEqual($extension, (int)$unit->timeready, 'ready no earlier than the deadline');
         $this->assertSame(',' . $this->u['marker']->id . ',', $DB->get_field(
-            'block_my_assessments_stu',
+            'block_le_dashboard_stu',
             'allocatedto',
             ['cmid' => $cmid, 'userid' => $this->u['s1']->id]
         ));
@@ -190,14 +190,14 @@ final class views_test extends \advanced_testcase {
      * nothing for this view yet, not merely because a re-index is queued after an upgrade.
      */
     public function test_preparing(): void {
-        set_config('backfillpending', time(), 'block_my_assessments');
-        unset_config('backfilldone', 'block_my_assessments');
+        set_config('backfillpending', time(), 'block_le_dashboard');
+        unset_config('backfilldone', 'block_le_dashboard');
         $this->assertTrue((new student($this->u['s1']->id))->export()['freshness']['preparing']);
-        set_config('backfilldone', time(), 'block_my_assessments');
+        set_config('backfilldone', time(), 'block_le_dashboard');
         $this->assertFalse((new student($this->u['s1']->id))->export()['freshness']['preparing']);
         $nobody = $this->getDataGenerator()->create_user();
         $this->assertTrue((new student($nobody->id))->export()['freshness']['preparing'], 'nothing indexed for them yet');
-        unset_config('backfillpending', 'block_my_assessments');
+        unset_config('backfillpending', 'block_le_dashboard');
         $this->assertFalse((new student($nobody->id))->export()['freshness']['preparing']);
     }
 
@@ -231,12 +231,12 @@ final class views_test extends \advanced_testcase {
         $gen->enrol_user($this->u['s1']->id, $course->id, 'student');
         $a = $gen->create_module('assign', ['course' => $course->id, 'name' => 'Essays & Reports',
             'duedate' => time() + DAYSECS]);
-        $gen->get_plugin_generator('block_my_assessments')->tag($a->cmid, 'summative');
+        $gen->get_plugin_generator('block_le_dashboard')->tag($a->cmid, 'summative');
         $export = (new student($this->u['s1']->id))->export();
         $row = self::rows($export, 'upcoming')['Essays & Reports'];
         $this->assertSame('Law & Society', $row['course']);
         $this->assertStringContainsString('essays & reports', $row['search']);
-        $html = $OUTPUT->render_from_template('block_my_assessments/view', $export);
+        $html = $OUTPUT->render_from_template('block_le_dashboard/view', $export);
         $this->assertStringContainsString('Essays &amp; Reports', $html);
         $this->assertStringNotContainsString('&amp;amp;', $html);
     }
@@ -244,7 +244,7 @@ final class views_test extends \advanced_testcase {
     /**
      * PR4: Refresh finds a tagged assessment the index missed, for students and convenors.
      *
-     * @covers \block_my_assessments\external\refresh
+     * @covers \block_le_dashboard\external\refresh
      */
     public function test_refresh_finds_missed(): void {
         global $DB;
@@ -253,12 +253,12 @@ final class views_test extends \advanced_testcase {
             $a = $this->getDataGenerator()->create_module('assign', ['course' => $courseid, 'name' => "Missed $view",
                 'duedate' => time() + DAYSECS]);
             \core_tag_tag::set_item_tags('core', 'course_modules', $a->cmid, \context_module::instance($a->cmid), ['summative']);
-            $DB->delete_records('task_adhoc', ['component' => 'block_my_assessments']);
-            $DB->delete_records('task_adhoc', ['classname' => '\\block_my_assessments\\task\\reindex']);
-            $this->assertFalse($DB->record_exists('block_my_assessments_cm', ['cmid' => $a->cmid]));
+            $DB->delete_records('task_adhoc', ['component' => 'block_le_dashboard']);
+            $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\reindex']);
+            $this->assertFalse($DB->record_exists('block_le_dashboard_cm', ['cmid' => $a->cmid]));
             $this->setUser($this->u[$user]);
-            \block_my_assessments\external\refresh::execute($view);
-            $this->assertTrue($DB->record_exists('block_my_assessments_cm', ['cmid' => $a->cmid]), $view);
+            \block_le_dashboard\external\refresh::execute($view);
+            $this->assertTrue($DB->record_exists('block_le_dashboard_cm', ['cmid' => $a->cmid]), $view);
             $this->setAdminUser();
         }
     }
@@ -268,9 +268,9 @@ final class views_test extends \advanced_testcase {
      */
     public function test_refreshing_expires(): void {
         $userid = $this->u['convenor']->id;
-        set_user_preference('block_my_assessments_refreshing', time() - 30, $userid);
+        set_user_preference('block_le_dashboard_refreshing', time() - 30, $userid);
         $this->assertTrue((new convenor($userid))->export()['freshness']['refreshing']);
-        set_user_preference('block_my_assessments_refreshing', time() - 11 * MINSECS, $userid);
+        set_user_preference('block_le_dashboard_refreshing', time() - 11 * MINSECS, $userid);
         $this->assertFalse((new convenor($userid))->export()['freshness']['refreshing']);
     }
 }

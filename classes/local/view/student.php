@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\view;
+namespace block_le_dashboard\local\view;
 
-use block_my_assessments\local\config;
-use block_my_assessments\local\index\student_row;
-use block_my_assessments\local\mitigation;
-use block_my_assessments\local\output\format;
-use block_my_assessments\local\scope;
+use block_le_dashboard\local\config;
+use block_le_dashboard\local\index\student_row;
+use block_le_dashboard\local\mitigation;
+use block_le_dashboard\local\output\format;
+use block_le_dashboard\local\scope;
 
 /**
  * The student view: my own assessments, in Overdue, Upcoming and Past.
@@ -28,8 +28,8 @@ use block_my_assessments\local\scope;
  * One query on the index, then the live uservisible check on the few rows
  * returned (R1: any restriction hides the assessment, dates included).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class student extends base {
@@ -89,8 +89,8 @@ class student extends base {
                                                 c.hiddenfromstudents, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
                                                 s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.enrolstart
-                                           FROM {block_my_assessments_stu} s
-                                           JOIN {block_my_assessments_cm} c ON c.cmid = s.cmid
+                                           FROM {block_le_dashboard_stu} s
+                                           JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0
                                             AND c.courseid $insql", $params);
         $rows = [];
@@ -113,7 +113,7 @@ class student extends base {
     public function scope_cmids(): array {
         global $DB;
         return array_map('intval', $DB->get_fieldset_select(
-            'block_my_assessments_stu',
+            'block_le_dashboard_stu',
             'cmid',
             'userid = :userid',
             ['userid' => $this->userid]
@@ -168,14 +168,14 @@ class student extends base {
             if ($selfcert['max'] === null) {
                 // No limit: the count is the value, with a note under it.
                 $box = $this->box('selfcert', ['both' => $selfcert['used']] + format::zero_counts());
-                $box['subnote'] = get_string('selfcertnolimit', 'block_my_assessments');
+                $box['subnote'] = get_string('selfcertnolimit', 'block_le_dashboard');
             } else {
                 $box = $this->box(
                     'selfcert',
                     format::zero_counts(),
                     null,
                     null,
-                    get_string('selfcertused', 'block_my_assessments', ['used' => $selfcert['used'], 'max' => $selfcert['max']])
+                    get_string('selfcertused', 'block_le_dashboard', ['used' => $selfcert['used'], 'max' => $selfcert['max']])
                 );
             }
             $summary[] = $box;
@@ -188,7 +188,7 @@ class student extends base {
             $this->section(classifier::PAST, $sections[classifier::PAST]),
         ]), $oldest, [
             'hasgradestoggle' => $hasgrades,
-            'showgrades' => (bool)get_user_preferences('block_my_assessments_showgrades', false, $this->userid),
+            'showgrades' => (bool)get_user_preferences('block_le_dashboard_showgrades', false, $this->userid),
         ]);
     }
 
@@ -205,7 +205,7 @@ class student extends base {
         $mitigation = null;
         if ($r->mitigation && isset(self::OVERLAY_ICONS[$r->mitigation])) {
             $mitigation = ['state' => $r->mitigation, 'icon' => self::OVERLAY_ICONS[$r->mitigation]];
-            $parts[] = get_string('tip_' . $r->mitigation, 'block_my_assessments');
+            $parts[] = get_string('tip_' . $r->mitigation, 'block_le_dashboard');
         }
         $state = null;
         if ($status === classifier::STATUS_REOPENED) {
@@ -225,7 +225,7 @@ class student extends base {
             $state = 'duesoon';
         }
         if ($state) {
-            $parts[] = get_string('tip_' . $state, 'block_my_assessments');
+            $parts[] = get_string('tip_' . $state, 'block_le_dashboard');
         }
         return [$state ? ['state' => $state, 'icon' => self::OVERLAY_ICONS[$state]] : null, $mitigation, $parts];
     }
@@ -256,16 +256,16 @@ class student extends base {
         $submitted = (int)$r->submitted === 1 && $r->timesubmitted ? (int)$r->timesubmitted : null;
         if ($submitted && $due && $submitted > $due) {
             // Against the effective deadline (D2), so extensions never read as late.
-            $notes[] = get_string('submittedlate', 'block_my_assessments', format::duration($submitted - $due));
+            $notes[] = get_string('submittedlate', 'block_le_dashboard', format::duration($submitted - $due));
         }
         // Time left: to the cut-off, or to the deadline plus the grace period when there is none (G9).
         $until = $r->cutoff ? (int)$r->cutoff : ($due ? $due + config::grace() : null);
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
-            $notes[] = get_string('stillsubmit', 'block_my_assessments', format::duration($until - $this->now));
+            $notes[] = get_string('stillsubmit', 'block_le_dashboard', format::duration($until - $this->now));
         }
         $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]);
         if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
-            $notes[] = get_string('duein', 'block_my_assessments', format::duration($due - $this->now));
+            $notes[] = get_string('duein', 'block_le_dashboard', format::duration($due - $this->now));
         }
         return $notes;
     }
@@ -285,7 +285,7 @@ class student extends base {
             'context' => \context_course::instance($r->courseid),
             'escape' => false,
         ]);
-        $row['typeline'] = get_string('rowkind', 'block_my_assessments', [
+        $row['typeline'] = get_string('rowkind', 'block_le_dashboard', [
             'type' => $row['typelabel'],
             'mod' => \core_text::strtolower($row['modlabel']),
         ]);
@@ -293,14 +293,14 @@ class student extends base {
         $row['search'] .= ' ' . \core_text::strtolower($row['course']);
         // The ordinary case has no pill: the section and the Submit button already say it.
         $row['status'] = in_array($status, classifier::PLAIN_STATUSES) ? null
-            : ['key' => $status, 'label' => get_string('status_' . $status, 'block_my_assessments')];
+            : ['key' => $status, 'label' => get_string('status_' . $status, 'block_le_dashboard')];
         [$row['overlay'], $row['mitigationoverlay'], $parts] = $this->modifiers($r, $section, $status);
         $row['hasmodifiers'] = $row['overlay'] || $row['mitigationoverlay'];
         $row['tip'] = format::tip($row['modlabel'], $parts);
 
         $dates = [];
         if ($r->due) {
-            $note = $r->individual ? get_string('individualdeadline', 'block_my_assessments') : null;
+            $note = $r->individual ? get_string('individualdeadline', 'block_le_dashboard') : null;
             $dates[] = format::date('due', (int)$r->due, $note);
         }
         $released = $status === classifier::STATUS_RELEASED;
@@ -320,7 +320,7 @@ class student extends base {
         $row['dates'] = $dates;
         $row['notes'] = $this->notes($r, $section, $status);
         if ($status === classifier::STATUS_RECEIVED) {
-            $text = get_string('hint_received_text', 'block_my_assessments');
+            $text = get_string('hint_received_text', 'block_le_dashboard');
             $row['hints'][] = format::hint($row['id'], 'received', $text);
         }
         // Late summative work: the penalties popover, next to the grade once there is one, else in the row's hints.
@@ -364,16 +364,16 @@ class student extends base {
      * @return array|null
      */
     protected function late_hint(string $rowid): ?array {
-        $text = get_config('block_my_assessments', 'latenote');
+        $text = get_config('block_le_dashboard', 'latenote');
         // Unset until an admin saves the new setting: use its default.
-        $text = trim($text === false ? get_string('latenote_default', 'block_my_assessments') : $text);
+        $text = trim($text === false ? get_string('latenote_default', 'block_le_dashboard') : $text);
         if ($text === '') {
             return null;
         }
-        $url = trim((string)get_config('block_my_assessments', 'latenoteurl'));
-        $link = $url === '' ? null : get_string('hint_latepenalty_link', 'block_my_assessments', \html_writer::link(
+        $url = trim((string)get_config('block_le_dashboard', 'latenoteurl'));
+        $link = $url === '' ? null : get_string('hint_latepenalty_link', 'block_le_dashboard', \html_writer::link(
             new \moodle_url($url),
-            get_string('hint_latepenalty_linktext', 'block_my_assessments')
+            get_string('hint_latepenalty_linktext', 'block_le_dashboard')
         ));
         return format::hint($rowid, 'latepenalty', format_string($text, true, ['escape' => false]), $link);
     }
@@ -387,15 +387,15 @@ class student extends base {
      * @return array|null
      */
     protected function feedback_hint(string $rowid): ?array {
-        $text = get_config('block_my_assessments', 'feedbackcontact');
+        $text = get_config('block_le_dashboard', 'feedbackcontact');
         // Unset until an admin saves the new setting: use its default.
-        $text = trim($text === false ? get_string('feedbackcontact_default', 'block_my_assessments') : $text);
+        $text = trim($text === false ? get_string('feedbackcontact_default', 'block_le_dashboard') : $text);
         if ($text === '') {
             return null;
         }
-        $url = trim((string)get_config('block_my_assessments', 'feedbackcontacturl'));
+        $url = trim((string)get_config('block_le_dashboard', 'feedbackcontacturl'));
         $who = $url !== '' ? \html_writer::link(new \moodle_url($url), format_string($text)) : format_string($text);
-        $contact = get_string('hint_feedbackcontact_contact', 'block_my_assessments', $who);
-        return format::hint($rowid, 'feedbackcontact', get_string('hint_feedbackcontact_text', 'block_my_assessments'), $contact);
+        $contact = get_string('hint_feedbackcontact_contact', 'block_le_dashboard', $who);
+        return format::hint($rowid, 'feedbackcontact', get_string('hint_feedbackcontact_text', 'block_le_dashboard'), $contact);
     }
 }

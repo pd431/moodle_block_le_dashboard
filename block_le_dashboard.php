@@ -17,16 +17,16 @@
 /**
  * My assessments block.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-class block_my_assessments extends block_base {
+class block_le_dashboard extends block_base {
     /**
      * Sets the block title.
      */
     public function init() {
-        $this->title = get_string('pluginname', 'block_my_assessments');
+        $this->title = get_string('blocktitle', 'block_le_dashboard');
     }
 
     #[\Override]
@@ -54,11 +54,11 @@ class block_my_assessments extends block_base {
         if (!isloggedin() || isguestuser()) {
             return $this->content;
         }
-        $dashboard = new \block_my_assessments\output\dashboard((int)$USER->id);
+        $dashboard = new \block_le_dashboard\output\dashboard((int)$USER->id);
         $context = $dashboard->export_for_template($OUTPUT);
-        $this->content->text = $OUTPUT->render_from_template('block_my_assessments/dashboard', $context);
-        $this->page->requires->js_call_amd('block_my_assessments/dashboard', 'init', [
-            $context['uniqid'], get_user_preferences('block_my_assessments_type', 'both'),
+        $this->content->text = $OUTPUT->render_from_template('block_le_dashboard/dashboard', $context);
+        $this->page->requires->js_call_amd('block_le_dashboard/dashboard', 'init', [
+            $context['uniqid'], get_user_preferences('block_le_dashboard_type', 'both'),
         ]);
         return $this->content;
     }

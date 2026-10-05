@@ -17,16 +17,16 @@
 /**
  * Version details.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
-$plugin->component = 'block_my_assessments';
-$plugin->version   = 2026100902;
+$plugin->component = 'block_le_dashboard';
+$plugin->version   = 2026100501;
 $plugin->requires  = 2024100700; // Moodle 4.5.
 $plugin->supported = [405, 502];
 $plugin->maturity  = MATURITY_BETA;
-$plugin->release   = '5.0.0-beta12 (plugin-agnostic remake)';
+$plugin->release   = '5.0.0-beta13 (plugin-agnostic remake)';

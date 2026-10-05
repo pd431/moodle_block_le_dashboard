@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\privacy;
+namespace block_le_dashboard\privacy;
 
 use core_privacy\local\metadata\collection;
 use core_privacy\local\request\approved_contextlist;
@@ -23,7 +23,7 @@ use core_privacy\local\request\contextlist;
 use core_privacy\local\request\transform;
 use core_privacy\local\request\userlist;
 use core_privacy\local\request\writer;
-use block_my_assessments\local\index\indexer;
+use block_le_dashboard\local\index\indexer;
 
 /**
  * Privacy provider. The index holds per-user data derived from the activity
@@ -31,8 +31,8 @@ use block_my_assessments\local\index\indexer;
  * and deleted by removing the rows (they are rebuilt from the plugins if the
  * user is still enrolled).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class provider implements
@@ -45,7 +45,7 @@ class provider implements
 
     #[\Override]
     public static function get_metadata(collection $collection): collection {
-        $collection->add_database_table('block_my_assessments_stu', [
+        $collection->add_database_table('block_le_dashboard_stu', [
             'userid' => 'privacy:metadata:stu:userid',
             'due' => 'privacy:metadata:stu:due',
             'submitted' => 'privacy:metadata:stu:submitted',
@@ -58,7 +58,7 @@ class provider implements
             'active' => 'privacy:metadata:stu:active',
             'enrolstart' => 'privacy:metadata:stu:enrolstart',
         ], 'privacy:metadata:stu');
-        $collection->add_database_table('block_my_assessments_mark', [
+        $collection->add_database_table('block_le_dashboard_mark', [
             'unitid' => 'privacy:metadata:mark:unitid',
             'allocatedto' => 'privacy:metadata:mark:allocatedto',
             'markedby' => 'privacy:metadata:mark:markedby',
@@ -67,7 +67,7 @@ class provider implements
             'unitdue' => 'privacy:metadata:mark:unitdue',
         ], 'privacy:metadata:mark');
         foreach (self::PREFERENCES as $name) {
-            $collection->add_user_preference('block_my_assessments_' . $name, 'privacy:metadata:preference:' . $name);
+            $collection->add_user_preference('block_le_dashboard_' . $name, 'privacy:metadata:preference:' . $name);
         }
         return $collection;
     }
@@ -80,10 +80,10 @@ class provider implements
      */
     protected static function has_rows(int $userid): bool {
         global $DB;
-        return $DB->record_exists('block_my_assessments_stu', ['userid' => $userid])
-            || $DB->record_exists_select('block_my_assessments_stu', self::allocated_sql(), self::allocated_params($userid))
+        return $DB->record_exists('block_le_dashboard_stu', ['userid' => $userid])
+            || $DB->record_exists_select('block_le_dashboard_stu', self::allocated_sql(), self::allocated_params($userid))
             || $DB->record_exists_select(
-                'block_my_assessments_mark',
+                'block_le_dashboard_mark',
                 "(unitid = :u1 AND unittype = 'user') OR allocatedto = :u2 OR markedby = :u3",
                 ['u1' => $userid, 'u2' => $userid, 'u3' => $userid]
             );
@@ -135,7 +135,7 @@ class provider implements
                 continue;
             }
             $rows = [];
-            foreach ($DB->get_records('block_my_assessments_stu', ['userid' => $userid]) as $r) {
+            foreach ($DB->get_records('block_le_dashboard_stu', ['userid' => $userid]) as $r) {
                 $rows[] = [
                     'cmid' => $r->cmid,
                     'due' => $r->due ? transform::datetime($r->due) : null,
@@ -146,7 +146,7 @@ class provider implements
                 ];
             }
             $marking = array_values($DB->get_records_select(
-                'block_my_assessments_mark',
+                'block_le_dashboard_mark',
                 "(unitid = :u1 AND unittype = 'user') OR allocatedto = :u2 OR markedby = :u3",
                 ['u1' => $userid, 'u2' => $userid, 'u3' => $userid],
                 '',
@@ -155,13 +155,13 @@ class provider implements
             // Students allocated to this person as marker, counted per assessment.
             $allocated = array_values($DB->get_records_sql(
                 "SELECT cmid, COUNT(1) AS students
-                   FROM {block_my_assessments_stu}
+                   FROM {block_le_dashboard_stu}
                   WHERE " . self::allocated_sql() . "
                GROUP BY cmid",
                 self::allocated_params($userid)
             ));
             writer::with_context($context)->export_data(
-                [get_string('pluginname', 'block_my_assessments')],
+                [get_string('pluginname', 'block_le_dashboard')],
                 (object)['assessments' => $rows, 'marking' => $marking, 'allocated' => $allocated]
             );
         }
@@ -194,13 +194,13 @@ class provider implements
     #[\Override]
     public static function export_user_preferences(int $userid) {
         foreach (self::PREFERENCES as $name) {
-            $value = get_user_preferences('block_my_assessments_' . $name, null, $userid);
+            $value = get_user_preferences('block_le_dashboard_' . $name, null, $userid);
             if ($value !== null) {
                 writer::export_user_preference(
-                    'block_my_assessments',
-                    'block_my_assessments_' . $name,
+                    'block_le_dashboard',
+                    'block_le_dashboard_' . $name,
                     $value,
-                    get_string('privacy:metadata:preference:' . $name, 'block_my_assessments')
+                    get_string('privacy:metadata:preference:' . $name, 'block_le_dashboard')
                 );
             }
         }

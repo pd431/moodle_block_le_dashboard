@@ -17,15 +17,15 @@
 /**
  * Capabilities.
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
-    'block/my_assessments:addinstance' => [
+    'block/le_dashboard:addinstance' => [
         'riskbitmask' => RISK_XSS,
         'captype' => 'write',
         'contextlevel' => CONTEXT_BLOCK,
@@ -34,7 +34,7 @@ $capabilities = [
         ],
         'clonepermissionsfrom' => 'moodle/site:manageblocks',
     ],
-    'block/my_assessments:myaddinstance' => [
+    'block/le_dashboard:myaddinstance' => [
         'captype' => 'write',
         'contextlevel' => CONTEXT_SYSTEM,
         'archetypes' => [

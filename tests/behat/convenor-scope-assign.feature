@@ -1,4 +1,4 @@
-@block @block_my_assessments @block_my_assessments_mirror @javascript
+@block @block_le_dashboard @block_le_dashboard_mirror
 Feature: Convenors oversee all marking in their modules, with bars only where the activity supports them (assign mirror)
   In order to see where marking is stuck
   As a module convenor
@@ -41,6 +41,7 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
     And the academic year "2026/27" starts on "2026-09-01"
 
+  @javascript
   Scenario: Only modules in the selected academic year are shown
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
     And a summative "assign" "A2" in "M2" was due "3 days ago"

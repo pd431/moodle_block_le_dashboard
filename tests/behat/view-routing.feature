@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: Staff see only the staff views, everyone else sees the student view
   In order to match how our users work (the rc6 routing)
   As anyone who opens the dashboard
@@ -73,6 +73,7 @@ Feature: Staff see only the staff views, everyone else sees the student view
 
   # beta6 (Pierre, 2026-10-03): what needs action, then what is coming, then what is done.
   # Empty sections are hidden but keep their place, so one upcoming assessment is enough.
+  @javascript
   Scenario Outline: Sections are ordered by what needs action first
     Given "staff1" is enrolled in "M1" as "<role>"
     And a summative "assign" "A1" in "M1" is due "tomorrow"

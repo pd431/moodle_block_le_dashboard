@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
-namespace block_my_assessments\local\adapter;
+namespace block_le_dashboard\local\adapter;
 
-use block_my_assessments\local\index\cm_row;
+use block_le_dashboard\local\index\cm_row;
 
 /**
  * Adapter for any activity type without its own (R5): the due date comes
@@ -26,8 +26,8 @@ use block_my_assessments\local\index\cm_row;
  * never Overdue. An activity with no due date in the calendar is listed
  * as Undated (EC2).
  *
- * @package    block_my_assessments
- * @copyright  2026 onwards block_my_assessments contributors
+ * @package    block_le_dashboard
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class generic extends base {

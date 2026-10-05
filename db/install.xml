@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="blocks/my_assessments/db" VERSION="20261002" COMMENT="XMLDB file for block_my_assessments"
+<XMLDB PATH="blocks/le_dashboard/db" VERSION="20261002" COMMENT="XMLDB file for block_le_dashboard"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd"
 >
   <TABLES>
-    <TABLE NAME="block_my_assessments_year" COMMENT="Academic years used to scope the staff and convenor views">
+    <TABLE NAME="block_le_dashboard_year" COMMENT="Academic years used to scope the staff and convenor views">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="label" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
@@ -20,7 +20,7 @@
         <INDEX NAME="timestart" UNIQUE="false" FIELDS="timestart"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="block_my_assessments_cm" COMMENT="Assessment index: one row per tagged assessment (derived data, rebuildable)">
+    <TABLE NAME="block_le_dashboard_cm" COMMENT="Assessment index: one row per tagged assessment (derived data, rebuildable)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -47,7 +47,7 @@
         <INDEX NAME="courseid" UNIQUE="false" FIELDS="courseid"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="block_my_assessments_stu" COMMENT="Assessment index: one row per student per assessment (derived data, rebuildable)">
+    <TABLE NAME="block_le_dashboard_stu" COMMENT="Assessment index: one row per student per assessment (derived data, rebuildable)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
@@ -74,7 +74,7 @@
         <INDEX NAME="userid" UNIQUE="false" FIELDS="userid"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="block_my_assessments_mark" COMMENT="Assessment index: one row per marking unit per stage (derived data, rebuildable)">
+    <TABLE NAME="block_le_dashboard_mark" COMMENT="Assessment index: one row per marking unit per stage (derived data, rebuildable)">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="cmid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>

@@ -1,4 +1,4 @@
-@block @block_my_assessments @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: Markers see the marking that is theirs, whatever the activity plugin
   In order to plan my marking
   As a marker
@@ -26,6 +26,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
       | marker2  | M1     | editingteacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
+  @javascript
   Scenario Outline: A <activity> hidden from students still shows marking to do, flagged as hidden
     Given a summative "<activity>" "A1" in "M1" with marker allocation was due "3 days ago"
     And "student1" has submitted "A1"
@@ -40,6 +41,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
       | coursework |
       | assign     |
 
+  @javascript
   Scenario Outline: With allocation, a <activity> shows only submissions allocated to me
     Given a summative "<activity>" "A1" in "M1" with marker allocation was due "3 days ago"
     And "student1" and "student2" have submitted "A1"
@@ -81,6 +83,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     Then "Q1" should appear in the "Completed marking" section
 
   # D6: unallocated work is shown to convenors only.
+  @javascript
   Scenario: Unallocated submissions are not shown to markers who are not convenors
     Given a summative "coursework" "A1" in "M1" with marker allocation was due "3 days ago"
     And "student1" and "student2" have submitted "A1"
@@ -89,6 +92,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     When I log in as "marker1" and view my dashboard
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
 
+  @javascript
   Scenario: Marking deadline is shown only for activity types that have one
     Given a summative "coursework" "A1" in "M1" with marker allocation and a marking deadline "in 10 days" was due "3 days ago"
     And a summative "quiz" "Q1" in "M1" with an essay question was due "3 days ago"
@@ -99,6 +103,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     Then "A1" should show "Marking deadline" with the date "in 10 days"
     And "Q1" should not show "Marking deadline"
 
+  @javascript
   Scenario: A marker in a hidden course still sees their marking
     Given the course "M1" is hidden from students
     And a summative "coursework" "A1" in "M1" with marker allocation was due "3 days ago"
@@ -108,6 +113,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
 
   # beta6 (Pierre, 2026-10-03): one bar per kind of work, its count once beside it.
+  @javascript
   Scenario: My marking shows the count once, beside its bar
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
     And "student1" and "student2" have submitted "A1"
@@ -119,7 +125,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And "A1" should not show "My marking"
 
   # Coursework only: no core activity has a moderation stage.
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: A moderator sees moderation progress alongside their own marking
     Given a summative "coursework" "A1" in "M1" with marker allocation and moderation was due "3 days ago"
     And "student1" and "student2" have submitted "A1"
@@ -146,6 +152,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
   # ---------- Workflow gaps, beta7 (coordinator-approved scope, 2026-10-03) ----------
 
   # G3: unallocated work falls to the module convenor's own marking; D6 still holds for other markers.
+  @javascript
   Scenario: Unallocated submissions count in the convenor's own marking, with a hint
     Given the following "users" exist:
       | username | firstname | lastname |
@@ -230,6 +237,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     Then "A1" should appear in the "Upcoming deadlines" section
     And "A1" should not appear in the "Marking in progress" section
 
+  @javascript
   Scenario: An extension student's work counts once their own deadline passes, and their extension is shown until then
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
     And "student2" has an extension on "A1" to "tomorrow"
