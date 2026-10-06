@@ -341,6 +341,55 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * Rebuild (Pierre, 2026-10-06): purge empties every index table and the backfill fills it again,
+     * leaving out rows for activities that no longer exist.
+     */
+    public function test_rebuild(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $student = $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $this->ma->tag($a->cmid);
+        $this->runAdhocTasks('\\block_le_dashboard\\task\\reindex');
+        $row = $DB->get_record(indexer::CM, ['cmid' => $a->cmid]);
+        unset($row->id);
+        $row->cmid += 1000;
+        $DB->insert_record(indexer::CM, $row);
+        $this->assertEquals(2, indexer::counts()['cm']);
+
+        $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\backfill']);
+        $this->assertFalse(task\backfill::pending());
+        task\backfill::rebuild();
+        $this->assertSame(['cm' => 0, 'stu' => 0, 'mark' => 0], indexer::counts());
+        $this->assertTrue(task\backfill::pending());
+        $this->assertNotEmpty(get_config('block_le_dashboard', 'backfillpending'));
+
+        $this->expectOutputRegex('/Indexing course/');
+        $this->runAdhocTasks('\\block_le_dashboard\\task\\backfill');
+        $this->assertFalse(task\backfill::pending());
+        $this->assertEmpty(get_config('block_le_dashboard', 'backfillpending'));
+        $this->assertEquals([$a->cmid], array_map('intval', $DB->get_fieldset_select(indexer::CM, 'cmid', '1 = 1')));
+        $this->assertTrue($DB->record_exists(indexer::STU, ['cmid' => $a->cmid, 'userid' => $student->id]));
+    }
+
+    /**
+     * Only site admins can open the Index page, so only they can rebuild.
+     */
+    public function test_rebuild_page_needs_site_config(): void {
+        global $CFG;
+        require_once($CFG->libdir . '/adminlib.php');
+        $page = admin_get_root(true, false)->locate('block_le_dashboard_index');
+        $this->assertSame(['moodle/site:config'], $page->req_capability);
+        $manager = $this->getDataGenerator()->create_user();
+        $this->getDataGenerator()->role_assign('manager', $manager->id);
+        $this->setUser($manager);
+        $this->assertFalse($page->check_access());
+        $this->setAdminUser();
+        $this->assertTrue($page->check_access());
+    }
+
+    /**
      * PR5: saving a tag or role setting queues a full re-index and shows Preparing.
      */
     public function test_settings_queue_backfill(): void {

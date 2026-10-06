@@ -28,7 +28,7 @@ Feature: The dashboard works with whichever assessment plugins are installed
   Scenario: The admin page lists every activity type with gradebook entries and what the block can show for it
     Given a "workshop" activity with grade items exists in "M1"
     When I log in as "admin"
-    And I navigate to "Plugins > Blocks > le_dashboard > Activity types" in site administration
+    And I navigate to "Plugins > Blocks > Le Dashboard > Activity types" in site administration
     Then I should see the following activity types:
       | Activity            | Support                         | Enabled |
       | Assignment          | Full                            | yes     |
@@ -59,7 +59,7 @@ Feature: The dashboard works with whichever assessment plugins are installed
   Scenario: External tools are not offered as an activity type
     Given an "lti" activity with grade items exists in "M1"
     When I log in as "admin"
-    And I navigate to "Plugins > Blocks > le_dashboard > Activity types" in site administration
+    And I navigate to "Plugins > Blocks > Le Dashboard > Activity types" in site administration
     Then I should not see "External tool (LTI)"
 
   # EC2 (Pierre, 2026-10-04): tagging is explicit, so a tagged activity without a date is listed as Undated.
@@ -82,5 +82,5 @@ Feature: The dashboard works with whichever assessment plugins are installed
     Then "A1" should appear in the "Upcoming" section
     And I should not see any error
     When I log in as "admin"
-    And I navigate to "Plugins > Blocks > le_dashboard > Activity types" in site administration
+    And I navigate to "Plugins > Blocks > Le Dashboard > Activity types" in site administration
     Then the "Quiz" activity type should show its last indexing error

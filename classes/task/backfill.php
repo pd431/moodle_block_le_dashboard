@@ -53,6 +53,25 @@ class backfill extends \core\task\adhoc_task {
     }
 
     /**
+     * Whether a backfill is queued or running.
+     *
+     * @return bool
+     */
+    public static function pending(): bool {
+        global $DB;
+        return $DB->record_exists('task_adhoc', ['classname' => '\\' . self::class]);
+    }
+
+    /**
+     * Empties the index and queues the backfill to fill it again. Students see
+     * "Preparing your assessments" until it has run.
+     */
+    public static function rebuild(): void {
+        indexer::purge();
+        self::queue();
+    }
+
+    /**
      * Admin setting callback: a tag or role setting changed, so what is indexed changed (PR5).
      *
      * @param string $name Full setting name.

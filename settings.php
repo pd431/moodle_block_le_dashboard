@@ -175,7 +175,7 @@ if ($ADMIN->fulltree) {
     ));
 }
 $ADMIN->add('block_le_dashboard_category', $settings);
-foreach (['types' => 'activitytypes', 'years' => 'academicyears'] as $page => $string) {
+foreach (['types' => 'activitytypes', 'years' => 'academicyears', 'index' => 'indexpage'] as $page => $string) {
     $ADMIN->add('block_le_dashboard_category', new admin_externalpage(
         'block_le_dashboard_' . $page,
         new lang_string($string, 'block_le_dashboard'),

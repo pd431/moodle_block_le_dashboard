@@ -2667,4 +2667,36 @@ class behat_block_le_dashboard extends behat_base {
         $DB->set_field('course', 'startdate', 0, ['id' => $id]);
         rebuild_course_cache($id, true);
     }
+
+    /**
+     * Runs the rebuild (the backfill ad hoc task).
+     *
+     * @When /^the rebuild task runs$/
+     */
+    public function the_rebuild_task_runs(): void {
+        $this->catch_up();
+    }
+
+    /**
+     * Adds an index row for a course module that doesn't exist, as a lost delete event would leave.
+     *
+     * @Given /^the index holds a row for an activity that no longer exists$/
+     */
+    public function the_index_holds_an_orphan(): void {
+        global $DB;
+        $row = $DB->get_record(\block_le_dashboard\local\index\indexer::CM, [], '*', IGNORE_MULTIPLE);
+        unset($row->id);
+        $row->cmid = (int)$DB->get_field_sql('SELECT MAX(id) FROM {course_modules}') + 1000;
+        $DB->insert_record(\block_le_dashboard\local\index\indexer::CM, $row);
+    }
+
+    /**
+     * Empties the index as the admin page does, without letting the rebuild run.
+     *
+     * @Given /^an admin has rebuilt the index and the rebuild task has not run yet$/
+     */
+    public function the_index_was_rebuilt_but_not_run(): void {
+        \block_le_dashboard\local\index\indexer::purge();
+        set_config('backfillpending', time(), 'block_le_dashboard');
+    }
 }

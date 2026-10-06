@@ -50,7 +50,7 @@ final class provider_test extends provider_testcase {
         $this->assertEquals([$context->id], $contexts->get_contextids());
 
         provider::export_user_data(new approved_contextlist($student, 'block_le_dashboard', [$context->id]));
-        $data = writer::with_context($context)->get_data([get_string('pluginname', 'block_le_dashboard')]);
+        $data = writer::with_context($context)->get_data([get_string('blocktitle', 'block_le_dashboard')]);
         $this->assertCount(1, $data->assessments);
         provider::export_user_preferences($student->id);
         $prefs = writer::with_context(\context_system::instance())->get_user_preferences('block_le_dashboard');
@@ -80,7 +80,7 @@ final class provider_test extends provider_testcase {
         $context = \context_user::instance($marker->id);
         $this->assertEquals([$context->id], provider::get_contexts_for_userid($marker->id)->get_contextids());
         provider::export_user_data(new approved_contextlist($marker, 'block_le_dashboard', [$context->id]));
-        $data = writer::with_context($context)->get_data([get_string('pluginname', 'block_le_dashboard')]);
+        $data = writer::with_context($context)->get_data([get_string('blocktitle', 'block_le_dashboard')]);
         $this->assertCount(2, $data->allocated);
 
         provider::delete_data_for_user(new approved_contextlist($marker, 'block_le_dashboard', [$context->id]));

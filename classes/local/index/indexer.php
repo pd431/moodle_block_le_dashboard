@@ -583,6 +583,30 @@ class indexer {
     }
 
     /**
+     * Empties the index: every marking, student and assessment row.
+     */
+    public static function purge(): void {
+        global $DB;
+        $transaction = $DB->start_delegated_transaction();
+        foreach ([self::MARK, self::STU, self::CM] as $table) {
+            $DB->delete_records($table);
+        }
+        $transaction->allow_commit();
+        memo::reset();
+    }
+
+    /**
+     * How many rows each index table holds.
+     *
+     * @return int[] Keyed cm, stu and mark.
+     */
+    public static function counts(): array {
+        global $DB;
+        return ['cm' => $DB->count_records(self::CM), 'stu' => $DB->count_records(self::STU),
+            'mark' => $DB->count_records(self::MARK)];
+    }
+
+    /**
      * Removes everything for a course (course deleted).
      *
      * @param int $courseid

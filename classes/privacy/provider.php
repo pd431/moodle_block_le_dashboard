@@ -161,7 +161,7 @@ class provider implements
                 self::allocated_params($userid)
             ));
             writer::with_context($context)->export_data(
-                [get_string('pluginname', 'block_le_dashboard')],
+                [get_string('blocktitle', 'block_le_dashboard')],
                 (object)['assessments' => $rows, 'marking' => $marking, 'allocated' => $allocated]
             );
         }

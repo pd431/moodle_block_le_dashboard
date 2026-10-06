@@ -329,8 +329,9 @@ Feature: Students see only assessments they can actually access
       | in 5 hours    | Due in 4 h    |
       | in 3 days     | Due in 2 days |
 
-  # G14: the pill already says "Feedback released".
-  Scenario: A released row doesn't repeat "released"
+  # G14: the pill already says "Feedback released". Pierre, 2026-10-06: the date is labelled
+  # "Feedback received", so a first-time student knows what it is.
+  Scenario: A released row labels its feedback date without repeating "released"
     Given the following "users" exist:
       | username | firstname | lastname |
       | marker1  | Mo        | Marker   |
@@ -344,3 +345,4 @@ Feature: Students see only assessments they can actually access
     When I log in as "student1" and view my dashboard
     Then "A1" should show "Feedback released"
     And "A1" should not show "Released"
+    And "A1" should show "Feedback received" with the date "today"
