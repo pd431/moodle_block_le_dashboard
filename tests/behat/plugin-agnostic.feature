@@ -35,6 +35,21 @@ Feature: The dashboard works with whichever assessment plugins are installed
       | Quiz                | Full                            | yes     |
       | Workshop            | Due date and grade only         | no      |
 
+  # Indicator-library thread, 2026-10-06: saving the page unchanged unticked every type.
+  Scenario: Saving the activity types page without changes keeps every type as it was
+    Given a "workshop" activity with grade items exists in "M1"
+    And a summative "assign" "A1" in "M1" is due "tomorrow"
+    When I log in as "admin"
+    And I navigate to "Plugins > Blocks > Le Dashboard > Activity types" in site administration
+    And I press "Save changes"
+    Then I should see the following activity types:
+      | Activity            | Support                         | Enabled |
+      | Assignment          | Full                            | yes     |
+      | Quiz                | Full                            | yes     |
+      | Workshop            | Due date and grade only         | no      |
+    When I log in as "student1" and view my dashboard
+    Then "A1" should appear in the "Upcoming" section
+
   Scenario: An activity type left unticked is ignored even when tagged
     Given a summative "workshop" "W1" in "M1" is due "tomorrow"
     And the "Workshop" activity type is not enabled in My assessments

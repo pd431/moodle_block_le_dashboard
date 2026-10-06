@@ -33,13 +33,13 @@ admin_externalpage_setup('block_le_dashboard_types');
 
 $types = registry::listable_types();
 if (data_submitted() && confirm_sesskey()) {
-    $enabled = optional_param_array('enabled', [], PARAM_PLUGIN);
+    $enabled = optional_param_array('enabled', [], PARAM_BOOL);
     $before = registry::enabled_types();
     foreach (array_keys($types) as $modname) {
         registry::set_enabled($modname, !empty($enabled[$modname]));
     }
     if ($before != registry::enabled_types()) {
-        \core\task\manager::queue_adhoc_task(new \block_le_dashboard\task\backfill(), true);
+        \block_le_dashboard\task\backfill::queue();
     }
     redirect($PAGE->url, get_string('changessaved'), null, \core\output\notification::NOTIFY_SUCCESS);
 }
