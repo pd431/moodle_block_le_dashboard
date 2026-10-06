@@ -53,6 +53,21 @@ class backfill extends \core\task\adhoc_task {
     }
 
     /**
+     * Whether a backfill is queued or running and has not failed. A failed one waits to retry and
+     * must not hold up the nightly reconcile in the meantime.
+     *
+     * @return bool
+     */
+    public static function active(): bool {
+        global $DB;
+        return $DB->record_exists_select(
+            'task_adhoc',
+            'classname = :classname AND faildelay = 0',
+            ['classname' => '\\' . self::class]
+        );
+    }
+
+    /**
      * Whether a backfill is queued or running.
      *
      * @return bool

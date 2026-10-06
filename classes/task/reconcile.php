@@ -34,6 +34,12 @@ class reconcile extends \core\task\scheduled_task {
 
     #[\Override]
     public function execute() {
+        // The backfill does the same work over the whole index: running both doubles the load and
+        // races it, and finishing first would hide "Preparing" before the backfill is done.
+        if (backfill::active()) {
+            mtrace('A backfill is queued or running; it does this work, so the reconcile is skipped.');
+            return;
+        }
         try {
             (new indexer())->reconcile(fn($line) => mtrace($line));
         } finally {

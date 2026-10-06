@@ -136,6 +136,25 @@ class registry {
     }
 
     /**
+     * Behat and PHPUnit only: fails reading student rows that include the student the
+     * testfailstudent setting names, or reading marking rows when testfailmarking is set.
+     *
+     * @param string $part 'student' or 'marking'
+     * @param int[] $userids
+     */
+    public static function check_test_part_failure(string $part, array $userids): void {
+        if ((defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+            $student = (int)get_config('block_le_dashboard', 'testfailstudent');
+            if ($part === 'student' && $student && in_array($student, $userids)) {
+                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'student ' . $student);
+            }
+            if ($part === 'marking' && get_config('block_le_dashboard', 'testfailmarking')) {
+                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'marking');
+            }
+        }
+    }
+
+    /**
      * Behat and PHPUnit only: whether writing the index for this assessment should fail, once,
      * because the testfailwrite setting names it. The setting is cleared here, outside the write's
      * transaction, so the rollback doesn't bring it back.

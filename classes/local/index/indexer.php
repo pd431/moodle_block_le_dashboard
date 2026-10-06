@@ -228,8 +228,18 @@ class indexer {
             $students = $this->accessible($cm, $students);
             $active = array_flip(self::students($courseid, true));
             $starts = self::enrol_starts($courseid, array_keys($students));
-            $sturows = $adapter->student_rows($cm, $cmrow, array_keys($students));
-            $markrows = $adapter->marking_rows($cm, $cmrow, array_keys($students));
+            // One student's or one stage's bad data mustn't fail the whole activity: what failed keeps
+            // its last indexed rows and the error is reported, the rest is indexed as usual.
+            [$sturows, $failed] = $this->student_rows($adapter, $cm, $cmrow, array_keys($students));
+            try {
+                registry::check_test_part_failure('marking', array_keys($students));
+                $markrows = $adapter->marking_rows($cm, $cmrow, array_keys($students));
+                $keepmarks = false;
+            } catch (\Throwable $e) {
+                registry::record_error($cm->modname, $e);
+                $markrows = [];
+                $keepmarks = true;
+            }
         } catch (\Throwable $e) {
             registry::record_error($cm->modname, $e);
             debugging(
@@ -271,7 +281,15 @@ class indexer {
         $markers = array_flip(self::markers($courseid));
         $stu = [];
         $dues = [];
+        $kept = $this->kept_student_rows($cmid, array_keys($failed));
         foreach ($students as $userid => $canaccess) {
+            if (isset($failed[$userid])) {
+                if (isset($kept[$userid])) {
+                    $dues[$userid] = $kept[$userid]->due ?? $cmrow->due;
+                    $stu[] = $kept[$userid];
+                }
+                continue;
+            }
             $row = $sturows[$userid] ?? new student_row($userid, $cmrow->due, $cmrow->cutoff);
             $dues[$userid] = $row->due ?? $cmrow->due;
             // Markers who left the module no longer hold work still to come (EC1).
@@ -331,10 +349,10 @@ class indexer {
         $transaction = $DB->start_delegated_transaction();
         try {
             if ($only === null) {
-                $this->delete_rows($cmid);
+                $this->delete_rows($cmid, !$keepmarks);
                 $DB->insert_record(self::CM, $record);
             } else {
-                $this->delete_unit_rows($cmid, $only, $groupids);
+                $this->delete_unit_rows($cmid, $only, $keepmarks ? [] : $groupids, !$keepmarks);
             }
             if ($failwrite) {
                 throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'cm ' . $cmid);
@@ -356,7 +374,9 @@ class indexer {
                 registry::record_error($cm->modname, $e);
             }
         }
-        registry::clear_error($cm->modname);
+        if (!$failed && !$keepmarks) {
+            registry::clear_error($cm->modname);
+        }
         if ($only === null) {
             // What is indexed changed: forget memoised grade item lookups in this process (a cron run is long).
             memo::reset();
@@ -389,6 +409,57 @@ class indexer {
     }
 
     /**
+     * The adapter's student rows. If the batch fails, each student is tried alone so one student's
+     * bad data fails only their row.
+     *
+     * @param \block_le_dashboard\local\adapter\adapter $adapter
+     * @param \cm_info $cm
+     * @param cm_row $cmrow
+     * @param int[] $userids
+     * @return array [student_row[] keyed by user id, true[] keyed by the user ids that failed]
+     */
+    protected function student_rows($adapter, \cm_info $cm, cm_row $cmrow, array $userids): array {
+        try {
+            registry::check_test_part_failure('student', $userids);
+            return [$adapter->student_rows($cm, $cmrow, $userids), []];
+        } catch (\Throwable $e) {
+            registry::record_error($cm->modname, $e);
+        }
+        $rows = [];
+        $failed = [];
+        foreach ($userids as $userid) {
+            try {
+                registry::check_test_part_failure('student', [$userid]);
+                $rows += $adapter->student_rows($cm, $cmrow, [$userid]);
+            } catch (\Throwable $e) {
+                $failed[$userid] = true;
+            }
+        }
+        return [$rows, $failed];
+    }
+
+    /**
+     * The indexed rows of students whose re-index failed, to write back unchanged.
+     *
+     * @param int $cmid
+     * @param int[] $userids
+     * @return \stdClass[] keyed by user id, without ids
+     */
+    protected function kept_student_rows(int $cmid, array $userids): array {
+        global $DB;
+        if (!$userids) {
+            return [];
+        }
+        [$usql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'u');
+        $out = [];
+        foreach ($DB->get_records_select(self::STU, "cmid = :cmid AND userid $usql", $params + ['cmid' => $cmid]) as $row) {
+            unset($row->id);
+            $out[(int)$row->userid] = $row;
+        }
+        return $out;
+    }
+
+    /**
      * Deletes some students' rows of an assessment: their student rows, their own marking
      * units, and their groups' units.
      *
@@ -396,13 +467,16 @@ class indexer {
      * @param int[] $userids
      * @param int[] $groupids
      */
-    protected function delete_unit_rows(int $cmid, array $userids, array $groupids): void {
+    protected function delete_unit_rows(int $cmid, array $userids, array $groupids, bool $marks = true): void {
         global $DB;
         if (!$userids) {
             return;
         }
         [$usql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'u');
         $DB->delete_records_select(self::STU, "cmid = :cmid AND userid $usql", $params + ['cmid' => $cmid]);
+        if (!$marks) {
+            return;
+        }
         $DB->delete_records_select(
             self::MARK,
             "cmid = :cmid AND unittype = :user AND unitid $usql",
@@ -508,9 +582,11 @@ class indexer {
      *
      * @param int $cmid
      */
-    protected function delete_rows(int $cmid): void {
+    protected function delete_rows(int $cmid, bool $marks = true): void {
         global $DB;
-        $DB->delete_records(self::MARK, ['cmid' => $cmid]);
+        if ($marks) {
+            $DB->delete_records(self::MARK, ['cmid' => $cmid]);
+        }
         $DB->delete_records(self::STU, ['cmid' => $cmid]);
         $DB->delete_records(self::CM, ['cmid' => $cmid]);
     }

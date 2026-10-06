@@ -222,6 +222,51 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * Pierre, 2026-10-06 (beta14): every unit released means the assessment is finished, even when a
+     * stage such as moderation only covered a sample. It goes to Past, with no "unmarked" call-out.
+     */
+    public function test_convenor_released_is_past(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $DB->set_field('block_le_dashboard_cm', 'markingdue', time() - DAYSECS, ['cmid' => $cmid]);
+        $DB->set_field('block_le_dashboard_mark', 'marked', 1, ['cmid' => $cmid]);
+        $DB->set_field('block_le_dashboard_mark', 'released', 1, ['cmid' => $cmid]);
+        // A moderation stage that only sampled other students: this student's unit was never moderated.
+        $row = $DB->get_record(
+            'block_le_dashboard_mark',
+            ['cmid' => $cmid, 'unitid' => $this->u['s2']->id],
+            '*',
+            IGNORE_MULTIPLE
+        );
+        unset($row->id);
+        $row->stage = 'moderated';
+        $row->marked = 0;
+        $row->markedby = null;
+        $row->timemarked = null;
+        $DB->insert_record('block_le_dashboard_mark', $row);
+
+        $export = (new convenor($this->u['convenor']->id))->export();
+        $past = self::rows($export, 'past');
+        $this->assertArrayHasKey('Overdue essay', $past);
+        $this->assertEmpty($past['Overdue essay']['alert'] ?? null, 'nothing is outstanding once released');
+        $marking = self::rows((new staff($this->u['marker']->id))->export(), 'completed');
+        $this->assertArrayHasKey('Overdue essay', $marking);
+    }
+
+    /**
+     * Pierre, 2026-10-06 (beta14): a course from another year shows "Course (2024/25)", not the raw placeholder.
+     */
+    public function test_course_in_other_year(): void {
+        global $DB;
+        $course = $DB->get_record('course', ['shortname' => 'M1']);
+        $DB->set_field('course', 'startdate', mktime(0, 0, 0, 10, 1, 2024), ['id' => $course->id]);
+        $method = new \ReflectionMethod(convenor::class, 'with_year');
+        $text = $method->invoke(new convenor($this->u['convenor']->id), 'Module 1', (int)$course->id);
+        $this->assertStringStartsWith('Module 1 (', $text);
+        $this->assertStringNotContainsString('{$a', $text);
+    }
+
+    /**
      * PR3: names with "&" are escaped once, by the template, and search finds them.
      */
     public function test_names_escaped_once(): void {

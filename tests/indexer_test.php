@@ -374,6 +374,92 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * Pierre, 2026-10-06 (beta14): the nightly reconcile ran alongside the first backfill. It now
+     * leaves the work to a queued or running backfill, and leaves "Preparing" showing.
+     */
+    public function test_reconcile_waits_for_backfill(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $this->ma->tag($a->cmid);
+        $DB->delete_records('task_adhoc');
+        task\backfill::rebuild();
+        $this->expectOutputRegex('/reconcile is skipped/');
+        (new task\reconcile())->execute();
+        $this->assertSame(0, indexer::counts()['cm']);
+        $this->assertNotEmpty(get_config('block_le_dashboard', 'backfillpending'));
+    }
+
+    /**
+     * A backfill that failed and waits to retry doesn't stop the nightly reconcile.
+     */
+    public function test_reconcile_runs_past_failed_backfill(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $this->ma->tag($a->cmid);
+        $DB->delete_records('task_adhoc');
+        task\backfill::rebuild();
+        $DB->set_field('task_adhoc', 'faildelay', 60, ['classname' => '\\' . task\backfill::class]);
+        $this->expectOutputRegex('/Indexing course/');
+        (new task\reconcile())->execute();
+        $this->assertSame(1, indexer::counts()['cm']);
+    }
+
+    /**
+     * One student's bad data (Pierre's coursework text grade, beta14) fails only that student's row:
+     * it keeps what was indexed before, everyone else is re-indexed, and the error is reported.
+     */
+    public function test_failing_student_keeps_last_row(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $this->ma->tag($a->cmid);
+        (new indexer())->index_cm($a->cmid);
+        $DB->set_field(indexer::STU, 'due', 111, ['cmid' => $a->cmid]);
+
+        set_config('testfailstudent', $s1->id, 'block_le_dashboard');
+        $this->assertTrue((new indexer())->index_cm($a->cmid));
+        $this->assertEquals(111, $DB->get_field(indexer::STU, 'due', ['cmid' => $a->cmid, 'userid' => $s1->id]));
+        $due = $DB->get_field(indexer::STU, 'due', ['cmid' => $a->cmid, 'userid' => $s2->id]);
+        $this->assertEqualsWithDelta(time() + DAYSECS, $due, 5);
+        $this->assertNotNull(registry::last_error('assign'));
+        registry::flush_errors();
+    }
+
+    /**
+     * Marking rows that fail to read keep their last indexed state; student rows still update.
+     */
+    public function test_failing_marking_keeps_last_rows(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $student = $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() - DAYSECS]);
+        $this->ma->tag($a->cmid);
+        (new indexer())->index_cm($a->cmid);
+        $marks = ['cmid' => $a->cmid, 'unitid' => $student->id, 'unittype' => 'user', 'stage' => 'kept'];
+        $DB->insert_record(indexer::MARK, $marks + ['submitted' => 1, 'marked' => 0, 'released' => 0, 'flagged' => 0]);
+        $DB->set_field('assign', 'duedate', time() + DAYSECS, ['id' => $a->id]);
+        \course_modinfo::purge_course_cache($course->id);
+
+        set_config('testfailmarking', 1, 'block_le_dashboard');
+        $this->assertTrue((new indexer())->index_cm($a->cmid));
+        $this->assertTrue($DB->record_exists(indexer::MARK, $marks));
+        $due = $DB->get_field(indexer::STU, 'due', ['cmid' => $a->cmid, 'userid' => $student->id]);
+        $this->assertEqualsWithDelta(time() + DAYSECS, $due, 5);
+        $this->assertNotNull(registry::last_error('assign'));
+        registry::flush_errors();
+    }
+
+    /**
      * Only site admins can open the Index page, so only they can rebuild.
      */
     public function test_rebuild_page_needs_site_config(): void {

@@ -171,7 +171,8 @@ class staff extends base {
      * @return string
      */
     public static function ready_sql(int $now): string {
-        return "(m.submitted = 1 AND (m.unitdue IS NULL OR m.unitdue < $now OR m.marked = 1))";
+        // A released unit is finished: a stage that only sampled (moderation) owes it nothing.
+        return "(m.submitted = 1 AND (m.marked = 1 OR (m.released = 0 AND (m.unitdue IS NULL OR m.unitdue < $now))))";
     }
 
     /**
@@ -182,7 +183,7 @@ class staff extends base {
      * @return bool
      */
     public static function is_ready(\stdClass $r, int $now): bool {
-        return $r->submitted && ($r->unitdue === null || (int)$r->unitdue < $now || $r->marked);
+        return $r->submitted && ($r->marked || (empty($r->released) && ($r->unitdue === null || (int)$r->unitdue < $now)));
     }
 
     /**
@@ -273,7 +274,7 @@ class staff extends base {
         [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sh');
         $params['multi'] = '%marker%';
         $rs = $DB->get_recordset_sql("SELECT m.id, m.cmid, m.unitid, m.unittype, m.stage, m.submitted, m.marked,
-                                             m.markedby, m.timemarked, m.timeready, m.unitdue
+                                             m.markedby, m.timemarked, m.timeready, m.unitdue, m.released
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                         " . base::LIVE . "

@@ -180,9 +180,9 @@ abstract class base {
      */
     protected function with_year(string $course, int $courseid): string {
         global $DB;
-        $course = $DB->get_record('course', ['id' => $courseid], 'startdate, enddate');
+        $dates = $DB->get_record('course', ['id' => $courseid], 'startdate, enddate');
         // The year it starts in, or ends in when it has no start date (EC3b).
-        $date = (int)($course->startdate ?: $course->enddate);
+        $date = (int)($dates->startdate ?: $dates->enddate);
         foreach (years::all() as $year) {
             if ($date && $date >= $year->timestart && $date < $year->timeend) {
                 return get_string(

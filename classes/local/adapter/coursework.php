@@ -284,10 +284,11 @@ class coursework extends base {
                 // D4: released once the final grade is published, dated by publish time.
                 if (!empty($s->lastpublished)) {
                     $row->timereleased = (int)($s->firstpublished ?: $s->lastpublished);
-                    if (isset($finalgrades[$s->id]) && (float)$cw->grade > 0) {
+                    // Coursework keeps the grade as text, which can be empty: show only a number.
+                    if (is_numeric($finalgrades[$s->id] ?? null) && (float)$cw->grade > 0) {
                         $row->gradedisplay = get_string('gradeoutof', 'block_le_dashboard', [
-                            'grade' => format_float($finalgrades[$s->id], 0),
-                            'max' => format_float($cw->grade, 0),
+                            'grade' => format_float((float)$finalgrades[$s->id], 0),
+                            'max' => format_float((float)$cw->grade, 0),
                         ]);
                     }
                 }
