@@ -93,11 +93,13 @@ class peerwork extends base {
      */
     protected function submissions(\stdClass $p): array {
         global $DB;
+        // Versions without the locked column never lock.
+        $locked = $DB->get_manager()->field_exists('peerwork_submission', 'locked') ? ', locked' : '';
         return $DB->get_records(
             'peerwork_submission',
             ['peerworkid' => $p->id],
             '',
-            'groupid, timecreated, timemodified, grade, gradedby, timegraded, released'
+            'groupid, timecreated, timemodified, grade, gradedby, timegraded, released' . $locked
         );
     }
 
@@ -111,6 +113,8 @@ class peerwork extends base {
                 $s = $submissions[$groupid];
                 $rows[$userid]->submitted = true;
                 $rows[$userid]->timesubmitted = (int)($s->timecreated ?: $s->timemodified);
+                // Peerwork locks a submission once made when it is set to lock editing.
+                $rows[$userid]->locked = !empty($s->locked);
             }
         }
         self::apply_gradebook_release($cm, $rows);

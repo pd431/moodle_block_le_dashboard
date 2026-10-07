@@ -106,6 +106,7 @@ abstract class base {
         $visible = config::visible_rows();
         foreach (array_values($rows) as $i => $row) {
             $rows[$i]['overflow'] = $i >= $visible;
+            $rows[$i]['hasflags'] = !empty($row['hiddenhint']) || !empty($row['hints']);
         }
         return [
             'key' => $key,

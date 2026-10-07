@@ -33,7 +33,11 @@ final class cm_row {
      * @param int|null $markingdue When marking is due, if the activity has such a date.
      * @param bool $hasallocation Whether units are allocated to named markers.
      * @param string[] $stages Marking stage keys in order (see stage strings in the lang file).
-     * @param bool $submissions Whether students submit (false: an assignment that only records a mark).
+     * @param bool $submissions Whether students hand work in online. False for an assignment with no
+     *                          submission types, coursework by attendance, attendance, or an activity
+     *                          tagged as done in person: every student is ready to mark at the deadline.
+     * @param bool $releases Whether grades are ever released to students. False: the adapter reports a
+     *                       fully marked unit as released, and students see it finished with no grade (F10).
      */
     public function __construct(
         /** @var int|null When submissions open. */
@@ -48,8 +52,10 @@ final class cm_row {
         public bool $hasallocation = false,
         /** @var string[] Marking stage keys, in order. */
         public array $stages = ['marked'],
-        /** @var bool Whether students submit here; false lists it like the generic tier (EC5). */
+        /** @var bool Whether students hand work in online (EC5, no-submission paradigm). */
         public bool $submissions = true,
+        /** @var bool Whether grades are ever released to students here (false: a quiz that never shows marks). */
+        public bool $releases = true,
     ) {
     }
 }

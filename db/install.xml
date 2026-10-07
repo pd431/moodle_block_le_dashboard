@@ -37,6 +37,9 @@
         <FIELD NAME="hasallocation" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
         <FIELD NAME="hasbrief" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when the activity has a description or a brief file"/>
         <FIELD NAME="stages" TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false" COMMENT="Comma-separated marking stage keys, in order"/>
+        <FIELD NAME="nosubmission" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when students hand nothing in online (attendance, in-person, mark-only)"/>
+        <FIELD NAME="norelease" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when grades are never released to students (a quiz that never shows marks)"/>
+        <FIELD NAME="setup" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Settings to check, comma-separated: nodue, nograde, nomarks, bothtags; null when none"/>
         <FIELD NAME="timeindexed" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

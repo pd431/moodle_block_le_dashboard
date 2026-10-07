@@ -17,6 +17,7 @@
 namespace block_le_dashboard\local\adapter;
 
 use block_le_dashboard\local\index\cm_row;
+use block_le_dashboard\local\index\marking_row;
 use block_le_dashboard\local\index\student_row;
 
 /**
@@ -219,5 +220,60 @@ abstract class base implements adapter {
             $rows[$userid]->timereleased = $release->timereleased;
             $rows[$userid]->gradedisplay = $release->display;
         }
+    }
+
+    /**
+     * Whether marking_rows() itself handles an assessment where students hand nothing in online. When
+     * not, the indexer uses no_submission_units().
+     *
+     * @return bool
+     */
+    public function marks_without_submissions(): bool {
+        return false;
+    }
+
+    /**
+     * Marking units where students hand nothing in online: every student has one, ready at their
+     * deadline, marked once the gradebook has their grade and released when the student can see it.
+     *
+     * @param \cm_info $cm
+     * @param int[] $userids
+     * @return marking_row[]
+     */
+    public static function no_submission_units(\cm_info $cm, array $userids): array {
+        global $CFG, $DB;
+        require_once($CFG->libdir . '/gradelib.php');
+        if (!$userids) {
+            return [];
+        }
+        $item = \grade_item::fetch([
+            'itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
+            'itemnumber' => 0, 'courseid' => $cm->course,
+        ]);
+        $grades = !$item ? [] : self::chunked($userids, function (array $chunk) use ($DB, $item) {
+            [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
+            $params['itemid'] = $item->id;
+            return $DB->get_records_sql("SELECT userid, usermodified, timemodified
+                                           FROM {grade_grades}
+                                          WHERE itemid = :itemid AND finalgrade IS NOT NULL AND userid $insql", $params);
+        });
+        $released = self::released_now($cm, array_keys($grades));
+        $rows = [];
+        foreach ($userids as $userid) {
+            $g = $grades[$userid] ?? null;
+            $rows[] = new marking_row(
+                unitid: (int)$userid,
+                unittype: marking_row::UNIT_USER,
+                stage: 'marked',
+                submitted: true,
+                marked: $g !== null,
+                markedby: $g && $g->usermodified ? (int)$g->usermodified : null,
+                timemarked: $g ? (int)$g->timemodified : null,
+                released: isset($released[$userid]),
+                // Ready at the student's deadline: the indexer moves it there.
+                timeready: 1,
+            );
+        }
+        return $rows;
     }
 }

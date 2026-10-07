@@ -61,11 +61,11 @@ if ($delete && $confirm && data_submitted() && confirm_sesskey()) {
 $record = $id ? $DB->get_record(years::TABLE, ['id' => $id], '*', MUST_EXIST) : null;
 $form = new \block_le_dashboard\form\year($PAGE->url->out(false));
 if ($record) {
-    $form->set_data($record);
+    $form->set_year($record);
 }
 if ($form->is_cancelled()) {
     redirect($PAGE->url);
-} else if ($data = $form->get_data()) {
+} else if ($data = $form->get_year()) {
     $data->timemodified = time();
     if (!empty($data->id)) {
         $DB->update_record(years::TABLE, $data);

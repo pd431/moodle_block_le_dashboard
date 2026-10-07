@@ -47,17 +47,29 @@ if ($ADMIN->fulltree) {
     ));
     // Changing what is indexed re-indexes everything in the background, with the Preparing banner (PR5).
     $reindex = 'block_le_dashboard\\task\\backfill::setting_changed';
-    foreach (['certaintags' => 'summativetags', 'formativetags' => 'formativetags'] as $name => $string) {
+    $tagsettings = [
+        'certaintags' => ['summativetags', ''],
+        'formativetags' => ['formativetags', ''],
+        'inpersontags' => ['inpersontags', 'inperson'],
+    ];
+    foreach ($tagsettings as $name => [$string, $default]) {
         $setting = new admin_setting_configtext(
             'block_le_dashboard/' . $name,
             new lang_string($string, 'block_le_dashboard'),
             new lang_string($string . '_desc', 'block_le_dashboard'),
-            '',
+            $default,
             PARAM_TEXT
         );
         $setting->set_updatedcallback($reindex);
         $settings->add($setting);
     }
+    $settings->add(new admin_setting_configtext(
+        'block_le_dashboard/untaggedguidanceurl',
+        new lang_string('untaggedguidanceurl', 'block_le_dashboard'),
+        new lang_string('untaggedguidanceurl_desc', 'block_le_dashboard'),
+        '',
+        PARAM_URL
+    ));
 
     $settings->add(new admin_setting_heading(
         'block_le_dashboard/rolesheading',

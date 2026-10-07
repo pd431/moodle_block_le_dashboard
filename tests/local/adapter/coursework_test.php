@@ -74,8 +74,10 @@ final class coursework_test extends \advanced_testcase {
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
         $dbman->create_table($table);
         try {
-            // Coursework, submission, status: two open flags on 101, one on 102, cleared 103, no submission, no status.
-            $rows = [[7, 101, '0'], [7, 101, '2'], [7, 102, '3'], [7, 103, '4'], [7, 0, '1'], [7, 104, null], [8, 105, '1']];
+            // Coursework, submission, status: open flags on 101 (and a cleared one), one on 102, cleared 103 (4) and
+            // 106 (2, Pierre 2026-10-07), no submission, no status.
+            $rows = [[7, 101, '0'], [7, 101, '2'], [7, 102, '3'], [7, 103, '4'], [7, 106, '2'], [7, 0, '1'], [7, 104, null],
+                [8, 105, '1']];
             foreach ($rows as [$cw, $sub, $status]) {
                 $DB->insert_record(self::TABLE, ['courseworkid' => $cw, 'submissionid' => $sub, 'status' => $status]);
             }

@@ -80,6 +80,14 @@ interface adapter {
     public function marking_rows(\cm_info $cm, cm_row $cmrow, array $userids): array;
 
     /**
+     * Whether marking_rows() handles an assessment where students hand nothing in online. When not,
+     * every student gets one unit, marked from the gradebook (base::no_submission_units()).
+     *
+     * @return bool
+     */
+    public function marks_without_submissions(): bool;
+
+    /**
      * Event classes after which an assessment of this type should be re-indexed.
      *
      * Every class listed here must also be observed in db/events.php; a unit test checks this.

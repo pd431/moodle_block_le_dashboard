@@ -17,16 +17,18 @@
 {{!
     @template block_le_dashboard/hint
 
-    A hint on a row: a small button that opens a tip by click or focus, never hover. The same
-    component for every hint, in the row's meta line or next to a grade.
+    A hint: one icon, with its count when it has one, that opens a popover with its title and
+    description on a click, keyboard focus or a short hover (dashboard.js). Staff flags keep a
+    tinted outline; student hints (glyph) are bare icons. The icon's name is the full title.
 
     Example context (json):
-    {"id": "ma-row-12-hint-brief", "key": "brief", "icon": "fa-circle-info", "label": "No brief", "text": "This assessment has no brief.", "link": null}
+    {"id": "ma-row-12-hint-unallocated", "key": "unallocated", "icon": "fa-user-slash", "tone": "attention",
+     "glyph": false, "title": "3 unallocated", "count": 3, "text": "Includes 3 submissions not yet allocated.", "link": null}
 }}
-<span class="ma-tip-wrap ma-tip-wrap--row">
-    <button type="button" class="btn btn-sm ma-btn ma-btn--hint" data-action="tip" data-hint="{{key}}"
-            aria-expanded="false" aria-controls="{{id}}">
-        <i class="fa-solid {{icon}}{{^icon}}fa-circle-info{{/icon}}" aria-hidden="true"></i> {{label}}
+<span class="ma-tip-wrap ma-tip-wrap--row ma-flag-wrap">
+    <button type="button" class="ma-flag ma-flag--{{tone}}{{#glyph}} ma-flag--glyph{{/glyph}}" data-action="tip"
+            data-hint="{{key}}" aria-expanded="false" aria-controls="{{id}}" aria-label="{{title}}">
+        <i class="fa-solid {{icon}}" aria-hidden="true"></i>{{#count}}<span class="ma-flag-count" aria-hidden="true">{{count}}</span>{{/count}}
     </button>
-    <span class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden>{{text}}{{#link}} {{{link}}}{{/link}}</span>
+    <span class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden><strong class="ma-tip-title">{{title}}</strong>{{text}}{{#link}} {{{link}}}{{/link}}</span>
 </span>

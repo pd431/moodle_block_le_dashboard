@@ -48,12 +48,11 @@ if (backfill::pending()) {
 indexer::purge();
 set_config('backfillpending', time(), 'block_le_dashboard');
 try {
-    (new indexer())->reconcile(fn($line) => cli_writeln($line));
+    (new indexer())->reconcile(fn($line) => cli_writeln($line), true);
 } finally {
     registry::flush_errors();
 }
-unset_config('backfillpending', 'block_le_dashboard');
-set_config('backfilldone', time(), 'block_le_dashboard');
+backfill::mark_done();
 $counts = indexer::counts();
 cli_writeln(get_string('indexcount_cm', 'block_le_dashboard', $counts['cm']));
 cli_writeln(get_string('indexcount_stu', 'block_le_dashboard', $counts['stu']));

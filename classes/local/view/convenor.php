@@ -20,6 +20,8 @@ use block_le_dashboard\local\config;
 use block_le_dashboard\local\index\indexer;
 use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
+use block_le_dashboard\local\setupchecks;
+use block_le_dashboard\local\untagged;
 
 /**
  * The module convenor view: every assessment in my modules, with progress for
@@ -72,7 +74,11 @@ class convenor extends base {
     #[\Override]
     public function export(): array {
         global $DB;
-        $extra = ['hasyears' => true, 'years' => $this->years()];
+        $extra = ['hasyears' => true, 'years' => $this->years(),
+            // Compatible activities nobody tagged, in the selected year's courses (Pierre, 2026-10-06).
+            'untagged' => untagged::hint($this->userid, $this->year(), $this->courses()),
+            // Tagged activities missing a setting, or of a type no dashboard shows (Pierre, 2026-10-07).
+            'setupchecks' => setupchecks::hint($this->userid, $this->year(), $this->courses())];
         $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::UNDATED => [],
             classifier::CONVENOR_PAST => []];
         // In progress shows whatever its year; Upcoming and Past follow the year picker (EC3).
@@ -96,7 +102,9 @@ class convenor extends base {
         $students = $DB->get_records_sql("SELECT s.cmid,
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
-                                                          THEN 1 ELSE 0 END) AS submitted
+                                                          THEN 1 ELSE 0 END) AS submitted,
+                                                 SUM(CASE WHEN s.cutoff IS NULL THEN 1 ELSE 0 END) AS uncut,
+                                                 MAX(s.cutoff) AS lastcutoff
                                             FROM {block_le_dashboard_stu} s
                                             JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            WHERE c.courseid $insql
@@ -111,10 +119,10 @@ class convenor extends base {
                                              SUM(CASE WHEN m.submitted = 1 THEN 1 ELSE 0 END) AS submittedunits,
                                              SUM(CASE WHEN m.submitted = 1 AND m.allocatedto IS NULL THEN 1 ELSE 0 END)
                                                  AS unallocated,
-                                             SUM(m.released) AS released,
+                                             SUM(CASE WHEN $ready AND m.released = 1 THEN 1 ELSE 0 END) AS released,
                                              MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
-                                             MAX(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
-                                                 AS lastready,
+                                             MIN(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
+                                                 AS firstready,
                                              MAX(m.timemarked) AS lastmarked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
@@ -146,7 +154,7 @@ class convenor extends base {
                                              SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                       WHERE c.courseid $insql AND m.allocatedto IS NOT NULL
+                                       WHERE c.courseid $insql AND $marker IS NOT NULL
                                     GROUP BY m.cmid, $marker, m.stage", $params);
         $markerids = [];
         foreach ($rs as $r) {
@@ -206,8 +214,11 @@ class convenor extends base {
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
-                $outstanding += $units - $released;
+                $outstanding += max(0, $units - $released);
             }
+            // Nothing more can be handed in: a generic type, or every student's cut-off has passed (F3).
+            $closed = $cm->adapter === 'generic'
+                || ($s && (int)$s->uncut === 0 && $s->lastcutoff !== null && (int)$s->lastcutoff < $this->now);
 
             $section = classifier::convenor(
                 $cm->due === null ? null : (int)$cm->due,
@@ -215,7 +226,8 @@ class convenor extends base {
                 $units,
                 $outstanding + (int)($pending[$cmid]->students ?? 0),
                 $threshold,
-                (int)($s->total ?? 0)
+                (int)($s->total ?? 0),
+                $closed
             );
             $otheryear = !isset($inyear[(int)$cm->courseid]);
             // Only with marking or release actually outstanding: that is the work needing action.
@@ -257,20 +269,15 @@ class convenor extends base {
             $row['hasmarkers'] = !empty($row['markers']);
             $row['markersid'] = $row['id'] . '-markers';
             $row['actions'] = [format::view_action($row['url'])];
-            $row['hints'] = [];
-            if ($cm->due === null) {
-                $row['hints'][] = $this->nodeadline_hint($row['id'], (int)$cmid);
+            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
+            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
+                $row['hints'][] = $setup;
             }
             if (empty($cm->hasbrief)) {
                 $row['hints'][] = $this->brief_hint($row['id']);
             }
-            // Work that arrived after the latest mark brought this back to In progress (G6).
-            $lastready = $lastmarked = 0;
-            foreach ($m as $r) {
-                $lastready = max($lastready, (int)$r->lastready);
-                $lastmarked = max($lastmarked, (int)$r->lastmarked);
-            }
-            if ($section === classifier::INPROGRESS && $lastmarked && $lastready >= $lastmarked) {
+            // Work that arrived after marking was finished brought this back to In progress (G6).
+            if ($section === classifier::INPROGRESS && staff::returned($m, $cm->due === null ? null : (int)$cm->due)) {
                 $text = get_string('hint_returned_convenor', 'block_le_dashboard');
                 $row['hints'][] = format::hint($row['id'], 'returned', $text);
             }
@@ -294,27 +301,6 @@ class convenor extends base {
         // In progress by marking deadline, then deadline.
         usort($sections[classifier::INPROGRESS], fn($a, $b) => $a['sortkey'] <=> $b['sortkey']);
         return $this->sections_context($sections, $oldest, $extra);
-    }
-
-    /**
-     * The hint shown on an assessment with no deadline, wherever it sits (EC2): students can't
-     * see when it is due, and it can't move through the sections by date.
-     *
-     * @param string $rowid
-     * @param int $cmid
-     * @return array
-     */
-    protected function nodeadline_hint(string $rowid, int $cmid): array {
-        $link = \html_writer::link(
-            new \moodle_url('/course/modedit.php', ['update' => $cmid]),
-            get_string('hint_nodeadline_settings', 'block_le_dashboard')
-        );
-        return format::hint(
-            $rowid,
-            'nodeadline',
-            get_string('hint_nodeadline_text', 'block_le_dashboard'),
-            get_string('hint_nodeadline_link', 'block_le_dashboard', $link)
-        );
     }
 
     /**

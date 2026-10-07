@@ -69,7 +69,7 @@ class staff extends base {
 
     /**
      * My marking per assessment and stage: tomark, mine, marked, unallocated (units counted
-     * because they fall to me as convenor), isgroup (units are groups), lastready (latest
+     * because they fall to me as convenor), isgroup (units are groups), firstready (earliest
      * time an unmarked unit became ready) and lastmarked (my latest mark here).
      *
      * Mine is: units allocated to me; unallocated units on activities with allocation in
@@ -98,8 +98,8 @@ class staff extends base {
                                             SUM(CASE WHEN $ready AND m.allocatedto IS NULL AND c.hasallocation = 1
                                                      THEN 1 ELSE 0 END) AS unallocated,
                                             MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
-                                            MAX(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
-                                                AS lastready,
+                                            MIN(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
+                                                AS firstready,
                                             MAX(CASE WHEN m.markedby = :me2 THEN m.timemarked ELSE NULL END) AS lastmarked
                                        FROM {block_le_dashboard_mark} m
                                        JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
@@ -159,9 +159,11 @@ class staff extends base {
                                                             GROUP BY m.cmid", $params));
     }
 
-    /** SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated to (EC8). */
-    const MARKER_SQL = "(CASE WHEN m.marked = 1 AND m.markedby IS NOT NULL AND m.allocatedto IS NOT NULL
-                              THEN m.markedby ELSE m.allocatedto END)";
+    /**
+     * SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated
+     * to (EC8). Marking without allocation (a quiz graded by hand, F8) counts for whoever marked it.
+     */
+    const MARKER_SQL = "(CASE WHEN m.marked = 1 AND m.markedby IS NOT NULL THEN m.markedby ELSE m.allocatedto END)";
 
     /**
      * SQL for a mark index row (alias m) that is ready to mark at a time: submitted, and its
@@ -242,7 +244,29 @@ class staff extends base {
     }
 
     /**
-     * The hint on a row with extensions still to come (G9): the button gives the count.
+     * Whether new work arrived after marking was finished (G6): the latest mark came after the
+     * deadline, and every unit still to mark became ready after it. Marking done before the
+     * deadline (early work, auto-marked quiz attempts) never finished anything (F4).
+     *
+     * @param \stdClass[] $stages With firstready (earliest unmarked ready unit) and lastmarked.
+     * @param int|null $due
+     * @return bool
+     */
+    public static function returned(array $stages, ?int $due): bool {
+        $lastmarked = 0;
+        $firstready = null;
+        foreach ($stages as $s) {
+            $lastmarked = max($lastmarked, (int)$s->lastmarked);
+            if ($s->firstready !== null) {
+                $firstready = $firstready === null ? (int)$s->firstready : min($firstready, (int)$s->firstready);
+            }
+        }
+        return $lastmarked > 0 && ($due === null || $lastmarked > $due) && $firstready !== null
+            && $firstready >= $lastmarked;
+    }
+
+    /**
+     * The hint on a row with extensions still to come (G9), with the count beside its icon.
      *
      * @param string $rowid
      * @param \stdClass $pending students, latest
@@ -256,7 +280,8 @@ class staff extends base {
             get_string('hint_extensions_text', 'block_le_dashboard', format::datetime((int)$pending->latest)),
             null,
             $n === 1 ? get_string('hint_extensions_one', 'block_le_dashboard')
-                : get_string('hint_extensions_many', 'block_le_dashboard', $n)
+                : get_string('hint_extensions_many', 'block_le_dashboard', $n),
+            $n
         );
     }
 
@@ -302,14 +327,15 @@ class staff extends base {
                 foreach ($share as $r) {
                     $key = $cmid . '-' . $r->stage;
                     $o = $out[$key] ??= (object)['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
-                        'mine' => 0, 'marked' => 0, 'unallocated' => 0, 'isgroup' => 0, 'lastready' => null,
-                        'lastmarked' => null];
+                        'mine' => 0, 'marked' => 0, 'unallocated' => 0, 'isgroup' => 0,
+                        'firstready' => null, 'lastmarked' => null];
                     $o->mine++;
                     if ($r->marked) {
                         $o->marked++;
                     } else {
                         $o->tomark++;
-                        $o->lastready = max((int)$o->lastready, (int)$r->timeready) ?: null;
+                        $o->firstready = $o->firstready === null ? $r->timeready
+                            : min((int)$o->firstready, (int)$r->timeready);
                     }
                     $o->isgroup = $o->isgroup || $r->unittype === 'group' ? 1 : 0;
                     if ($r->marked && (int)$r->markedby === $this->userid) {
@@ -401,13 +427,11 @@ class staff extends base {
         $inyear = array_flip($this->courses()[1]);
         foreach ($bycm as $cmid => $stages) {
             $cm = $cms[$cmid];
-            $tomark = $mine = $unallocated = $lastready = $lastmarked = 0;
+            $tomark = $mine = $unallocated = 0;
             foreach ($stages as $s) {
                 $tomark += (int)$s->tomark;
                 $mine += (int)$s->mine;
                 $unallocated += (int)$s->unallocated;
-                $lastready = max($lastready, (int)$s->lastready);
-                $lastmarked = max($lastmarked, (int)$s->lastmarked);
             }
             $section = classifier::staff(
                 $tomark,
@@ -434,7 +458,10 @@ class staff extends base {
             ]));
             $row['tomark'] = $tomark;
             $row['bars'] = $this->stage_bars($stages);
-            $row['hints'] = [];
+            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
+            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
+                $row['hints'][] = $setup;
+            }
             if ($unallocated) {
                 $row['hints'][] = format::hint(
                     $row['id'],
@@ -443,11 +470,14 @@ class staff extends base {
                         $unallocated === 1 ? 'hint_unallocated_one' : 'hint_unallocated_many',
                         'block_le_dashboard',
                         $unallocated
-                    )
+                    ),
+                    null,
+                    get_string('hint_unallocated', 'block_le_dashboard', $unallocated),
+                    $unallocated
                 );
             }
-            // Work that arrived after I last marked here: the row came back (G6).
-            if ($tomark && $lastmarked && $lastready >= $lastmarked) {
+            // Work that arrived after I finished marking here: the row came back (G6).
+            if ($tomark && self::returned($stages, $cm->due === null ? null : (int)$cm->due)) {
                 $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_le_dashboard'));
             }
             if (isset($pending[$cmid])) {
@@ -505,7 +535,13 @@ class staff extends base {
                 (int)$cm->submissions,
                 (int)$cm->students
             )];
-            $row['hints'] = isset($pending[$cmid]) ? [self::extensions_hint($row['id'], $pending[$cmid])] : [];
+            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
+            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
+                $row['hints'][] = $setup;
+            }
+            if (isset($pending[$cmid])) {
+                $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
+            }
             if (!empty($flagged[$cmid])) {
                 $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
             }

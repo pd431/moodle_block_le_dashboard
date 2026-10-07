@@ -435,7 +435,8 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
-     * Marking rows that fail to read keep their last indexed state; student rows still update.
+     * A student whose marking units fail to read keeps their last indexed units (A7); student rows
+     * still update.
      */
     public function test_failing_marking_keeps_last_rows(): void {
         global $DB;
@@ -450,7 +451,7 @@ final class indexer_test extends \advanced_testcase {
         $DB->set_field('assign', 'duedate', time() + DAYSECS, ['id' => $a->id]);
         \course_modinfo::purge_course_cache($course->id);
 
-        set_config('testfailmarking', 1, 'block_le_dashboard');
+        set_config('testfailmarking', $student->id, 'block_le_dashboard');
         $this->assertTrue((new indexer())->index_cm($a->cmid));
         $this->assertTrue($DB->record_exists(indexer::MARK, $marks));
         $due = $DB->get_field(indexer::STU, 'due', ['cmid' => $a->cmid, 'userid' => $student->id]);
@@ -517,5 +518,218 @@ final class indexer_test extends \advanced_testcase {
         $this->assertSame(1, $DB->count_records('block_le_dashboard_stu', ['cmid' => $bad->cmid]), 'old rows kept');
         $this->assertNotEquals(12345, $DB->get_field('block_le_dashboard_cm', 'timeindexed', ['cmid' => $good->cmid]));
         $this->assertSame(1, registry::last_error('assign')->count);
+    }
+
+    /**
+     * A1, A3: a running backfill has read its data, so a change made meanwhile queues another; only one
+     * ever waits to start, whichever writer queues it.
+     */
+    public function test_backfill_queues_behind_a_running_one(): void {
+        global $DB;
+        $classname = '\\' . task\backfill::class;
+        $DB->delete_records('task_adhoc', ['classname' => $classname]);
+        task\backfill::queue();
+        $DB->set_field('task_adhoc', 'timestarted', time(), ['classname' => $classname]);
+        task\backfill::queue();
+        task\backfill::rebuild();
+        set_config('formativetags', 'practice', 'block_le_dashboard');
+        task\backfill::setting_changed('block_le_dashboard/formativetags');
+        $this->assertSame(2, $DB->count_records('task_adhoc', ['classname' => $classname]));
+        $this->assertSame(1, $DB->count_records_select(
+            'task_adhoc',
+            'classname = :c AND timestarted IS NULL',
+            ['c' => $classname]
+        ));
+    }
+
+    /**
+     * A12: a role given or taken away on a category re-indexes the indexed courses under it, and only those.
+     */
+    public function test_category_role_queues_courses(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $parent = $gen->create_category();
+        $child = $gen->create_category(['parent' => $parent->id]);
+        $other = $gen->create_category();
+        $inside = $gen->create_course(['category' => $child->id]);
+        $outside = $gen->create_course(['category' => $other->id]);
+        foreach ([$inside, $outside] as $course) {
+            $gen->create_and_enrol($course, 'student');
+            $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+            $this->ma->tag($a->cmid);
+        }
+        $teacher = $gen->create_user();
+        $roleid = $DB->get_field('role', 'id', ['shortname' => 'editingteacher']);
+        $DB->delete_records('task_adhoc');
+        $queued = function () use ($DB) {
+            $ids = [];
+            foreach ($DB->get_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\reindex']) as $t) {
+                $data = json_decode($t->customdata);
+                if (isset($data->courseid)) {
+                    $ids[] = (int)$data->courseid;
+                }
+            }
+            return $ids;
+        };
+        role_assign($roleid, $teacher->id, \context_coursecat::instance($parent->id)->id);
+        $this->assertSame([(int)$inside->id], $queued());
+        $DB->delete_records('task_adhoc');
+        role_unassign($roleid, $teacher->id, \context_coursecat::instance($parent->id)->id);
+        $this->assertSame([(int)$inside->id], $queued());
+    }
+
+    /**
+     * No online submission: an activity tagged in-person has no submission state, and every student is a
+     * marking unit, marked once the gradebook holds their grade.
+     */
+    public function test_in_person_assessment(): void {
+        global $CFG, $DB;
+        require_once($CFG->libdir . '/gradelib.php');
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+        $q = $gen->create_module('quiz', ['course' => $course->id, 'timeclose' => time() - DAYSECS, 'grade' => 10]);
+        set_config('inpersontags', 'inperson', 'block_le_dashboard');
+        \core_tag_tag::set_item_tags(
+            'core',
+            'course_modules',
+            $q->cmid,
+            \context_module::instance($q->cmid),
+            ['summative', 'inperson']
+        );
+        $item = \grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'quiz', 'iteminstance' => $q->id,
+            'itemnumber' => 0, 'courseid' => $course->id]);
+        $item->update_final_grade($s1->id, 7, 'test', false, FORMAT_MOODLE, $teacher->id);
+        (new indexer())->index_cm($q->cmid);
+
+        $cm = $DB->get_record(indexer::CM, ['cmid' => $q->cmid]);
+        $this->assertEquals(1, $cm->nosubmission);
+        $this->assertSame('generic', $cm->adapter, 'no Submitted bar');
+        $this->assertNull($DB->get_field(indexer::STU, 'submitted', ['cmid' => $q->cmid, 'userid' => $s1->id]));
+        $units = $DB->get_records(indexer::MARK, ['cmid' => $q->cmid], '', 'unitid, submitted, marked, markedby, timeready');
+        $this->assertCount(2, $units);
+        $this->assertEquals(1, $units[$s1->id]->marked);
+        $this->assertEquals($teacher->id, $units[$s1->id]->markedby);
+        $this->assertEquals(0, $units[$s2->id]->marked);
+        $this->assertEquals(1, $units[$s2->id]->submitted);
+        $this->assertEquals((int)$q->timeclose, (int)$units[$s2->id]->timeready, 'ready at the deadline');
+
+        // Without the tag it is an ordinary quiz again.
+        \core_tag_tag::set_item_tags('core', 'course_modules', $q->cmid, \context_module::instance($q->cmid), ['summative']);
+        (new indexer())->index_cm($q->cmid);
+        $this->assertEquals(0, $DB->get_field(indexer::CM, 'nosubmission', ['cmid' => $q->cmid]));
+        $this->assertSame(0, $DB->count_records(indexer::MARK, ['cmid' => $q->cmid]));
+    }
+
+    /**
+     * Settings a tagged assessment is missing, for the staff Check settings flag and the convenor's list.
+     */
+    public function test_setup_problems(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $convenor = $gen->create_and_enrol($course, 'moduleconvenor');
+        $tag = function (int $cmid, array $tags): void {
+            \core_tag_tag::set_item_tags('core', 'course_modules', $cmid, \context_module::instance($cmid), $tags);
+        };
+        $setup = function (int $cmid): ?string {
+            global $DB;
+            (new indexer())->index_cm($cmid);
+            return $DB->get_field(indexer::CM, 'setup', ['cmid' => $cmid]);
+        };
+        $ok = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $tag($ok->cmid, ['summative']);
+        $this->assertNull($setup($ok->cmid));
+
+        $undated = $gen->create_module('assign', ['course' => $course->id, 'duedate' => 0, 'grade' => 0]);
+        $tag($undated->cmid, ['summative', 'formative']);
+        $this->assertSame('nodue,nograde,bothtags', $setup($undated->cmid));
+
+        // Marks never shown: flagged on summative work only (coordinator, 2026-10-07).
+        $quiz = $gen->create_module('quiz', ['course' => $course->id, 'timeclose' => time() + DAYSECS, 'grade' => 10]);
+        $practice = $gen->create_module('quiz', ['course' => $course->id, 'timeclose' => time() + DAYSECS, 'grade' => 10]);
+        $DB->set_field_select('quiz', 'reviewmarks', 0, 'id IN (?, ?)', [$quiz->id, $practice->id]);
+        $tag($quiz->cmid, ['summative']);
+        $this->assertSame('nomarks', $setup($quiz->cmid));
+        $tag($practice->cmid, ['formative']);
+        $this->assertNull($setup($practice->cmid));
+
+        // The convenor's list: those above, and a tagged activity of a type that isn't enabled.
+        $workshop = $gen->create_module('workshop', ['course' => $course->id]);
+        $tag($workshop->cmid, ['summative']);
+        $hint = \block_le_dashboard\local\setupchecks::hint($convenor->id, null, [(int)$course->id]);
+        $this->assertSame('3 tagged activities need their settings checked across your courses.', $hint['label']);
+        $problems = array_column($hint['courses'][0]['activities'], 'problems', 'url');
+        $this->assertSame('No due date; No grade; Tagged summative and formative', $problems[(string)new \moodle_url(
+            '/mod/assign/view.php',
+            ['id' => $undated->cmid]
+        )]);
+        $this->assertSame('Not shown on dashboards: Workshop is not enabled in Le Dashboard', $problems[(string)new \moodle_url(
+            '/mod/workshop/view.php',
+            ['id' => $workshop->cmid]
+        )]);
+    }
+
+    /**
+     * A final submission is closed from the second it was handed in, so it is Past at once.
+     */
+    public function test_final_submission_is_past_at_once(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + WEEKSECS,
+            'submissiondrafts' => 1, 'assignsubmission_onlinetext_enabled' => 1]);
+        \core_tag_tag::set_item_tags('core', 'course_modules', $a->cmid, \context_module::instance($a->cmid), ['summative']);
+        $now = time();
+        $DB->insert_record('assign_submission', ['assignment' => $a->id, 'userid' => $s1->id, 'status' => 'submitted',
+            'latest' => 1, 'attemptnumber' => 0, 'timecreated' => $now, 'timemodified' => $now, 'groupid' => 0]);
+        (new indexer())->index_cm($a->cmid);
+        $row = $DB->get_record(indexer::STU, ['cmid' => $a->cmid, 'userid' => $s1->id]);
+        $this->assertLessThan($now, (int)$row->cutoff);
+        [$section, $status] = \block_le_dashboard\local\view\classifier::student($row, $now, 7);
+        $this->assertSame(\block_le_dashboard\local\view\classifier::PAST, $section);
+        $this->assertSame(\block_le_dashboard\local\view\classifier::STATUS_SUBMITTED, $status);
+    }
+
+    /**
+     * A generic activity done in person has a marking stage, so markers see it to mark from the date.
+     */
+    public function test_in_person_generic_activity(): void {
+        global $CFG, $DB;
+        require_once($CFG->libdir . '/gradelib.php');
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+        \block_le_dashboard\local\adapter\registry::set_enabled('workshop', true);
+        $w = $gen->create_module('workshop', ['course' => $course->id, 'submissionend' => time() - 2 * DAYSECS]);
+        set_config('inpersontags', 'inperson', 'block_le_dashboard');
+        \core_tag_tag::set_item_tags(
+            'core',
+            'course_modules',
+            $w->cmid,
+            \context_module::instance($w->cmid),
+            ['summative', 'inperson']
+        );
+        $item = \grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'workshop', 'iteminstance' => $w->id,
+            'itemnumber' => 0, 'courseid' => $course->id]);
+        $item->update_final_grade($s1->id, 64, 'test', false, FORMAT_MOODLE, $teacher->id);
+        (new indexer())->index_cm($w->cmid);
+
+        $cm = $DB->get_record(indexer::CM, ['cmid' => $w->cmid]);
+        $this->assertEquals(1, $cm->nosubmission);
+        $this->assertSame('marked', $cm->stages);
+        $export = (new \block_le_dashboard\local\view\staff($teacher->id))->export();
+        $tomark = [];
+        foreach ($export['sections'] as $section) {
+            if ($section['key'] === 'tomark') {
+                $tomark = array_column($section['rows'], null, 'name');
+            }
+        }
+        $this->assertArrayHasKey($w->name, $tomark);
     }
 }

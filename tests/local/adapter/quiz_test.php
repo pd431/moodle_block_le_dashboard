@@ -60,7 +60,7 @@ final class quiz_test extends \advanced_testcase {
         $cm = get_fast_modinfo($course->id)->cms[$quiz->cmid];
         $adapter = new quiz();
         $cmrow = $adapter->cm_row($cm);
-        $this->assertNull($cmrow->cutoff, 'quizzes have no cut-off: overdue until the threshold');
+        $this->assertSame($cmrow->due, $cmrow->cutoff, 'a quiz closes at its close date (F2)');
         $rows = $adapter->student_rows($cm, $cmrow, array_column($students, 'id'));
         $record = $DB->get_record('quiz', ['id' => $quiz->id]);
         foreach ($students as $i => $s) {
@@ -100,5 +100,144 @@ final class quiz_test extends \advanced_testcase {
 
         $rows = $adapter->student_rows($cm, $cmrow, [$s1->id]);
         $this->assertTrue($rows[$s1->id]->submitted);
+    }
+
+    /**
+     * Inserts a finished attempt.
+     *
+     * @param int $quizid
+     * @param int $userid
+     * @param int $n
+     * @param float|null $sum
+     * @param string $state
+     * @return int
+     */
+    protected static function attempt(int $quizid, int $userid, int $n, ?float $sum, string $state = 'finished'): int {
+        global $DB;
+        return $DB->insert_record('quiz_attempts', (object)[
+            'quiz' => $quizid, 'userid' => $userid, 'attempt' => $n, 'uniqueid' => 980000 + $userid * 10 + $n,
+            'layout' => '', 'currentpage' => 0, 'preview' => 0, 'state' => $state, 'timestart' => time() - 100,
+            'timefinish' => $state === 'finished' ? time() - 50 : 0, 'timemodified' => time() - 50, 'sumgrades' => $sum]);
+    }
+
+    /**
+     * Once every attempt is used and none is open, the quiz is closed for that student: the cut-off is
+     * when their last attempt ended. Overrides change the limit as quiz does.
+     */
+    public function test_attempts_used_up_close_the_quiz(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $s3 = $gen->create_and_enrol($course, 'student');
+        $s4 = $gen->create_and_enrol($course, 'student');
+        $close = time() + 5 * DAYSECS;
+        $quiz = $gen->create_module('quiz', ['course' => $course->id, 'timeclose' => $close, 'attempts' => 1]);
+        self::attempt($quiz->id, $s1->id, 1, 1.0);
+        self::attempt($quiz->id, $s2->id, 1, 1.0);
+        self::attempt($quiz->id, $s3->id, 1, null, 'inprogress');
+        // A second attempt for s2.
+        $DB->insert_record('quiz_overrides', (object)['quiz' => $quiz->id, 'userid' => $s2->id, 'attempts' => 2]);
+
+        $cm = get_fast_modinfo($course->id)->cms[$quiz->cmid];
+        $adapter = new quiz();
+        $cmrow = $adapter->cm_row($cm);
+        $rows = $adapter->student_rows($cm, $cmrow, [$s1->id, $s2->id, $s3->id, $s4->id]);
+        $this->assertLessThan(time(), $rows[$s1->id]->cutoff, 'every attempt used');
+        $this->assertSame($close, $rows[$s1->id]->due, 'the deadline stays');
+        $this->assertSame($close, $rows[$s2->id]->cutoff, 'an override allows another');
+        $this->assertSame($close, $rows[$s3->id]->cutoff, 'an attempt still open');
+        $this->assertSame($close, $rows[$s4->id]->cutoff, 'nothing tried yet');
+    }
+
+    /**
+     * F10: marks never shown, or a maximum grade of 0, release nothing, so a marked attempt counts as finished.
+     * F11: marks shown after close only release each student at their own close.
+     */
+    public function test_release_follows_review_options(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/quiz/lib.php');
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $quiz = $gen->create_module('quiz', ['course' => $course->id, 'timeclose' => time() - HOURSECS, 'grade' => 10]);
+        self::attempt($quiz->id, $s1->id, 1, 1.0);
+        self::attempt($quiz->id, $s2->id, 1, null);
+        $cm = get_fast_modinfo($course->id)->cms[$quiz->cmid];
+        $adapter = new quiz();
+        $set = function (array $fields) use ($DB, $quiz) {
+            $DB->update_record('quiz', ['id' => $quiz->id] + $fields);
+            $record = $DB->get_record('quiz', ['id' => $quiz->id]);
+            $record->cmidnumber = '';
+            quiz_grade_item_update($record);
+        };
+
+        // Marks never shown.
+        $set(['reviewmarks' => 0]);
+        $cmrow = $adapter->cm_row($cm);
+        $this->assertFalse($cmrow->releases);
+        $rows = $adapter->student_rows($cm, $cmrow, [$s1->id, $s2->id]);
+        $this->assertNotNull($rows[$s1->id]->timereleased, 'marked counts as finished');
+        $this->assertNull($rows[$s1->id]->gradedisplay, 'with no grade claimed');
+        $this->assertNull($rows[$s2->id]->timereleased, 'still needs grading');
+        $units = [];
+        foreach ($adapter->marking_rows($cm, $cmrow, [$s1->id, $s2->id]) as $m) {
+            $units[$m->unitid] = $m;
+        }
+        $this->assertTrue($units[$s1->id]->released);
+        $this->assertFalse($units[$s2->id]->released);
+
+        // A maximum grade of 0.
+        $set(['reviewmarks' => 0x11110, 'grade' => 0]);
+        $this->assertFalse($adapter->cm_row($cm)->releases);
+
+        // Marks after close only: the quiz closed an hour ago, s1's override closes tomorrow.
+        $set(['reviewmarks' => 0x00010, 'grade' => 10]);
+        $cmrow = $adapter->cm_row($cm);
+        $this->assertTrue($cmrow->releases);
+        $DB->insert_record('quiz_overrides', (object)['quiz' => $quiz->id, 'userid' => $s1->id,
+            'timeclose' => time() + DAYSECS]);
+        $item = \grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'quiz', 'iteminstance' => $quiz->id,
+            'itemnumber' => 0, 'courseid' => $course->id]);
+        $item->update_final_grade($s1->id, 7, 'test');
+        $item->update_final_grade($s2->id, 6, 'test');
+        $rows = $adapter->student_rows($cm, $cmrow, [$s1->id, $s2->id]);
+        $this->assertGreaterThan(time(), $rows[$s1->id]->timereleased, 'released at their own close');
+        $this->assertLessThanOrEqual(time(), $rows[$s2->id]->timereleased);
+        foreach ($adapter->marking_rows($cm, $cmrow, [$s1->id]) as $m) {
+            $this->assertFalse($m->released, 'not released before their own close');
+        }
+    }
+
+    /**
+     * F8: whoever saved the last manual grade on an attempt marked it.
+     */
+    public function test_marker_from_manual_grading(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+        $quiz = $gen->create_module('quiz', ['course' => $course->id, 'timeclose' => time() - DAYSECS]);
+        $id = self::attempt($quiz->id, $s1->id, 1, 1.0);
+        $uniqueid = (int)$DB->get_field('quiz_attempts', 'uniqueid', ['id' => $id]);
+        $qa = $DB->insert_record('question_attempts', (object)['questionusageid' => $uniqueid, 'slot' => 1,
+            'behaviour' => 'manualgraded', 'questionid' => 1, 'variant' => 1, 'maxmark' => 1, 'minfraction' => 0,
+            'maxfraction' => 1, 'flagged' => 0, 'questionsummary' => '', 'rightanswer' => '', 'responsesummary' => '',
+            'timemodified' => time()]);
+        $DB->insert_record('question_attempt_steps', (object)['questionattemptid' => $qa, 'sequencenumber' => 0,
+            'state' => 'needsgrading', 'fraction' => null, 'timecreated' => time() - 60, 'userid' => $s1->id]);
+        $DB->insert_record('question_attempt_steps', (object)['questionattemptid' => $qa, 'sequencenumber' => 1,
+            'state' => 'mangrright', 'fraction' => 1, 'timecreated' => time(), 'userid' => $teacher->id]);
+
+        $cm = get_fast_modinfo($course->id)->cms[$quiz->cmid];
+        $adapter = new quiz();
+        [$m] = $adapter->marking_rows($cm, $adapter->cm_row($cm), [$s1->id]);
+        $this->assertSame((int)$teacher->id, $m->markedby);
     }
 }

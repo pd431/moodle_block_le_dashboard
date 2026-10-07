@@ -276,6 +276,9 @@ class assign extends base {
             $graded = isset($grades[$userid]) && $grades[$userid]->grade !== null && (float)$grades[$userid]->grade >= 0
                 && (int)$grades[$userid]->attemptnumber === (int)$submission->attemptnumber;
             $rows[$userid]->reopened = $submission->status === 'reopened' || ($submission->status === 'draft' && $graded);
+            // Final once submitted where students must click Submit, or when a teacher locked it.
+            $rows[$userid]->locked = $rows[$userid]->submitted
+                && (!empty($a->submissiondrafts) || !empty($flags[$userid]->locked));
         }
         self::apply_gradebook_release($cm, $rows);
         // A resubmission after release is in marking again, whatever the gradebook still holds.
@@ -399,7 +402,7 @@ class assign extends base {
             [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
             $params['assignid'] = $assignid;
             $marker = self::allocation_table() ? '' : ', allocatedmarker';
-            return $DB->get_records_sql("SELECT userid, extensionduedate, workflowstate $marker
+            return $DB->get_records_sql("SELECT userid, extensionduedate, workflowstate, locked $marker
                                            FROM {assign_user_flags}
                                           WHERE assignment = :assignid AND userid $insql", $params);
         });
@@ -471,5 +474,11 @@ class assign extends base {
                                              ON latest.userid = g.userid AND latest.attemptnumber = g.attemptnumber
                                           WHERE g.assignment = :assignid AND g.userid $insql", $params);
         });
+    }
+
+    #[\Override]
+    public function marks_without_submissions(): bool {
+        // Allocation, marking workflow and flags still apply (EC5).
+        return true;
     }
 }

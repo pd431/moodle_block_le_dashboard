@@ -72,7 +72,8 @@ final class strings_test extends \advanced_testcase {
             }
         }
         foreach ((new \ReflectionClass(classifier::class))->getConstants() as $name => $value) {
-            if (str_starts_with($name, 'STATUS_')) {
+            // A reopened attempt is shown with no pill, so it has no label.
+            if (str_starts_with($name, 'STATUS_') && $value !== classifier::STATUS_REOPENED) {
                 $keys[] = 'status_' . $value;
             }
         }

@@ -14,8 +14,8 @@ Feature: Activity icons say what the activity is and what applies to me
   #   Overdue fa-clock (danger, Overdue section only), Submitted late fa-clock (grey), Due soon
   #   fa-hourglass-half (attention), Not submitted fa-circle-xmark (grey); Self-certification applied
   #   fa-hand-holding-heart and Extension granted fa-calendar-plus, both in the Mitigate tone (attention).
-  # The tooltip opens like Moodle's help icons: on click or keyboard focus, never on hover,
-  # and it closes on Escape, on a click elsewhere, or when focus leaves. Its text is built
+  # The tooltip opens on click, keyboard focus, or a hover of half a second (beta17, Pierre 2026-10-06),
+  # and it closes on Escape, on a click elsewhere, when focus leaves, or when a hover ends. Its text is built
   # from lang strings: the activity type, then each part as its own sentence, e.g.
   # "Coursework. Self-certification applied. Submitted late." The icon's accessible
   # name is that same text, so screen readers hear it without opening the tooltip.
@@ -46,7 +46,7 @@ Feature: Activity icons say what the activity is and what applies to me
 
     Examples:
       | activity | due        | event                                      | text                           |
-      | quiz     | yesterday  | nothing happens                            | Quiz. Overdue.                 |
+      | assign   | yesterday  | nothing happens                            | Assignment. Overdue.           |
       | assign   | in 10 days | "student1" has submitted "A1"              | Assignment.                    |
       | assign   | 3 days ago | "student1" submitted "A1" "yesterday"      | Assignment. Submitted late.    |
       | assign   | tomorrow   | "student1" has an extension on "A1" to "in 10 days" | Assignment. Extension granted. |
@@ -63,23 +63,23 @@ Feature: Activity icons say what the activity is and what applies to me
 
   @javascript
   Scenario: The tooltip opens from the keyboard and closes with Escape
-    Given a summative "quiz" "A1" in "M1" was due "yesterday"
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
     And I press the tab key until the activity icon of "A1" is focused
-    Then the activity icon tooltip of "A1" should say "Quiz. Overdue."
+    Then the activity icon tooltip of "A1" should say "Assignment. Overdue."
     When I press the escape key
     Then the activity icon tooltip of "A1" should not be visible
 
   @javascript
-  Scenario: Hovering the icon does not open the tooltip
-    Given a summative "quiz" "A1" in "M1" was due "yesterday"
+  Scenario: A brief pass over the icon does not open the tooltip
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
-    And I hover over the activity icon of "A1"
+    And I hover over the activity icon of "A1" for "200" milliseconds
     Then the activity icon tooltip of "A1" should not be visible
 
   @javascript
   Scenario: Clicking elsewhere closes the tooltip
-    Given a summative "quiz" "A1" in "M1" was due "yesterday"
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
     And I click on the activity icon of "A1"
     And I click on "My assessments" "block"

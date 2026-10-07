@@ -62,7 +62,7 @@ Feature: Dashboard data is cached, says how fresh it is, and can be refreshed (a
     Then I should see "Updated" with the time "now"
 
   Scenario: An assessment becomes overdue at its deadline without re-indexing
-    Given a summative "quiz" "Q1" in "M1" is due "in 1 minute"
+    Given a summative "assign" "Q1" in "M1" is due "in 1 minute"
     And the My assessments index is up to date
     When 2 minutes pass
     And I log in as "student2" and view my dashboard

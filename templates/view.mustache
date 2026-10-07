@@ -74,6 +74,11 @@
         </div>
     </div>
 
+    {{! Module convenors only, quiet until opened: compatible activities nobody tagged (Pierre, 2026-10-06), and
+        tagged ones missing a setting (2026-10-07). }}
+    {{#untagged}}{{< block_le_dashboard/checklist }}{{$region}}ma-untagged{{/region}}{{$icon}}fa-tag{{/icon}}{{/ block_le_dashboard/checklist }}{{/untagged}}
+    {{#setupchecks}}{{< block_le_dashboard/checklist }}{{$region}}ma-setupchecks{{/region}}{{$icon}}fa-screwdriver-wrench{{/icon}}{{/ block_le_dashboard/checklist }}{{/setupchecks}}
+
     <div class="ma-freshness" data-region="ma-freshness">
         {{#freshness.refreshing}}
         <span class="ma-freshness-text">

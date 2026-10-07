@@ -61,6 +61,27 @@ final class classifier_test extends \basic_testcase {
             'no deadline, reopened stays actionable (EC2)' => [[null, null, 0, null, true], c::UPCOMING, c::STATUS_REOPENED],
             'generic, no deadline (EC2)' => [[null, null, null, null], c::UNDATED, c::STATUS_OPEN],
             'generic, no deadline, graded (EC2)' => [[null, null, null, $now - 60], c::PAST, c::STATUS_RELEASED],
+            'released without a submission (F1)' => [[$now - $day, null, 0, $now - 60], c::PAST, c::STATUS_RELEASED],
+            'released without a submission, due ahead (F1)' => [[$now + $day, null, 0, $now - 60], c::UPCOMING,
+                c::STATUS_RELEASED],
+            'final before the deadline: locked, or every quiz attempt used' => [[$now + $day, $now - 60, 1, null], c::PAST,
+                c::STATUS_SUBMITTED],
+            'final, then the deadline passed' => [[$now - $day, $now - 2 * $day, 1, null], c::PAST, c::STATUS_INMARKING],
+            'closed quiz, nothing handed in: Past at once' => [[$now - 60, $now - 60, 0, null], c::PAST,
+                c::STATUS_NOTSUBMITTED],
+            'quiz override reopens the close' => [[$now + $day, $now + $day, 0, null], c::UPCOMING, c::STATUS_PENDING],
+            'no online submission, date ahead' => [[$now + $day, null, null, null, false, ['nosubmission' => 1]],
+                c::UPCOMING, c::STATUS_DUE],
+            'no online submission, date passed' => [[$now - $day, null, null, null, false, ['nosubmission' => 1]],
+                c::PAST, c::STATUS_AWAITING],
+            'no online submission, graded' => [[$now - $day, null, null, $now - 60, false, ['nosubmission' => 1]],
+                c::PAST, c::STATUS_RELEASED],
+            'marks never released, marked (F10)' => [[$now - $day, $now - $day, 1, $now - 60, false, ['norelease' => 1]],
+                c::PAST, c::STATUS_SUBMITTED],
+            'marks never released, not marked (F10)' => [[$now - $day, $now - $day, 1, null, false, ['norelease' => 1]],
+                c::PAST, c::STATUS_INMARKING],
+            'marks never released, undated, marked (F10)' => [[null, null, 1, $now - 60, false, ['norelease' => 1]],
+                c::PAST, c::STATUS_SUBMITTED],
         ];
     }
 
@@ -68,14 +89,14 @@ final class classifier_test extends \basic_testcase {
      * Student sections and statuses.
      *
      * @dataProvider student_provider
-     * @param array $row due, cutoff, submitted, timereleased, reopened
+     * @param array $row due, cutoff, submitted, timereleased, reopened, other fields
      * @param string $section
      * @param string $status
      */
     public function test_student(array $row, string $section, string $status): void {
         [$due, $cutoff, $submitted, $released] = $row;
-        $record = (object)['due' => $due, 'cutoff' => $cutoff, 'submitted' => $submitted, 'timereleased' => $released,
-            'reopened' => $row[4] ?? false];
+        $record = (object)(['due' => $due, 'cutoff' => $cutoff, 'submitted' => $submitted, 'timereleased' => $released,
+            'reopened' => $row[4] ?? false] + ($row[5] ?? []));
         $this->assertSame([$section, $status], c::student($record, self::NOW, 90));
     }
 
@@ -106,6 +127,20 @@ final class classifier_test extends \basic_testcase {
         $row->due = self::NOW - 3 * DAYSECS;
         $row->enrolstart = self::NOW - 10 * DAYSECS;
         $this->assertSame([c::OVERDUE, c::STATUS_NOTSUBMITTED], c::student($row, self::NOW, 90, $grace));
+    }
+
+    /**
+     * One rule decides whether work can still be handed in: the student's own cut-off, unless reopened.
+     */
+    public function test_submittable(): void {
+        $row = (object)['cutoff' => null, 'reopened' => 0];
+        $this->assertTrue(c::submittable($row, self::NOW));
+        $row->cutoff = self::NOW;
+        $this->assertTrue(c::submittable($row, self::NOW), 'open until the cut-off itself');
+        $row->cutoff = self::NOW - 1;
+        $this->assertFalse(c::submittable($row, self::NOW));
+        $row->reopened = 1;
+        $this->assertTrue(c::submittable($row, self::NOW));
     }
 
     /**
@@ -145,6 +180,9 @@ final class classifier_test extends \basic_testcase {
         $this->assertSame(c::UNDATED, c::convenor(null, self::NOW, 0, 0, 90, 2));
         $this->assertSame(c::CONVENOR_PAST, c::convenor(null, self::NOW, 2, 0, 90, 2), 'finished work goes to Past');
         $this->assertSame(c::INPROGRESS, c::convenor(null, self::NOW, 2, 1, 90, 2));
+        // F3: once nothing more can be handed in, nothing submitted and nothing outstanding is Past.
+        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90, 2, true));
+        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 1, 90, 2, true));
     }
 
     /**

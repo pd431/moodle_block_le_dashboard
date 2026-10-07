@@ -101,6 +101,15 @@ class config {
     }
 
     /**
+     * Tag names that mark an assessment as done in person: students hand nothing in online.
+     *
+     * @return string[]
+     */
+    public static function inperson_tags(): array {
+        return self::csv('inpersontags', true);
+    }
+
+    /**
      * Role ids for one of the role settings, falling back to archetypes when unset.
      *
      * @param string $setting studentrole, staffrole or moduleconvenorrole

@@ -32,21 +32,22 @@
         "tip": "Assignment. Extension granted. Due soon.",
         "assesstype": "summative",
         "typelabel": "Summative",
-        "hidden": false,
         "search": "essay 1 m1 assignment",
         "overflow": false,
         "overlay": {"state": "duesoon", "icon": "fa-clock"},
         "mitigationoverlay": {"state": "extension", "icon": "fa-calendar-plus"},
+        "hiddenhint": null,
         "hints": [],
+        "hasflags": false,
         "status": {"key": "pending", "label": "Not submitted yet"},
-        "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00", "note": null}],
+        "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00"}],
         "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}]
     }
 }}
 <li class="list-group-item ma-row" id="{{id}}" data-region="ma-row" data-cmid="{{cmid}}" data-assesstype="{{assesstype}}"{{#tomark}} data-tomark="{{tomark}}"{{/tomark}}
     data-search="{{search}}"{{#overflow}} data-overflow="1" hidden{{/overflow}}>
     <div class="ma-row-icon ma-tip-wrap">
-        <button type="button" class="ma-row-iconbtn" data-action="tip" aria-expanded="false" aria-controls="{{id}}-tip"
+        <button type="button" class="ma-row-iconbtn" data-action="tip" data-region="ma-row-icon" aria-expanded="false" aria-controls="{{id}}-tip"
                 aria-label="{{tip}}">
             <i class="fa-solid {{faicon}} ma-row-faicon" aria-hidden="true"></i>
             {{#hasmodifiers}}
@@ -63,33 +64,33 @@
         <div class="ma-row-meta{{#stacked}} ma-row-meta--stacked{{/stacked}}">
             <span class="ma-row-course">{{course}}</span>
             <span class="ma-row-type">{{typeline}}</span>
-            {{#hidden}}<span class="badge ma-pill ma-pill--hidden">{{#str}}hiddenfromstudents, block_le_dashboard{{/str}}</span>{{/hidden}}
-            {{#hints}}{{> block_le_dashboard/hint }}{{/hints}}
+            {{#hasflags}}
+            <span class="ma-flags">{{#hiddenhint}}{{> block_le_dashboard/hint }}{{/hiddenhint}}{{#hints}}{{> block_le_dashboard/hint }}{{/hints}}</span>
+            {{/hasflags}}
         </div>
     </div>
     <div class="ma-row-dates">
         {{#dates}}
         <div class="ma-row-date ma-row-date--{{key}}" data-date="{{key}}">
-            {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>
-            {{#note}}<span class="ma-row-date-note">{{note}}</span>{{/note}}
+            {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}
         </div>
         {{/dates}}
         {{#notes}}<div class="ma-row-note">{{.}}</div>{{/notes}}
         {{#alert}}<div class="ma-row-alert" data-region="ma-alert">{{alert}}</div>{{/alert}}
     </div>
     <div class="ma-row-status">
-        {{#status}}<span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{/status}}
-        {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_le_dashboard{{/str}} <strong>{{text}}</strong>{{#hint}} {{> block_le_dashboard/hint }}{{/hint}}</span>{{/grade}}
+        {{#status}}<span class="ma-status-wrap"><span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{#statushint}}{{> block_le_dashboard/hint }}{{/statushint}}</span>{{/status}}
+        {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_le_dashboard{{/str}} <strong>{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</span>{{/grade}}
         {{#bars}}{{> block_le_dashboard/progress }}{{/bars}}
     </div>
     <div class="ma-row-actions">
         {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{label}}<span class="accesshide">: {{name}}</span></a>{{/actions}}
         {{#mitigation}}
-        <div class="dropdown ma-mitigate">
+        <div class="dropdown ma-mitigate" data-region="ma-mitigate">
             <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
                     data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_mitigate, block_le_dashboard{{/str}}</button>
             <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
-                {{#links}}<div class="dropdown-item ma-mitigate-item">{{{html}}}</div>{{/links}}
+                {{#links}}{{#url}}<a class="dropdown-item ma-mitigate-item" href="{{url}}">{{label}}</a>{{/url}}{{^url}}<div class="dropdown-item ma-mitigate-item">{{{html}}}</div>{{/url}}{{/links}}
             </div>
         </div>
         {{/mitigation}}

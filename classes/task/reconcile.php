@@ -45,7 +45,6 @@ class reconcile extends \core\task\scheduled_task {
         } finally {
             registry::flush_errors();
         }
-        unset_config('backfillpending', 'block_le_dashboard');
-        set_config('backfilldone', time(), 'block_le_dashboard');
+        backfill::mark_done();
     }
 }

@@ -34,7 +34,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And "A1" is hidden from students
     When I log in as "marker1" and view my dashboard
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
-    And "A1" should show "Hidden from students"
+    And "A1" should have a "hidden" hint
 
     Examples:
       | activity   |
@@ -244,7 +244,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And "student1" and "student2" have submitted "A1"
     When I log in as "marker1" and view my dashboard
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
-    And "A1" should show "1 student has an extension"
+    And the "extension" flag of "A1" should be labelled "1 student has an extension"
     When I click on the extension hint of "A1"
     Then I should see "Their work may still arrive" in the "My assessments" block
 
@@ -253,19 +253,19 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And "student1" has submitted "A1"
     And "student2" has an extension on "A1" to "<extension>"
     When I log in as "marker1" and view my dashboard
-    Then "A1" should <show> "has an extension"
+    Then "A1" should <have> an "extension" hint
 
     Examples:
-      | extension    | show     |
-      | 20 hours ago | show     |
-      | 30 hours ago | not show |
+      | extension    | have     |
+      | 20 hours ago | have     |
+      | 30 hours ago | not have |
 
   Scenario: With only extension work to come, the assessment stays in Upcoming deadlines
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And "student2" has an extension on "A1" to "in 5 days"
     When I log in as "marker1" and view my dashboard
     Then "A1" should appear in the "Upcoming deadlines" section
-    And "A1" should show "1 student has an extension"
+    And the "extension" flag of "A1" should be labelled "1 student has an extension"
 
   # D10: a row held in Upcoming by extensions shows when the latest one ends, not only a past deadline.
   Scenario: An assessment held in Upcoming deadlines by extensions shows the latest extended deadline
@@ -280,7 +280,7 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     Given a summative "assign" "A1" in "M1" is due "in 2 days"
     And "student2" has an extension on "A1" to "in 5 days"
     When I log in as "marker1" and view my dashboard
-    Then "A1" should show "1 student has an extension"
+    Then the "extension" flag of "A1" should be labelled "1 student has an extension"
     And "A1" should not show "Extended deadline"
 
   # Whose extensions: allocated to me, or unallocated when I convene.
@@ -298,8 +298,8 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And the submission of "student1" for "A1" is allocated to "marker1"
     And the submission of "student2" for "A1" is not allocated
     When I log in as "marker1" and view my dashboard
-    Then "A1" should show "1 student has an extension"
+    Then the "extension" flag of "A1" should be labelled "1 student has an extension"
     When I log in as "convenor" and view the "My marking"
-    Then "A1" should show "1 student has an extension"
+    Then the "extension" flag of "A1" should be labelled "1 student has an extension"
     When I log in as "marker2" and view my dashboard
     Then I should not see "has an extension" in the "My assessments" block

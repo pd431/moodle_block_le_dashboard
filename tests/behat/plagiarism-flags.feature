@@ -6,7 +6,8 @@ Feature: Staff see how many submissions are flagged for plagiarism
 
   # Pierre, 2026-10-04: "Port plagiarism first ... Pick a relevant fa icon for the warning". Scope for beta12.
   # rc6 behaviour ported (flows/my-assessments-flows.md §12.5): a coursework row is flagged when
-  # coursework_plagiarism_flags has rows for it with a submission and status 0-3; the count is distinct flagged
+  # coursework_plagiarism_flags has rows for it with a submission and status 0, 1 or 3 (2 is "cleared": Pierre,
+  # 2026-10-07, matching his rc7 commit); the count is distinct flagged
   # submissions. Quizzes and assignments never get one.
   # Where the coordinator's defaults don't fit the source (marked CHOICE):
   # - rc6's flags are mod_coursework's own table, not core's plagiarism API: core plagiarism plugins (Turnitin and
@@ -18,7 +19,7 @@ Feature: Staff see how many submissions are flagged for plagiarism
   # Fixes to rc6's known issues:
   # - B43: the flag shows in every section, not only In progress.
   # - B44: the wording says "submissions", which is what is counted (group coursework counts groups).
-  # - B42 stays open: which statuses mean an open case is inferred from rc6 (0-3). It is one constant in the
+  # - B42 stays partly open: 2 (cleared) no longer counts; 0, 1 and 3 are still inferred from rc6. It is one constant in the
   #   coursework adapter; Pierre should confirm against his coursework version.
   # The flag: a hint button (the existing component) with fa-flag, in the attention tone, not danger: it is
   # staff-only information, never shown to students. Label "1 flagged" / "N flagged"; the tip says
@@ -75,12 +76,17 @@ Feature: Staff see how many submissions are flagged for plagiarism
     Then "C1" should show "1 flagged"
 
   @mod_coursework @javascript
-  Scenario: A cleared case no longer counts
+  Scenario Outline: A cleared or closed case no longer counts
     Given a summative "coursework" "C1" in "M1" was due "2 days ago"
     And "student1" has submitted "C1"
-    And the submission of "student1" for "C1" is flagged for plagiarism with status "4"
+    And the submission of "student1" for "C1" is flagged for plagiarism with status "<status>"
     When I log in as "convenor" and view the "Convenor view"
     Then "C1" should not have a plagiarism hint
+
+    Examples:
+      | status |
+      | 2      |
+      | 4      |
 
   @mod_coursework @javascript
   Scenario: Students never see the flag

@@ -144,7 +144,27 @@ class coursework extends base {
             markingdue: $markingdue,
             hasallocation: !empty($cw->allocationenabled),
             stages: array_keys(self::stage_map($cw)),
+            submissions: !self::by_attendance($cw),
         );
+    }
+
+    /** Submission type values meaning students attend rather than hand work in online. */
+    const ATTENDANCE_TYPES = ['attendance'];
+
+    /**
+     * Whether the coursework is assessed by attendance: nothing is handed in online. Versions name the
+     * setting differently, so any of these columns counts (unverified without the plugin: Pierre tests).
+     *
+     * @param \stdClass $cw
+     * @return bool
+     */
+    protected static function by_attendance(\stdClass $cw): bool {
+        foreach (['submissiontype', 'submissionmethod'] as $field) {
+            if (isset($cw->$field) && in_array(\core_text::strtolower((string)$cw->$field), self::ATTENDANCE_TYPES)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -231,12 +251,26 @@ class coursework extends base {
      * @return \stdClass[] "type:id" => submission
      */
     protected static function submissions(int $courseworkid): array {
+        // A draft isn't handed in until it is finalised, by the student or at the deadline (A8).
+        $finalised = self::column('coursework_submissions', ['finalisedstatus', 'finalised']);
         return self::by_allocatable(
             'coursework_submissions',
             $courseworkid,
             'timesubmitted, firstpublished, lastpublished',
-            'AND timesubmitted > 0'
+            'AND timesubmitted > 0' . ($finalised ? " AND $finalised = 1" : '')
         );
+    }
+
+    /**
+     * Whether feedback counts as marking done: a grade that isn't blank, and final where this
+     * coursework version marks drafts (A8).
+     *
+     * @param \stdClass|null $f Feedback, with grade and, if the version has it, finalised.
+     * @return bool
+     */
+    protected static function marked(?\stdClass $f): bool {
+        return $f !== null && $f->grade !== null && trim((string)$f->grade) !== ''
+            && (!property_exists($f, 'finalised') || !empty($f->finalised));
     }
 
     #[\Override]
@@ -281,6 +315,8 @@ class coursework extends base {
                 $s = $submissions[$key];
                 $row->submitted = true;
                 $row->timesubmitted = (int)$s->timesubmitted;
+                // Only finalised work counts as submitted, where the version records it, and that is final (A8).
+                $row->locked = self::column('coursework_submissions', ['finalisedstatus', 'finalised']) !== null;
                 // D4: released once the final grade is published, dated by publish time.
                 if (!empty($s->lastpublished)) {
                     $row->timereleased = (int)($s->firstpublished ?: $s->lastpublished);
@@ -327,10 +363,10 @@ class coursework extends base {
     }
 
     /**
-     * Plagiarism flag statuses that mean a case is open, as rc6 counted them (B42: inferred, not
-     * checked against mod_coursework's status constants; to be confirmed for the site's version).
+     * Plagiarism flag statuses that mean a case is open. rc6 counted 0-3; 2 is "cleared", so it isn't
+     * one (Pierre, 2026-10-07, as in his rc7 commit). B42: the others are still inferred from rc6.
      */
-    const OPEN_FLAG_STATUSES = ['0', '1', '2', '3'];
+    const OPEN_FLAG_STATUSES = ['0', '1', '3'];
 
     /**
      * Submissions with an open plagiarism (academic conduct) flag, from mod_coursework's own table.
@@ -395,8 +431,9 @@ class coursework extends base {
         // Feedback by submission and stage.
         $feedback = [];
         if ($stagecol) {
+            $finalised = self::column('coursework_feedbacks', ['finalised']) ? ', f.finalised' : '';
             $rs = $DB->get_recordset_sql("SELECT f.id, f.submissionid, f.$stagecol AS stage, f.assessorid, f.grade,
-                                                 f.timemodified, f.ismoderation
+                                                 f.timemodified, f.ismoderation $finalised
                                             FROM {coursework_feedbacks} f
                                             JOIN {coursework_submissions} s ON s.id = f.submissionid
                                            WHERE s.courseworkid = :cwid", ['cwid' => $cw->id]);
@@ -430,7 +467,7 @@ class coursework extends base {
             $released = !empty($s->lastpublished);
             foreach ($map as $stagekey => $identifier) {
                 $f = $feedback[(int)$s->id][$identifier] ?? null;
-                $marked = $f !== null && $f->grade !== null;
+                $marked = self::marked($f);
                 if ($identifier === self::STAGE_MODERATOR && !$marked && isset($agreed[(int)$s->id])) {
                     $marked = true;
                 }

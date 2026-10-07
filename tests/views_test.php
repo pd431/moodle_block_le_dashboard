@@ -176,7 +176,8 @@ final class views_test extends \advanced_testcase {
         $row = self::rows((new staff($this->u['marker']->id))->export(), 'tomark')['Overdue essay'];
         $this->assertSame(1, $row['tomark'], 's1 waits for their extended deadline');
         $hints = array_column($row['hints'], null, 'key');
-        $this->assertSame('1 student has an extension', $hints['extensions']['label']);
+        $this->assertSame('1 student has an extension', $hints['extensions']['title']);
+        $this->assertSame(1, $hints['extensions']['count']);
 
         $other = (new staff($this->u['other']->id))->export();
         $this->assertStringNotContainsString('has an extension', json_encode($other), 'not allocated to them');
@@ -317,5 +318,105 @@ final class views_test extends \advanced_testcase {
         $this->assertTrue((new convenor($userid))->export()['freshness']['refreshing']);
         set_user_preference('block_le_dashboard_refreshing', time() - 11 * MINSECS, $userid);
         $this->assertFalse((new convenor($userid))->export()['freshness']['refreshing']);
+    }
+
+    /**
+     * F4: New work only when every unit marked before the last mark was done, and more arrived after it.
+     */
+    public function test_returned(): void {
+        $due = 1000;
+        $stage = fn(?int $firstready, int $lastmarked) => (object)['firstready' => $firstready, 'lastmarked' => $lastmarked];
+        $this->assertTrue(staff::returned([$stage(1600, 1500)], $due), 'work arrived after marking finished');
+        $this->assertFalse(staff::returned([$stage(1400, 1500)], $due), 'unmarked work older than the last mark');
+        $this->assertFalse(staff::returned([$stage(1600, 900)], $due), 'marked early, before the deadline');
+        $this->assertFalse(staff::returned([$stage(null, 1500)], $due), 'nothing left to mark');
+        $this->assertTrue(staff::returned([$stage(1600, 1500)], null), 'no deadline');
+    }
+
+    /**
+     * A5: grades entered in the gradebook for students with nothing ready never push Released above the total.
+     */
+    public function test_released_never_exceeds_total(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $row = $DB->get_record(
+            'block_le_dashboard_mark',
+            ['cmid' => $cmid, 'unitid' => $this->u['s2']->id],
+            '*',
+            IGNORE_MULTIPLE
+        );
+        unset($row->id);
+        $row->unitid = $this->u['s1']->id;
+        $row->submitted = 0;
+        $row->timeready = null;
+        $row->marked = 1;
+        $row->released = 1;
+        $DB->insert_record('block_le_dashboard_mark', $row);
+
+        $export = (new convenor($this->u['convenor']->id))->export();
+        $rows = self::rows($export, 'inprogress') + self::rows($export, 'past');
+        $bars = array_column($rows['Overdue essay']['bars'], null, 'key');
+        $this->assertLessThanOrEqual($bars['released']['max'], $bars['released']['value']);
+        $this->assertSame(0, $bars['released']['value']);
+    }
+
+    /**
+     * No online submission: the student sees the icon until the date, then "Awaiting feedback", never
+     * Overdue; staff see the flag.
+     */
+    public function test_no_submission(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $DB->set_field('block_le_dashboard_cm', 'nosubmission', 1, ['cmid' => $cmid]);
+        $DB->set_field('block_le_dashboard_stu', 'submitted', null, ['cmid' => $cmid]);
+        $export = (new student($this->u['s1']->id))->export();
+        $past = self::rows($export, 'past');
+        $this->assertSame('awaiting', $past['Overdue essay']['status']['key']);
+        $this->assertSame([], $past['Overdue essay']['hints']);
+        $marking = (new staff($this->u['marker']->id))->export();
+        $all = [];
+        foreach ($marking['sections'] as $section) {
+            $all += array_column($section['rows'], null, 'name');
+        }
+        $this->assertContains('nosubmission', array_column($all['Overdue essay']['hints'], 'key'));
+
+        $DB->set_field('block_le_dashboard_stu', 'due', time() + DAYSECS, ['cmid' => $cmid]);
+        $upcoming = self::rows((new student($this->u['s1']->id))->export(), 'upcoming');
+        $hint = $upcoming['Overdue essay']['hints'][0];
+        $this->assertSame('nosubmission', $hint['key']);
+        $this->assertTrue($hint['glyph']);
+        $this->assertSame('No online submission', $hint['title']);
+        $this->assertNotContains('submit', array_column($upcoming['Overdue essay']['actions'], 'key'));
+    }
+
+    /**
+     * Module convenors see compatible activities nobody tagged; markers and students don't.
+     */
+    public function test_untagged_hint(): void {
+        global $DB;
+        $course = $DB->get_record('course', ['shortname' => 'M1']);
+        $gen = $this->getDataGenerator();
+        $plain = $gen->create_module('assign', ['course' => $course->id, 'name' => 'Untagged essay']);
+        $gen->create_module('page', ['course' => $course->id, 'name' => 'Reading']);
+        $export = (new convenor($this->u['convenor']->id))->export();
+        $this->assertNotNull($export['untagged']);
+        $this->assertMatchesRegularExpression(
+            '/^You have 1 compatible but untagged activities across your /',
+            $export['untagged']['label']
+        );
+        $this->assertSame(['Untagged essay'], array_column($export['untagged']['courses'][0]['activities'], 'name'));
+        $this->assertNull($export['untagged']['guidanceurl']);
+        $this->assertArrayNotHasKey('untagged', (new staff($this->u['marker']->id))->export());
+
+        // Tagged, it drops out once the cached list is forgotten (Refresh).
+        \core_tag_tag::set_item_tags(
+            'core',
+            'course_modules',
+            $plain->cmid,
+            \context_module::instance($plain->cmid),
+            ['formative']
+        );
+        \block_le_dashboard\local\untagged::forget($this->u['convenor']->id);
+        $this->assertNull((new convenor($this->u['convenor']->id))->export()['untagged']);
     }
 }

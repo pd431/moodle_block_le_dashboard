@@ -43,10 +43,35 @@ class year extends \moodleform {
         $this->add_action_buttons();
     }
 
+    /**
+     * The stored end (the first day after the year) to the last day the form shows.
+     *
+     * @param \stdClass $record
+     */
+    public function set_year(\stdClass $record): void {
+        $this->set_data((object)(['timeend' => $record->timeend - 1] + (array)$record));
+    }
+
+    /**
+     * The submitted year, its end stored as the first day after the last day entered.
+     *
+     * @return \stdClass|null
+     */
+    public function get_year(): ?\stdClass {
+        $data = $this->get_data();
+        if ($data) {
+            $end = new \DateTime('@' . $data->timeend);
+            $end->setTimezone(\core_date::get_user_timezone_object());
+            $data->timeend = $end->modify('+1 day')->getTimestamp();
+        }
+        return $data;
+    }
+
     #[\Override]
     public function validation($data, $files) {
         $errors = parent::validation($data, $files);
-        if ($data['timeend'] <= $data['timestart']) {
+        // The form shows the year's last day; the stored end is the day after (A11).
+        if ($data['timeend'] < $data['timestart']) {
             $errors['timeend'] = get_string('yearendbeforestart', 'block_le_dashboard');
         }
         return $errors;

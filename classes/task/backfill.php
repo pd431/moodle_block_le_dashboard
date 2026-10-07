@@ -36,20 +36,51 @@ class backfill extends \core\task\adhoc_task {
     #[\Override]
     public function execute() {
         try {
-            (new indexer())->reconcile(fn($line) => mtrace($line));
+            // What is indexed changed, so every course, not only the nightly live window (F5).
+            (new indexer())->reconcile(fn($line) => mtrace($line), true);
         } finally {
             registry::flush_errors();
         }
-        unset_config('backfillpending', 'block_le_dashboard');
-        set_config('backfilldone', time(), 'block_le_dashboard');
+        // A backfill queued while this one ran does the rest: "Preparing" stays until it has.
+        if (!self::waiting((int)$this->get_id())) {
+            self::mark_done();
+        }
     }
 
     /**
-     * Queues the backfill and marks the index as being prepared.
+     * Queues the backfill and marks the index as being prepared. Every writer goes through here
+     * (install, settings, Activity types, Rebuild). One may wait while another runs: core's own
+     * duplicate check also matches the running one, which has read its data already, so a change
+     * made meanwhile would be lost (A1, A3).
      */
     public static function queue(): void {
         set_config('backfillpending', time(), 'block_le_dashboard');
-        \core\task\manager::queue_adhoc_task(new self(), true);
+        if (!self::waiting()) {
+            \core\task\manager::queue_adhoc_task(new self());
+        }
+    }
+
+    /**
+     * Whether a backfill is queued and has not started.
+     *
+     * @param int $except This task's own id, when it asks.
+     * @return bool
+     */
+    protected static function waiting(int $except = 0): bool {
+        global $DB;
+        return $DB->record_exists_select(
+            'task_adhoc',
+            'classname = :classname AND timestarted IS NULL AND id <> :except',
+            ['classname' => '\\' . self::class, 'except' => $except]
+        );
+    }
+
+    /**
+     * The index is complete: "Preparing" goes.
+     */
+    public static function mark_done(): void {
+        unset_config('backfillpending', 'block_le_dashboard');
+        set_config('backfilldone', time(), 'block_le_dashboard');
     }
 
     /**

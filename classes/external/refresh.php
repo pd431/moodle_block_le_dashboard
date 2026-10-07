@@ -65,29 +65,50 @@ class refresh extends external_api {
         $year = $yearid < 0 ? null : $yearid;
         $object = factory::make($view, (int)$USER->id, $year);
         $cmids = $object->refresh_cmids();
-        $last = (int)get_user_preferences('block_le_dashboard_lastrefresh', 0, $USER->id);
-        if ($last > time() - self::MIN_INTERVAL) {
+        // Per view: a convenor's Refresh doesn't cover their wider staff view (A9).
+        $last = json_decode((string)get_user_preferences('block_le_dashboard_lastrefresh', '', $USER->id), true);
+        $last = is_array($last) ? $last : [];
+        $ok = true;
+        $throttled = (int)($last[$view] ?? 0) > time() - self::MIN_INTERVAL;
+        if ($throttled) {
             // Pressed again within the minute: the index is as fresh as it gets (F9).
             $status = 'done';
         } else if ($view === scope::STUDENT) {
-            // A student's Refresh rewrites only their own rows (F4).
-            set_user_preference('block_le_dashboard_lastrefresh', time());
+            // A student's Refresh rewrites only their own rows (F4). An activity another update holds
+            // is left to the task queued for it, rather than holding the request up (A6, A9).
             $indexer = new indexer();
             foreach ($cmids as $cmid) {
-                $indexer->index_users($cmid, [(int)$USER->id]);
+                try {
+                    $indexer->index_users($cmid, [(int)$USER->id], indexer::INLINE_LOCK_WAIT);
+                } catch (\Throwable $e) {
+                    indexer::queue_cm($cmid);
+                    $ok = false;
+                }
             }
             $status = 'done';
         } else if (count($cmids) <= config::inline_refresh_limit()) {
-            set_user_preference('block_le_dashboard_lastrefresh', time());
-            (new indexer())->index_cms($cmids);
+            try {
+                (new indexer())->index_cms($cmids);
+            } catch (\Throwable $e) {
+                // Recorded for the admin page; the rest was indexed. A second press tries again.
+                $ok = false;
+            }
             $status = 'done';
         } else {
-            set_user_preference('block_le_dashboard_lastrefresh', time());
             set_user_preference('block_le_dashboard_refreshing', time());
             $task = new \block_le_dashboard\task\reindex();
             $task->set_custom_data(['cmids' => array_values($cmids), 'userid' => (int)$USER->id]);
             \core\task\manager::queue_adhoc_task($task, true);
             $status = 'queued';
+        }
+        // Only a Refresh that did its work holds the next one off (A9).
+        if ($ok && !$throttled) {
+            $last[$view] = time();
+            set_user_preference('block_le_dashboard_lastrefresh', json_encode($last));
+        }
+        if ($view === scope::CONVENOR) {
+            // Activities tagged since the list was cached drop out at once.
+            \block_le_dashboard\local\untagged::forget((int)$USER->id);
         }
         $object = factory::make($view, (int)$USER->id, $year);
         $output = $PAGE->get_renderer('core');

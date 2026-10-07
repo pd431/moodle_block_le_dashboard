@@ -11,7 +11,8 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
   # - Finished means: My marking, all my units marked; convenor, something submitted and everything marked and
   #   released; student, a grade released. An undated assessment with nothing submitted stays Undated.
   # - Ordinary-case pills removed: "Not submitted yet", generic "Due" and "Open". Kept: Submitted, Received,
-  #   In marking, Feedback released, Resubmission open, Not submitted and Closed (these say something happened).
+  #   In marking, Feedback released, Not submitted and Closed (these say something happened). Beta17 drops
+  #   Resubmission open (reopened-quiet.feature).
   # - Ordinary-case icons removed: the on-time "submitted" tick. Kept: the not-submitted cross in Past (it is the
   #   exception there, and EC10 relies on it).
   # - Late is a clock. That frees nothing for due soon, so due soon moves to fa-hourglass-half.
@@ -68,8 +69,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Undated" section
     And "A1" should show "Received"
-    When I click on the received hint of "A1"
-    Then I should see "This assessment has no deadline in the system, so it stays here until it has a grade." in the "My assessments" block
+    And "A1" should not have a "received" hint
 
   Scenario: Graded undated work moves to Past, placed by the date feedback was given
     Given a summative "assign" "A1" in "M1" with no due date exists
@@ -193,9 +193,9 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     When I log in as "student1" and view my dashboard
     Then "A1" should not have a late penalty hint
 
-  Scenario: Before release the late penalty popover follows the late line
+  Scenario: Before release the late clock sits beside the In marking pill
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
     And "student1" submitted "A1" "2 days ago"
     When I log in as "student1" and view my dashboard
-    Then "A1" should show "Submitted 1 day late"
-    And "A1" should have a late penalty hint
+    Then "A1" should not show "Submitted 1 day late"
+    And the "late" icon of "A1" should sit next to its "In marking" pill

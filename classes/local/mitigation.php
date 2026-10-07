@@ -47,14 +47,21 @@ class mitigation {
         return true;
     }
 
+    /** Link kinds, each with its own menu label (mitigate_<kind>). */
+    const KIND_SELFCERT = 'selfcert';
+    /** The student request form. */
+    const KIND_REQUEST = 'request';
+
     /**
-     * Links for the Mitigate menu of one row, as HTML from block_rhb.
+     * Links for the Mitigate menu of one row. block_rhb returns each link as HTML; only its address is
+     * kept, and the label comes from this plugin's strings by the kind of link (Pierre, 2026-10-06).
+     * A link whose address can't be read falls back to block_rhb's own HTML, so no route is lost.
      *
      * Shown only when there is at least one real link, as rc6 did.
      *
      * @param string $modname
      * @param int $instanceid
-     * @return string[]
+     * @return array[] Each with url and label, or html for the fallback.
      */
     public static function links(string $modname, int $instanceid): array {
         if (!self::available()) {
@@ -68,7 +75,8 @@ class mitigation {
             try {
                 $coursework = \mod_coursework\models\coursework::find($instanceid);
                 if ($coursework) {
-                    $links[] = (string)block_rhb_get_self_certification_link($coursework);
+                    // Block_rhb's self-certification link (blocks/rhb/lib.php).
+                    $links[] = self::item(self::KIND_SELFCERT, (string)block_rhb_get_self_certification_link($coursework));
                 }
             } catch (\Throwable $e) {
                 debugging('block_rhb self-certification link failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
@@ -78,21 +86,41 @@ class mitigation {
             self::$srm = null;
             if (function_exists('block_rhb_get_srm_link')) {
                 try {
-                    self::$srm = (string)block_rhb_get_srm_link();
+                    // Block_rhb's student request form link (blocks/rhb/lib.php), the same for every row.
+                    self::$srm = self::item(self::KIND_REQUEST, (string)block_rhb_get_srm_link());
                 } catch (\Throwable $e) {
                     debugging('block_rhb request link failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
                 }
             }
         }
-        $haslink = fn($html) => preg_match('/<a\b[^>]*href=/i', (string)$html) === 1;
-        $links = array_values(array_filter($links, $haslink));
+        $links = array_values(array_filter($links));
         if (!$links && $modname === 'coursework') {
             return [];
         }
-        if (self::$srm && $haslink(self::$srm)) {
+        if (self::$srm) {
             $links[] = self::$srm;
         }
         return $links;
+    }
+
+    /**
+     * One menu item from block_rhb's HTML: its address with our label, the HTML itself when the address
+     * can't be read, or null when there is no link at all (a message such as "limit reached").
+     *
+     * @param string $kind
+     * @param string $html
+     * @return array|null
+     */
+    public static function item(string $kind, string $html): ?array {
+        if (!preg_match('/<a\b[^>]*\bhref\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>]+))/i', $html, $m)) {
+            return null;
+        }
+        $href = html_entity_decode($m[2] !== '' ? $m[2] : ($m[3] ?? '') . ($m[4] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $url = clean_param($href, PARAM_LOCALURL) ?: clean_param($href, PARAM_URL);
+        if ($url === '' || $url === '#') {
+            return ['html' => $html];
+        }
+        return ['url' => $url, 'label' => get_string('mitigate_' . $kind, 'block_le_dashboard')];
     }
 
     /**

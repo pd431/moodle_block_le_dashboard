@@ -32,6 +32,9 @@ class registry {
         'coursework' => coursework::class,
     ];
 
+    /** Activity types where students never hand anything in online. */
+    const NOSUBMISSION = ['attendance'];
+
     /** Activity types never offered (R8: LTI is out of scope for now). */
     const EXCLUDED = ['lti'];
 
@@ -136,8 +139,8 @@ class registry {
     }
 
     /**
-     * Behat and PHPUnit only: fails reading student rows that include the student the
-     * testfailstudent setting names, or reading marking rows when testfailmarking is set.
+     * Behat and PHPUnit only: fails reading student rows, or marking rows, that include the student
+     * the testfailstudent, or testfailmarking, setting names.
      *
      * @param string $part 'student' or 'marking'
      * @param int[] $userids
@@ -148,8 +151,9 @@ class registry {
             if ($part === 'student' && $student && in_array($student, $userids)) {
                 throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'student ' . $student);
             }
-            if ($part === 'marking' && get_config('block_le_dashboard', 'testfailmarking')) {
-                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'marking');
+            $marking = (int)get_config('block_le_dashboard', 'testfailmarking');
+            if ($part === 'marking' && $marking && in_array($marking, $userids)) {
+                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'marking ' . $marking);
             }
         }
     }
@@ -230,5 +234,18 @@ class registry {
         }
         $value = get_config('block_le_dashboard', 'lasterror_' . $modname);
         return $value ? json_decode($value) : null;
+    }
+
+    /**
+     * Whether students hand nothing in online for this assessment, whatever its adapter says:
+     * attendance, or an activity tagged as done in person. The adapters declare their own cases
+     * (cm_row::$submissions), such as an assignment with no submission types.
+     *
+     * @param \cm_info $cm
+     * @return bool
+     */
+    public static function no_submission(\cm_info $cm): bool {
+        return in_array($cm->modname, self::NOSUBMISSION)
+            || \block_le_dashboard\local\tags::has_any((int)$cm->id, \block_le_dashboard\local\config::inperson_tags());
     }
 }

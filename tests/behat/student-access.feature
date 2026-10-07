@@ -121,7 +121,7 @@ Feature: Students see only assessments they can actually access
 
   # Added 2026-10-02 with design-v2 section 5a: counts come from data, not from section titles.
   Scenario: Summary counts are unaffected by a customised section title
-    Given a summative "quiz" "A1" in "M1" was due "yesterday"
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
     And the language string for the "Overdue" section title is customised to "Needs attention"
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Needs attention" section
@@ -129,8 +129,8 @@ Feature: Students see only assessments they can actually access
 
   @javascript
   Scenario: Searching filters rows but does not change the summary counts
-    Given a summative "quiz" "A1" in "M1" was due "yesterday"
-    And a summative "quiz" "A2" in "M1" was due "yesterday"
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
+    And a summative "assign" "A2" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
     And I search the "My assessments" block for "A1"
     Then I should not see "A2" in the "My assessments" block
@@ -138,8 +138,8 @@ Feature: Students see only assessments they can actually access
 
   @javascript
   Scenario: The type filter switches the summary counts to that type
-    Given a summative "quiz" "A1" in "M1" was due "yesterday"
-    And a formative "quiz" "F1" in "M1" was due "yesterday"
+    Given a summative "assign" "A1" in "M1" was due "yesterday"
+    And a formative "assign" "F1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
     And I press "Formative" in the "My assessments" block
     Then the "Overdue" summary count should be "1"
@@ -265,7 +265,7 @@ Feature: Students see only assessments they can actually access
     And the submission of "student1" for "A1" is reopened
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Upcoming" section
-    And "A1" should show "Resubmission open"
+    And "A1" should have no status pill
     And "A1" should show "Submit"
     And I click on the activity icon of "A1"
     And the activity icon tooltip of "A1" should say "Assignment."
@@ -275,7 +275,7 @@ Feature: Students see only assessments they can actually access
     Given a summative "assign" "A1" in "M1" was due "<due>"
     And "student1" submitted "A1" "<submitted>"
     When I log in as "student1" and view my dashboard
-    Then "A1" should show "<text>"
+    Then the "late" icon of "A1" should be labelled "<text>. Late penalties may apply."
 
     Examples:
       | due            | submitted      | text                              |
@@ -294,14 +294,14 @@ Feature: Students see only assessments they can actually access
     And "A1" should not show "late"
 
   # Pierre, 2026-10-04: the late note is now the late penalties popover (student-polish.feature).
-  Scenario: Late summative work carries the late penalties popover, late formative work does not
+  Scenario: Late summative work says late penalties may apply, late formative work only says it was late
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And a formative "assign" "F1" in "M1" was due "2 days ago"
     And "student1" submitted "A1" "1 day ago"
     And "student1" submitted "F1" "1 day ago"
     When I log in as "student1" and view my dashboard
-    Then "A1" should have a late penalty hint
-    And "F1" should not have a late penalty hint
+    Then the "late" icon of "A1" should be labelled "Submitted 1 day late. Late penalties may apply."
+    And the "late" icon of "F1" should be labelled "Submitted 1 day late."
 
   Scenario: Work submitted before an extended deadline is not late
     Given a summative "assign" "A1" in "M1" was due "3 days ago"

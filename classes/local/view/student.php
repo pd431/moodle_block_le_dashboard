@@ -86,7 +86,7 @@ class student extends base {
         [$insql, $params] = $DB->get_in_or_equal(array_keys($courses), SQL_PARAMS_NAMED);
         $params['userid'] = $this->userid;
         $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue,
-                                                c.hiddenfromstudents, c.timeindexed,
+                                                c.hiddenfromstudents, c.nosubmission, c.norelease, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
                                                 s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.enrolstart
                                            FROM {block_le_dashboard_stu} s
@@ -216,7 +216,8 @@ class student extends base {
             $state = 'overdue';
         } else if (self::is_late($r)) {
             $state = 'late';
-        } else if (in_array($status, [classifier::STATUS_NOTSUBMITTED, classifier::STATUS_CLOSED])) {
+        } else if ($status === classifier::STATUS_NOTSUBMITTED) {
+            // Not for Closed: the block can't see those submissions (F6).
             $state = 'notsubmitted';
         } else if (
             in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && $r->due && (int)$r->due > $this->now
@@ -241,9 +242,8 @@ class student extends base {
     }
 
     /**
-     * Plain lines under the dates (G5), each at the precision its size needs: how late
-     * the work was, the late note, time left to submit, and how soon it is due. Neutral
-     * text: lateness is information, never a warning colour.
+     * Plain lines under the dates (G5), each at the precision its size needs: time left to submit,
+     * and how soon it is due. How late work was is the clock's title, not a line.
      *
      * @param \stdClass $r
      * @param string $section
@@ -253,11 +253,6 @@ class student extends base {
     protected function notes(\stdClass $r, string $section, string $status): array {
         $notes = [];
         $due = $r->due ? (int)$r->due : null;
-        $submitted = (int)$r->submitted === 1 && $r->timesubmitted ? (int)$r->timesubmitted : null;
-        if ($submitted && $due && $submitted > $due) {
-            // Against the effective deadline (D2), so extensions never read as late.
-            $notes[] = get_string('submittedlate', 'block_le_dashboard', format::duration($submitted - $due));
-        }
         // Time left: to the cut-off, or to the deadline plus the grace period when there is none (G9).
         $until = $r->cutoff ? (int)$r->cutoff : ($due ? $due + config::grace() : null);
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
@@ -297,11 +292,14 @@ class student extends base {
         [$row['overlay'], $row['mitigationoverlay'], $parts] = $this->modifiers($r, $section, $status);
         $row['hasmodifiers'] = $row['overlay'] || $row['mitigationoverlay'];
         $row['tip'] = format::tip($row['modlabel'], $parts);
+        // Nothing to hand in online: say so while the date is ahead (Pierre, 2026-10-06).
+        $row['hints'] = !empty($r->nosubmission) && $section !== classifier::PAST
+            ? [format::nosubmission_hint($row['id'], false)] : [];
 
         $dates = [];
         if ($r->due) {
-            $note = $r->individual ? get_string('individualdeadline', 'block_le_dashboard') : null;
-            $dates[] = format::date('due', (int)$r->due, $note);
+            // An extension is ordinary upcoming work: no note (Pierre, 2026-10-06).
+            $dates[] = format::date('due', (int)$r->due);
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
@@ -312,23 +310,22 @@ class student extends base {
             }
         } else if ($status === classifier::STATUS_INMARKING && $r->markingdue) {
             // The date stays once it has passed, with a hint saying who to contact (G12).
-            $dates[] = format::date('feedbackexpected', (int)$r->markingdue);
-            if ((int)$r->markingdue < $this->now && ($hint = $this->feedback_hint($row['id']))) {
-                $row['hints'][] = $hint;
+            $date = format::date('feedbackexpected', (int)$r->markingdue);
+            // The question-circle beside the date once it has passed, saying who to contact (G12).
+            if ((int)$r->markingdue < $this->now) {
+                $date['hint'] = $this->feedback_hint($row['id']);
             }
+            $dates[] = $date;
         }
         $row['dates'] = $dates;
         $row['notes'] = $this->notes($r, $section, $status);
-        if ($status === classifier::STATUS_RECEIVED) {
-            $text = get_string('hint_received_text', 'block_le_dashboard');
-            $row['hints'][] = format::hint($row['id'], 'received', $text);
-        }
-        // Late summative work: the penalties popover, next to the grade once there is one, else in the row's hints.
-        if ($r->assesstype === 'summative' && self::is_late($r) && ($hint = $this->late_hint($row['id']))) {
+        // Late work: the clock beside the grade once there is one, else beside the status pill.
+        if (self::is_late($r)) {
+            $hint = $this->late_hint($row['id'], $r);
             if (!empty($row['grade'])) {
                 $row['grade']['hint'] = $hint;
             } else {
-                $row['hints'][] = $hint;
+                $row['statushint'] = $hint;
             }
         }
 
@@ -342,40 +339,54 @@ class student extends base {
             $actions[] = format::view_action($row['url']);
         }
         $row['actions'] = $actions;
-        // Mitigate around the student's own deadline, whatever the section or status (G4).
-        $mitigable = in_array($r->assesstype, self::MITIGATION_TYPES)
-            && config::mitigation_open($r->due ? (int)$r->due : null, $this->now);
-        $links = $mitigable ? mitigation::links($r->modname, $r->instance) : [];
+        $links = $this->mitigation_links($r);
         if ($links) {
             $row['mitigation'] = [
                 'id' => $row['id'] . '-mitigate',
                 'icon' => format::ACTION_ICONS['mitigate'],
-                'links' => array_map(fn($h) => ['html' => $h], $links),
+                'links' => $links,
             ];
         }
         return $row;
     }
 
     /**
-     * The late penalties popover: the late note setting, and a link to the policy when one is set.
-     * With the note cleared there is no popover.
+     * Mitigate's links around the student's own deadline, whatever the section or status (G4):
+     * none outside the window, on formative work, or without block_rhb.
+     *
+     * @param \stdClass $r
+     * @return array[] Menu items (mitigation::links())
+     */
+    protected function mitigation_links(\stdClass $r): array {
+        $open = in_array($r->assesstype, self::MITIGATION_TYPES)
+            && config::mitigation_open($r->due ? (int)$r->due : null, $this->now);
+        return $open ? mitigation::links($r->modname, $r->instance) : [];
+    }
+
+    /**
+     * The late clock: "Submitted 2 h late." On summative work with a late penalties note, the title adds
+     * "Late penalties may apply." and the popover holds the note and the policy link, when one is set.
      *
      * @param string $rowid
-     * @return array|null
+     * @param \stdClass $r
+     * @return array
      */
-    protected function late_hint(string $rowid): ?array {
-        $text = get_config('block_le_dashboard', 'latenote');
-        // Unset until an admin saves the new setting: use its default.
-        $text = trim($text === false ? get_string('latenote_default', 'block_le_dashboard') : $text);
-        if ($text === '') {
-            return null;
+    protected function late_hint(string $rowid, \stdClass $r): array {
+        $late = format::duration((int)$r->timesubmitted - (int)$r->due);
+        $text = '';
+        $link = null;
+        if ($r->assesstype === 'summative') {
+            $text = get_config('block_le_dashboard', 'latenote');
+            // Unset until an admin saves the new setting: use its default.
+            $text = trim($text === false ? get_string('latenote_default', 'block_le_dashboard') : $text);
+            $url = trim((string)get_config('block_le_dashboard', 'latenoteurl'));
+            $link = $url === '' ? null : get_string('hint_latepenalty_link', 'block_le_dashboard', \html_writer::link(
+                new \moodle_url($url),
+                get_string('hint_latepenalty_linktext', 'block_le_dashboard')
+            ));
         }
-        $url = trim((string)get_config('block_le_dashboard', 'latenoteurl'));
-        $link = $url === '' ? null : get_string('hint_latepenalty_link', 'block_le_dashboard', \html_writer::link(
-            new \moodle_url($url),
-            get_string('hint_latepenalty_linktext', 'block_le_dashboard')
-        ));
-        return format::hint($rowid, 'latepenalty', format_string($text, true, ['escape' => false]), $link);
+        $title = get_string($text !== '' ? 'hint_late_penalties' : 'hint_late', 'block_le_dashboard', $late);
+        return format::hint($rowid, 'late', $text === '' ? '' : format_string($text, true, ['escape' => false]), $link, $title);
     }
 
     /**

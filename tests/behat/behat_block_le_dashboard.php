@@ -43,7 +43,7 @@ class behat_block_le_dashboard extends behat_base {
     const BLOCK = '.block_le_dashboard';
 
     /** Module tables searched when looking up an activity by name. */
-    const MODULES = ['assign', 'quiz', 'peerwork', 'coursework', 'workshop', 'forum', 'page', 'lti'];
+    const MODULES = ['assign', 'quiz', 'peerwork', 'coursework', 'workshop', 'forum', 'page', 'lti', 'attendance'];
 
     /**
      * The module convenor role is needed before Background enrolments refer to it.
@@ -259,9 +259,12 @@ class behat_block_le_dashboard extends behat_base {
      *
      * Options after "with": marker allocation, a marking deadline "...", an essay question,
      * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation,
-     * marking workflow, reopened attempts, a cut-off "...", manual agreement.
+     * marking workflow, reopened attempts, a cut-off "...", manual agreement, tagged "..." (a second tag),
+     * N attempts allowed, marks never shown, marks shown immediately after only, marks shown after
+     * close only, a maximum grade of 0 (quiz), submission type attendance (coursework), required Submit
+     * (assign: students must click Submit, which makes the submission final).
      *
-     * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
+     * @Given /^an? (?P<tag>summative|formative|"[^"]+") "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag
      * @param string $modname
      * @param string $name
@@ -277,20 +280,28 @@ class behat_block_le_dashboard extends behat_base {
         string $opts,
         string $due
     ): void {
-        $this->create_assessment($tag, $modname, $name, $course, $opts, self::time($due));
+        // A quoted tag is any tag, such as one the settings don't list yet.
+        $this->create_assessment(trim($tag, '"'), $modname, $name, $course, $opts, self::time($due));
     }
 
     /**
      * Creates and tags an assessment with no due date.
      *
-     * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)" with no due date exists$/
+     * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)" with no due date(?P<opts> and no grade)? exists$/
      * @param string $tag
      * @param string $modname
      * @param string $name
      * @param string $course
+     * @param string $opts
      */
-    public function an_assessment_with_no_due_date(string $tag, string $modname, string $name, string $course): void {
-        $this->create_assessment($tag, $modname, $name, $course, '', null);
+    public function an_assessment_with_no_due_date(
+        string $tag,
+        string $modname,
+        string $name,
+        string $course,
+        string $opts = ''
+    ): void {
+        $this->create_assessment($tag, $modname, $name, $course, $opts, null);
     }
 
     /**
@@ -327,7 +338,8 @@ class behat_block_le_dashboard extends behat_base {
             case 'assign':
                 // EC5: "with no online submission" means the assignment only records a mark.
                 $online = str_contains($opts, 'no online submission') ? 0 : 1;
-                $record += ['duedate' => (int)$due, 'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => $online,
+                $record += ['duedate' => (int)$due, 'submissiondrafts' => str_contains($opts, 'required Submit') ? 1 : 0,
+                    'assignsubmission_onlinetext_enabled' => $online,
                     'assignsubmission_file_enabled' => 0,
                     'gradingduedate' => $markingdue,
                     'markingworkflow' => $allocation || str_contains($opts, 'marking workflow') ? 1 : 0,
@@ -357,6 +369,9 @@ class behat_block_le_dashboard extends behat_base {
                 if (preg_match('/grading method "([^"]*)"/', $opts, $m)) {
                     $record['grademethod'] = $methods[strtolower($m[1])];
                 }
+                if (preg_match('/(\d+) attempts? allowed/', $opts, $m)) {
+                    $record['attempts'] = (int)$m[1];
+                }
                 break;
             case 'peerwork':
                 $record += ['duedate' => (int)$due];
@@ -366,12 +381,19 @@ class behat_block_le_dashboard extends behat_base {
                 $record += ['deadline' => (int)$due, 'numberofmarkers' => $markers, 'allocationenabled' => $allocation ? 1 : 0,
                     'moderationenabled' => str_contains($opts, 'moderation') ? 1 : 0,
                     'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue];
+                if (str_contains($opts, 'submission type attendance')) {
+                    $record['submissiontype'] = 'attendance';
+                }
                 break;
             case 'workshop':
                 $record += ['submissionend' => (int)$due];
                 break;
             default:
                 $record += ['duedate' => (int)$due];
+        }
+        if (str_contains($opts, 'no grade')) {
+            // A grade of 0 is grade type None.
+            $record['grade'] = 0;
         }
         $instance = $gen->create_module($modname, $record);
         if (isset($record['intro'])) {
@@ -385,11 +407,40 @@ class behat_block_le_dashboard extends behat_base {
         }
         if ($modname === 'quiz') {
             self::add_essay($instance);
+            $review = ['marks never shown' => 0, 'marks shown immediately after only' => 0x11000,
+                'marks shown after close only' => 0x00010];
+            foreach ($review as $phrase => $marks) {
+                if (str_contains($opts, $phrase)) {
+                    self::set_quiz((int)$instance->id, ['reviewmarks' => $marks]);
+                }
+            }
+            if (str_contains($opts, 'a maximum grade of 0')) {
+                self::set_quiz((int)$instance->id, ['grade' => 0]);
+            }
         }
         if ($due) {
             self::joined_before($course->id, $due);
         }
-        core_tag_tag::set_item_tags('core', 'course_modules', $instance->cmid, context_module::instance($instance->cmid), [$tag]);
+        $tags = [$tag];
+        if (preg_match('/tagged "([^"]*)"/', $opts, $m)) {
+            $tags[] = $m[1];
+        }
+        core_tag_tag::set_item_tags('core', 'course_modules', $instance->cmid, context_module::instance($instance->cmid), $tags);
+    }
+
+    /**
+     * Changes quiz settings in the database and updates its grade item, as saving the form would.
+     *
+     * @param int $quizid
+     * @param array $fields
+     */
+    protected static function set_quiz(int $quizid, array $fields): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/mod/quiz/lib.php');
+        $DB->update_record('quiz', ['id' => $quizid] + $fields);
+        $quiz = $DB->get_record('quiz', ['id' => $quizid]);
+        $quiz->cmidnumber = '';
+        quiz_grade_item_update($quiz);
     }
 
     /**
@@ -438,6 +489,28 @@ class behat_block_le_dashboard extends behat_base {
             MUST_EXIST
         );
         \block_le_dashboard\local\adapter\registry::set_enabled($modname, $not === '');
+    }
+
+    /**
+     * Saves the formative tag setting, as the settings page does: its callback queues a backfill.
+     *
+     * @When /^the formative tag is changed to "(?P<tag>[^"]*)" in the settings$/
+     * @param string $tag
+     */
+    public function the_formative_tag_is_changed(string $tag): void {
+        set_config('formativetags', $tag, 'block_le_dashboard');
+        \block_le_dashboard\task\backfill::setting_changed('block_le_dashboard/formativetags');
+    }
+
+    /**
+     * Unticks an activity type and saves, as the Activity types page does.
+     *
+     * @When /^the "(?P<type>[^"]*)" activity type is unticked on the Activity types page$/
+     * @param string $type
+     */
+    public function the_activity_type_is_unticked(string $type): void {
+        $this->the_activity_type_is_enabled($type, 'not ');
+        \block_le_dashboard\task\backfill::queue();
     }
 
     /**
@@ -833,11 +906,19 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $userid
      */
     protected function submit(cm_info $cm, int $userid): void {
+        global $DB;
         $gen = testing_util::get_data_generator();
         switch ($cm->modname) {
             case 'assign':
                 $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $userid, 'cmid' => $cm->id,
                     'onlinetext' => 'My work']);
+                // Where students must click Submit, the generator leaves a draft: submit it, as the student would.
+                $DB->set_field(
+                    'assign_submission',
+                    'status',
+                    'submitted',
+                    ['assignment' => $cm->instance, 'userid' => $userid, 'latest' => 1]
+                );
                 break;
             case 'quiz':
                 $this->finish_attempts($cm, $userid, 1);
@@ -923,10 +1004,21 @@ class behat_block_le_dashboard extends behat_base {
             $quba->manual_grade(1, 'Good', 1, FORMAT_HTML);
             question_engine::save_questions_usage_by_activity($quba);
             $DB->set_field('quiz_attempts', 'sumgrades', $quba->get_total_mark(), ['id' => $attempt->id]);
+            self::regrade_quiz($cm, (int)$attempt->userid);
         } else {
             $this->assert_ungraded($attempt);
         }
         self::queue($cm);
+    }
+
+    /**
+     * Writes a student's quiz grade to the gradebook, as finishing a manual grade does.
+     *
+     * @param cm_info|stdClass $cm
+     * @param int $userid
+     */
+    protected static function regrade_quiz($cm, int $userid): void {
+        \mod_quiz\quiz_settings::create((int)$cm->instance)->get_grade_calculator()->recompute_final_grade($userid);
     }
 
     /**
@@ -1181,7 +1273,7 @@ class behat_block_le_dashboard extends behat_base {
         } else {
             testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_feedback([
                 'courseworkid' => $cm->instance, 'allocatableid' => $userid, 'assessorid' => $markerid,
-                'stage_identifier' => $stage, 'grade' => 60, 'isfinalgrade' => $final ? 1 : 0]);
+                'stage_identifier' => $stage, 'grade' => 60, 'isfinalgrade' => $final ? 1 : 0, 'finalised' => 1]);
         }
         self::queue($cm);
     }
@@ -1302,13 +1394,15 @@ class behat_block_le_dashboard extends behat_base {
     /**
      * An assessment is in the index.
      *
-     * @Then /^"(?P<name>[^"]*)" should be in the index$/
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?be in the index$/
      * @param string $name
+     * @param string $not
      */
-    public function should_be_in_the_index(string $name): void {
+    public function should_be_in_the_index(string $name, string $not = ''): void {
         global $DB;
-        if (!$DB->record_exists('block_le_dashboard_cm', ['cmid' => $this->cm($name)->id])) {
-            throw new ExpectationException("'$name' is not in the index", $this->getSession());
+        $in = $DB->record_exists('block_le_dashboard_cm', ['cmid' => $this->cm($name)->id]);
+        if ($in === (bool)$not) {
+            throw new ExpectationException("'$name' is " . ($in ? '' : 'not ') . 'in the index', $this->getSession());
         }
     }
 
@@ -2096,7 +2190,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_late_hint_should_sit_next_to_grade(string $name): void {
-        if (!$this->row($name)->find('css', '[data-region="ma-grade"] [data-hint="latepenalty"]')) {
+        if (!$this->row($name)->find('css', '[data-region="ma-grade"] [data-hint="late"]')) {
             throw new ExpectationException("The late penalty hint of '$name' is not next to its grade", $this->getSession());
         }
     }
@@ -2262,8 +2356,10 @@ class behat_block_le_dashboard extends behat_base {
 
     /** Hint names in steps, to the hint keys rows carry. */
     const HINTS = ['brief' => 'brief', 'unallocated' => 'unallocated', 'returned work' => 'returned',
-        'feedback contact' => 'feedbackcontact', 'extension' => 'extensions', 'no deadline' => 'nodeadline',
-        'received' => 'received', 'late penalty' => 'latepenalty', 'plagiarism' => 'plagiarism'];
+        'returned' => 'returned', 'feedback contact' => 'feedbackcontact', 'feedback' => 'feedbackcontact',
+        'feedbackcontact' => 'feedbackcontact', 'extension' => 'extensions', 'extensions' => 'extensions',
+        'setup' => 'setup', 'check settings' => 'setup', 'nodeadline' => 'nodeadline', 'received' => 'received', 'late' => 'late',
+        'late penalty' => 'late', 'plagiarism' => 'plagiarism', 'hidden' => 'hidden', 'nosubmission' => 'nosubmission'];
 
     /**
      * Clicks a row's hint.
@@ -2281,7 +2377,7 @@ class behat_block_le_dashboard extends behat_base {
     /**
      * Whether a row has a hint.
      *
-     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? (?P<hint>[a-z ]+?) hint$/
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? "?(?P<hint>[a-z ]+?)"? hint$/
      * @param string $name
      * @param string $not
      * @param string $hint
@@ -2376,6 +2472,26 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * An action button on a row, such as Submit or View.
+     *
+     * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?have an? "(?P<label>[^"]*)" button$/
+     * @param string $name
+     * @param string $not
+     * @param string $label
+     */
+    public function row_should_have_button(string $name, string $not, string $label): void {
+        $has = false;
+        foreach ($this->row($name)->findAll('css', 'a.ma-btn, button.ma-btn') as $button) {
+            $text = $button->find('css', '.accesshide');
+            $shown = trim(str_replace($text ? $text->getText() : '', '', $button->getText()));
+            $has = $has || $shown === $label;
+        }
+        if ($has === (bool)$not) {
+            throw new ExpectationException("'$name' " . ($not ? 'has' : 'has no') . " '$label' button", $this->getSession());
+        }
+    }
+
+    /**
      * Text in a row, or a dated item.
      *
      * @Then /^"(?P<name>[^"]*)" should (?P<not>not )?show "(?P<text>[^"]*)"(?: with the date "(?P<when>[^"]*)")?$/
@@ -2387,13 +2503,32 @@ class behat_block_le_dashboard extends behat_base {
     public function row_should_show(string $name, string $not, string $text, string $when = ''): void {
         $row = $this->row($name);
         if ($when === '') {
-            $has = str_contains($row->getText(), $text);
+            $has = str_contains($this->row_text($row), $text);
             if ($has === (bool)$not) {
                 throw new ExpectationException("'$name' " . ($not ? 'shows' : 'does not show') . " '$text'", $this->getSession());
             }
             return;
         }
         $this->row_date($row, $name, $text, $when);
+    }
+
+    /**
+     * The text a row shows, leaving out closed popovers: without a browser, getText() would read them too.
+     *
+     * @param \Behat\Mink\Element\NodeElement $row
+     * @return string
+     */
+    protected function row_text(\Behat\Mink\Element\NodeElement $row): string {
+        if ($this->running_javascript()) {
+            return $row->getText();
+        }
+        $doc = new DOMDocument();
+        @$doc->loadHTML('<?xml encoding="utf-8"?><div>' . $row->getHtml() . '</div>');
+        $xpath = new DOMXPath($doc);
+        foreach (iterator_to_array($xpath->query("//*[@data-region='ma-tip'][@hidden]")) as $tip) {
+            $tip->parentNode->removeChild($tip);
+        }
+        return trim(preg_replace('/\s+/', ' ', $doc->textContent));
     }
 
     /**
@@ -2505,15 +2640,15 @@ class behat_block_le_dashboard extends behat_base {
     /**
      * Markers listed.
      *
-     * @Then /^"(?P<name>[^"]*)" should list markers "(?P<m1>[^"]*)" and "(?P<m2>[^"]*)"$/
+     * @Then /^"(?P<name>[^"]*)" should list markers? "(?P<m1>[^"]*)"(?: and "(?P<m2>[^"]*)")?$/
      * @param string $name
      * @param string $m1
      * @param string $m2
      */
-    public function should_list_markers(string $name, string $m1, string $m2): void {
+    public function should_list_markers(string $name, string $m1, string $m2 = ''): void {
         $names = array_map(fn($n) => $n->getHtml(), $this->row($name)->findAll('css', '.ma-marker-name'));
         $names = array_map('html_entity_decode', $names);
-        foreach ([$m1, $m2] as $marker) {
+        foreach (array_filter([$m1, $m2], 'strlen') as $marker) {
             if (!in_array($marker, $names)) {
                 throw new ExpectationException("'$name' does not list $marker", $this->getSession());
             }
@@ -2698,5 +2833,750 @@ class behat_block_le_dashboard extends behat_base {
     public function the_index_was_rebuilt_but_not_run(): void {
         \block_le_dashboard\local\index\indexer::purge();
         set_config('backfillpending', time(), 'block_le_dashboard');
+    }
+
+    // Beta17: flags and popovers, submittability, no online submission, audit fixes.
+
+    /**
+     * A row's hint icon by its key.
+     *
+     * @param string $key
+     * @param string $name
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function flag(string $key, string $name): \Behat\Mink\Element\NodeElement {
+        $key = self::HINTS[$key] ?? $key;
+        return $this->row($name)->find('css', '[data-hint="' . $key . '"]')
+            ?? throw new ExpectationException("'$name' has no $key icon", $this->getSession());
+    }
+
+    /**
+     * Waits for a condition for up to two seconds.
+     *
+     * @param callable $test
+     * @return bool
+     */
+    protected static function within(callable $test): bool {
+        for ($i = 0; $i < 20; $i++) {
+            if ($test()) {
+                return true;
+            }
+            usleep(100000);
+        }
+        return (bool)$test();
+    }
+
+    /**
+     * Rests the pointer on a hint icon for a time.
+     *
+     * @When /^I hover over the "(?P<key>[a-z]+)" (?:flag|icon) of "(?P<name>[^"]*)" for "(?P<ms>\d+)" milliseconds$/
+     * @param string $key
+     * @param string $name
+     * @param int $ms
+     */
+    public function i_hover_over_the_flag_for(string $key, string $name, int $ms): void {
+        $this->flag($key, $name)->mouseOver();
+        usleep($ms * 1000);
+    }
+
+    /**
+     * Rests the pointer on a row's activity icon for a time.
+     *
+     * @When /^I hover over the activity icon of "(?P<name>[^"]*)" for "(?P<ms>\d+)" milliseconds$/
+     * @param string $name
+     * @param int $ms
+     */
+    public function i_hover_over_the_activity_icon_for(string $name, int $ms): void {
+        $this->activity_icon($name)->mouseOver();
+        usleep($ms * 1000);
+    }
+
+    /**
+     * Moves the pointer off a row, to the page's navigation bar.
+     *
+     * @When /^I move the pointer away from "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_move_the_pointer_away(string $name): void {
+        $this->row($name);
+        $this->find('css', 'nav.navbar')->mouseOver();
+        usleep(400000);
+    }
+
+    /**
+     * Clicks a hint icon.
+     *
+     * @When /^I click on the "(?P<key>[a-z]+)" (?:flag|icon) of "(?P<name>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     */
+    public function i_click_on_the_flag(string $key, string $name): void {
+        $this->flag($key, $name)->click();
+    }
+
+    /**
+     * Presses Tab until a hint icon has focus.
+     *
+     * @When /^I press the tab key until the "(?P<key>[a-z]+)" (?:flag|icon) of "(?P<name>[^"]*)" is focused$/
+     * @param string $key
+     * @param string $name
+     */
+    public function i_tab_to_the_flag(string $key, string $name): void {
+        $id = $this->flag($key, $name)->getAttribute('aria-controls');
+        $js = 'return document.activeElement && document.activeElement.getAttribute("aria-controls") === ' . json_encode($id);
+        for ($i = 0; $i < 100; $i++) {
+            if ($this->evaluate_script($js)) {
+                return;
+            }
+            $this->execute('behat_general::i_press_named_key', ['', 'tab']);
+        }
+        throw new ExpectationException("Tab never reached the $key icon of '$name'", $this->getSession());
+    }
+
+    /**
+     * A hint's popover title and description.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should say "(?P<title>[^"]*)" then "(?P<text>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $title
+     * @param string $text
+     */
+    public function the_popover_should_say(string $key, string $name, string $title, string $text): void {
+        $flag = $this->flag($key, $name);
+        if (!self::within(fn() => $this->tip_text($flag) !== null)) {
+            throw new ExpectationException("The $key popover of '$name' is not open", $this->getSession());
+        }
+        $tip = $this->getSession()->getPage()->find('css', '#' . $flag->getAttribute('aria-controls'));
+        $shown = trim(preg_replace('/\s+/', ' ', $tip->find('css', '.ma-tip-title')->getText()));
+        $all = $this->tip_text($flag);
+        if ($shown !== $title || !str_contains($all, $text) || strpos($all, $text) < strlen($title)) {
+            throw new ExpectationException("The $key popover of '$name' says '$all'", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a hint's popover is open.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should (?P<not>not )?be visible$/
+     * @param string $key
+     * @param string $name
+     * @param string $not
+     */
+    public function the_popover_should_be_visible(string $key, string $name, string $not = ''): void {
+        $flag = $this->flag($key, $name);
+        $want = !$not;
+        if (!self::within(fn() => ($this->tip_text($flag) !== null) === $want)) {
+            throw new ExpectationException("The $key popover of '$name' is " . ($want ? 'closed' : 'open'), $this->getSession());
+        }
+    }
+
+    /**
+     * A flag and its number.
+     *
+     * @Then /^"(?P<name>[^"]*)" should have an? "(?P<key>[a-z]+)" flag showing (?:"(?P<n>\d+)"|no number)$/
+     * @param string $name
+     * @param string $key
+     * @param string $n
+     */
+    public function should_have_a_flag_showing(string $name, string $key, string $n = ''): void {
+        $count = $this->flag($key, $name)->find('css', '.ma-flag-count');
+        $shown = $count ? trim($count->getText()) : '';
+        if ($shown !== $n) {
+            throw new ExpectationException("The $key flag of '$name' shows '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * A flag's accessible name.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" (?:flag|icon) of "(?P<name>[^"]*)" should be labelled "(?P<label>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $label
+     */
+    public function the_flag_should_be_labelled(string $key, string $name, string $label): void {
+        $shown = $this->flag($key, $name)->getAttribute('aria-label');
+        if ($shown !== $label) {
+            throw new ExpectationException("The $key flag of '$name' is labelled '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * Where a student's hint icon sits.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" icon of "(?P<name>[^"]*)" should sit next to its (?:(?P<grade>grade)|"(?P<pill>[^"]*)" pill|"(?P<date>[^"]*)" date)$/
+     * @param string $key
+     * @param string $name
+     * @param string $grade
+     * @param string $pill
+     * @param string $date
+     */
+    public function the_icon_should_sit_next_to(string $key, string $name, string $grade, string $pill = '', string $date = ''): void {
+        $key = self::HINTS[$key] ?? $key;
+        $row = $this->row($name);
+        if ($grade) {
+            $where = $row->find('css', '[data-region="ma-grade"]');
+        } else if ($pill !== '') {
+            $where = $row->find('xpath', ".//span[contains(@class, 'ma-status-wrap')][span[contains(@class, 'ma-pill')]" .
+                "[normalize-space(.) = " . behat_context_helper::escape($pill) . "]]");
+        } else {
+            $where = $row->find('xpath', ".//div[contains(@class, 'ma-row-date')][span[contains(@class, 'ma-row-date-label')]" .
+                "[normalize-space(.) = " . behat_context_helper::escape($date) . "]]");
+        }
+        if (!$where || !$where->find('css', '[data-hint="' . $key . '"]')) {
+            throw new ExpectationException("The $key icon of '$name' is not where expected", $this->getSession());
+        }
+    }
+
+    /**
+     * A student's hint is a bare glyph.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" icon of "(?P<name>[^"]*)" should have no circle$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_icon_should_have_no_circle(string $key, string $name): void {
+        if (!$this->flag($key, $name)->hasClass('ma-flag--glyph')) {
+            throw new ExpectationException("The $key icon of '$name' is not a bare glyph", $this->getSession());
+        }
+    }
+
+    /**
+     * The link in an open popover is the next stop for Tab.
+     *
+     * @Then /^the late policy link in the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" can be reached with the tab key$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_popover_link_can_be_reached(string $key, string $name): void {
+        $flag = $this->flag($key, $name);
+        $id = $flag->getAttribute('aria-controls');
+        $this->execute('behat_general::i_press_named_key', ['', 'tab']);
+        $js = '!!(document.activeElement && document.activeElement.tagName === "A" && '
+            . 'document.activeElement.closest("#' . $id . '"))';
+        if (!$this->evaluate_script($js)) {
+            throw new ExpectationException("Tab doesn't reach the link in the $key popover of '$name'", $this->getSession());
+        }
+    }
+
+    /**
+     * A grade entered straight into the gradebook.
+     *
+     * @Given /^the gradebook grade of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is set to "(?P<grade>[\d.]+)"$/
+     * @param string $student
+     * @param string $name
+     * @param string $grade
+     */
+    public function the_gradebook_grade_is_set(string $student, string $name, string $grade): void {
+        global $CFG;
+        require_once($CFG->libdir . '/gradelib.php');
+        $cm = $this->cm($name);
+        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
+            'itemnumber' => 0, 'courseid' => $cm->course]);
+        if (!$item) {
+            throw new coding_exception("'$name' has no grade item");
+        }
+        $item->update_final_grade(self::userid($student), (float)$grade, 'gradebook', false, FORMAT_MOODLE, get_admin()->id);
+        self::queue($cm);
+    }
+
+    /**
+     * A quiz override that moves one student's close.
+     *
+     * @Given /^"(?P<user>[^"]*)" has a quiz override on "(?P<name>[^"]*)" closing "(?P<when>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function has_a_quiz_override(string $username, string $name, string $when): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $DB->insert_record('quiz_overrides', ['quiz' => $cm->instance, 'userid' => self::userid($username),
+            'timeclose' => self::time($when)]);
+        self::queue($cm);
+    }
+
+    /**
+     * Turns off marks in every review option of a quiz.
+     *
+     * @Given /^the review options of "(?P<name>[^"]*)" never show marks$/
+     * @param string $name
+     */
+    public function the_review_options_never_show_marks(string $name): void {
+        $cm = $this->cm($name);
+        self::set_quiz((int)$cm->instance, ['reviewmarks' => 0]);
+        self::queue($cm);
+    }
+
+    /**
+     * Grades a quiz essay by hand as a marker, so the question engine records who graded it.
+     *
+     * @Given /^"(?P<marker>[^"]*)" grades the essay of "(?P<student>[^"]*)" in "(?P<name>[^"]*)"$/
+     * @param string $marker
+     * @param string $student
+     * @param string $name
+     */
+    public function grades_the_essay(string $marker, string $student, string $name): void {
+        global $DB, $USER;
+        $cm = $this->cm($name);
+        $attempts = $DB->get_records('quiz_attempts', ['quiz' => $cm->instance, 'userid' => self::userid($student)], 'attempt');
+        $attempt = end($attempts);
+        $saved = $USER;
+        \core\session\manager::set_user(core_user::get_user(self::userid($marker)));
+        try {
+            $quba = question_engine::load_questions_usage_by_activity($attempt->uniqueid);
+            $quba->manual_grade(1, 'Good', 1, FORMAT_HTML);
+            question_engine::save_questions_usage_by_activity($quba);
+            $DB->set_field('quiz_attempts', 'sumgrades', $quba->get_total_mark(), ['id' => $attempt->id]);
+            self::regrade_quiz($cm, (int)$attempt->userid);
+        } finally {
+            \core\session\manager::set_user($saved);
+        }
+        self::queue($cm);
+    }
+
+    /**
+     * A backfill that is running: it has started and has read its data.
+     *
+     * @Given /^a backfill has started$/
+     */
+    public function a_backfill_has_started(): void {
+        global $DB;
+        \block_le_dashboard\task\backfill::queue();
+        $DB->set_field_select(
+            'task_adhoc',
+            'timestarted',
+            time(),
+            'classname = :c AND timestarted IS NULL',
+            ['c' => '\\' . \block_le_dashboard\task\backfill::class]
+        );
+    }
+
+    /**
+     * How many backfills are queued and not started.
+     *
+     * @Then /^"(?P<n>\d+)" backfills? should be waiting to start$/
+     * @param int $n
+     */
+    public function backfills_should_be_waiting(int $n): void {
+        global $DB;
+        $waiting = $DB->count_records_select(
+            'task_adhoc',
+            'classname = :c AND timestarted IS NULL',
+            ['c' => '\\' . \block_le_dashboard\task\backfill::class]
+        );
+        if ($waiting !== $n) {
+            throw new ExpectationException("$waiting backfills are waiting", $this->getSession());
+        }
+    }
+
+    /**
+     * Assigns a role on a category, as the category's Assign roles page does.
+     *
+     * @When /^"(?P<user>[^"]*)" is given the "(?P<role>[^"]*)" role on the category "(?P<category>[^"]*)"$/
+     * @param string $username
+     * @param string $role
+     * @param string $category
+     */
+    public function is_given_the_role_on_the_category(string $username, string $role, string $category): void {
+        global $DB;
+        $catid = $DB->get_field('course_categories', 'id', ['name' => $category], MUST_EXIST);
+        $roleid = $DB->get_field('role', 'id', ['shortname' => $role], MUST_EXIST);
+        role_assign($roleid, self::userid($username), context_coursecat::instance($catid)->id);
+    }
+
+    /**
+     * Whether a course re-index is waiting.
+     *
+     * @Then /^a re-index of the course "(?P<course>[^"]*)" should (?P<not>not )?be queued$/
+     * @param string $shortname
+     * @param string $not
+     */
+    public function a_course_reindex_should_be_queued(string $shortname, string $not = ''): void {
+        global $DB;
+        $courseid = (int)self::course($shortname)->id;
+        $queued = false;
+        foreach ($DB->get_records('task_adhoc', ['classname' => '\\' . \block_le_dashboard\task\reindex::class]) as $task) {
+            $data = json_decode($task->customdata);
+            $queued = $queued || (isset($data->courseid) && (int)$data->courseid === $courseid);
+        }
+        if ($queued === (bool)$not) {
+            throw new ExpectationException(
+                "A re-index of $shortname is " . ($queued ? '' : 'not ') . 'queued',
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * A draft: an assignment saved but not submitted under required Submit, or coursework not finalised.
+     *
+     * @Given /^"(?P<user>[^"]*)" has saved a draft of "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     */
+    public function has_saved_a_draft_of(string $username, string $name): void {
+        $cm = $this->cm($name);
+        $gen = testing_util::get_data_generator();
+        if ($cm->modname === 'assign') {
+            // Under required Submit the generator leaves a draft.
+            $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => self::userid($username),
+                'cmid' => $cm->id, 'onlinetext' => 'Draft']);
+        } else {
+            $gen->get_plugin_generator('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
+                'allocatableid' => self::userid($username), 'allocatabletype' => 'user', 'finalised' => 0,
+                'finalisedstatus' => 0]);
+        }
+        self::queue($cm);
+    }
+
+    /**
+     * Coursework feedback saved with no grade.
+     *
+     * @Given /^"(?P<marker>[^"]*)" has saved blank feedback on the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)"$/
+     * @param string $marker
+     * @param string $student
+     * @param string $name
+     */
+    public function has_saved_blank_feedback(string $marker, string $student, string $name): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $submissionid = $DB->get_field(
+            'coursework_submissions',
+            'id',
+            ['courseworkid' => $cm->instance, 'allocatableid' => self::userid($student)],
+            MUST_EXIST
+        );
+        $gen = testing_util::get_data_generator()->get_plugin_generator('mod_coursework');
+        $gen->create_feedback(['submissionid' => $submissionid, 'assessorid' => self::userid($marker),
+            'grade' => null, 'feedbackcomment' => '', 'stage_identifier' => 'assessor_1', 'finalised' => 0]);
+        self::queue($cm);
+    }
+
+    /**
+     * A convenor's quiet list: the untagged activities, or the settings to check.
+     *
+     * @param string $which "untagged activities" or "settings check"
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function untagged_list(string $which = 'untagged activities'): \Behat\Mink\Element\NodeElement {
+        $region = $which === 'settings check' ? 'ma-setupchecks' : 'ma-untagged';
+        return $this->find('css', self::BLOCK . ' [data-region="' . $region . '"]');
+    }
+
+    /**
+     * Text in the untagged activities hint.
+     *
+     * @Then /^I should (?P<not>not )?see "(?P<text>[^"]*)" in the (?P<which>untagged activities|settings check) list$/
+     * @param string $not
+     * @param string $text
+     * @param string $which
+     */
+    public function i_should_see_in_the_untagged_list(string $not, string $text, string $which): void {
+        $node = $this->untagged_list($which);
+        $has = str_contains($node->getText(), $text);
+        if (!$this->running_javascript()) {
+            $has = str_contains(strip_tags($node->getHtml()), $text);
+        }
+        if ($has === (bool)$not) {
+            throw new ExpectationException(
+                "The untagged list " . ($has ? 'shows' : 'does not show') . " '$text'",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * The hint, or one course in it, is closed.
+     *
+     * @Then /^the (?:(?P<which>settings check) list|untagged activities (?:list|of "(?P<course>[^"]*)")) should be collapsed$/
+     * @param string $which
+     * @param string $course
+     */
+    public function the_untagged_list_should_be_collapsed(string $which = '', string $course = ''): void {
+        $node = $this->untagged_list($which ?: 'untagged activities');
+        if ($course !== '') {
+            $node = $node->find('xpath', ".//details[contains(@class, 'ma-untagged-course')][summary[starts-with(normalize-space(.), " .
+                behat_context_helper::escape($course . ' (') . ")]]")
+                ?? throw new ExpectationException("No untagged course '$course'", $this->getSession());
+        }
+        if ($node->hasAttribute('open')) {
+            throw new ExpectationException('The untagged activities are open', $this->getSession());
+        }
+    }
+
+    /**
+     * A link to an activity's own page.
+     *
+     * @Then /^I should see "(?P<text>[^"]*)" linking to the page of "(?P<name>[^"]*)"$/
+     * @param string $text
+     * @param string $name
+     */
+    public function i_should_see_linking_to_the_page_of(string $text, string $name): void {
+        $this->execute('behat_block_le_dashboard::i_should_see_linking_to', [$text, $this->cm($name)->url->out(false)]);
+    }
+
+    /**
+     * A hidden activity in the untagged hint is marked as hidden.
+     *
+     * @Then /^"(?P<name>[^"]*)" in the untagged activities list should be marked "(?P<text>[^"]*)"$/
+     * @param string $name
+     * @param string $text
+     */
+    public function in_the_untagged_list_should_be_marked(string $name, string $text): void {
+        $li = $this->untagged_list()->find('xpath', ".//li[a[normalize-space(.) = " . behat_context_helper::escape($name) . "]]")
+            ?? throw new ExpectationException("'$name' is not in the untagged list", $this->getSession());
+        $mark = $li->find('css', '.ma-untagged-hidden');
+        if (!$mark || !str_contains(strip_tags($mark->getHtml()), $text)) {
+            throw new ExpectationException("'$name' is not marked '$text'", $this->getSession());
+        }
+    }
+
+    /**
+     * Several tagged assessments with the same deadline, named "Assessment 1", "Assessment 2"...
+     *
+     * @Given /^(?P<n>\d+) (?P<tag>summative|formative) "(?P<mod>\w+)" activities in "(?P<course>[^"]*)" are due "(?P<due>[^"]*)"$/
+     * @param int $n
+     * @param string $tag
+     * @param string $modname
+     * @param string $course
+     * @param string $due
+     */
+    public function several_assessments_are_due(int $n, string $tag, string $modname, string $course, string $due): void {
+        for ($i = 1; $i <= $n; $i++) {
+            $this->create_assessment($tag, $modname, "Assessment $i", $course, '', self::time($due));
+        }
+    }
+
+    /**
+     * Computed styles of elements in the block, keyed as asked.
+     *
+     * @param array $selectors key => CSS selector inside the block
+     * @param string[] $properties
+     * @return array key => property => value (null when the element is missing)
+     */
+    protected function computed(array $selectors, array $properties): array {
+        $js = 'return (function() { var block = document.querySelector(' . json_encode(self::BLOCK) . '), out = {};' .
+            ' var sel = ' . json_encode($selectors) . ', props = ' . json_encode($properties) . ';' .
+            ' Object.keys(sel).forEach(function(k) { var el = block.querySelector(sel[k]);' .
+            ' if (!el) { out[k] = null; return; } var cs = getComputedStyle(el), o = {};' .
+            ' props.forEach(function(p) { o[p] = p === "height" ? String(el.getBoundingClientRect().height)' .
+            ' : cs.getPropertyValue(p); }); out[k] = o; }); return JSON.stringify(out); })();';
+        return json_decode($this->evaluate_script($js), true);
+    }
+
+    /**
+     * Marks one element [data-behat-measure] for computed(), clearing any earlier mark.
+     *
+     * @param \Behat\Mink\Element\NodeElement $el
+     */
+    protected function mark_for_measuring(\Behat\Mink\Element\NodeElement $el): void {
+        $this->getSession()->executeScript('document.querySelectorAll("[data-behat-measure]").forEach(function(e) {' .
+            ' e.removeAttribute("data-behat-measure"); });' .
+            ' document.evaluate(' . json_encode($el->getXpath()) . ', document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null)' .
+            '.singleNodeValue.setAttribute("data-behat-measure", "1");');
+    }
+
+    /**
+     * The search box's outer corners.
+     *
+     * @Then /^the search box should have the same radius on all four outer corners$/
+     */
+    public function the_search_box_outer_corners_match(): void {
+        $c = $this->computed(
+            ['icon' => '.ma-search .input-group-text', 'input' => '.ma-search .form-control'],
+            ['border-top-left-radius', 'border-bottom-left-radius', 'border-top-right-radius', 'border-bottom-right-radius']
+        );
+        $outer = [$c['icon']['border-top-left-radius'], $c['icon']['border-bottom-left-radius'],
+            $c['input']['border-top-right-radius'], $c['input']['border-bottom-right-radius']];
+        if (count(array_unique($outer)) !== 1 || (float)$outer[0] <= 0) {
+            throw new ExpectationException('The search box outer corners are ' . implode(', ', $outer), $this->getSession());
+        }
+    }
+
+    /**
+     * The join between the search icon and input.
+     *
+     * @Then /^the search box should have square corners where the icon meets the input$/
+     */
+    public function the_search_box_inner_corners_are_square(): void {
+        $c = $this->computed(
+            ['icon' => '.ma-search .input-group-text', 'input' => '.ma-search .form-control'],
+            ['border-top-left-radius', 'border-bottom-left-radius', 'border-top-right-radius', 'border-bottom-right-radius']
+        );
+        $inner = [$c['icon']['border-top-right-radius'], $c['icon']['border-bottom-right-radius'],
+            $c['input']['border-top-left-radius'], $c['input']['border-bottom-left-radius']];
+        if (array_filter($inner, fn($r) => (float)$r > 0)) {
+            throw new ExpectationException('The search box inner corners are ' . implode(', ', $inner), $this->getSession());
+        }
+    }
+
+    /**
+     * The search box's height against a control bar button.
+     *
+     * @Then /^the search box should be as tall as the "(?P<label>[^"]*)" button$/
+     * @param string $label
+     */
+    public function the_search_box_is_as_tall_as(string $label): void {
+        $button = $this->find('xpath', "//*[contains(@class, 'block_le_dashboard')]//button[normalize-space(.) = " .
+            behat_context_helper::escape($label) . "]");
+        $this->mark_for_measuring($button);
+        $c = $this->computed(['search' => '.ma-search .input-group', 'button' => '[data-behat-measure]'], ['height']);
+        if (abs((float)$c['search']['height'] - (float)$c['button']['height']) > 1) {
+            throw new ExpectationException("The search box is {$c['search']['height']}px tall, the button " .
+                "{$c['button']['height']}px", $this->getSession());
+        }
+    }
+
+    /**
+     * Focus is shown around the whole search box.
+     *
+     * @Then /^the search box should show its focus ring around the icon and the input$/
+     */
+    public function the_search_box_shows_its_focus_ring(): void {
+        $c = $this->computed(['group' => '.ma-search .input-group', 'input' => '.ma-search .form-control'], ['box-shadow']);
+        if (in_array($c['group']['box-shadow'], ['', 'none']) || !in_array($c['input']['box-shadow'], ['', 'none'])) {
+            throw new ExpectationException("Focus ring: group '{$c['group']['box-shadow']}', input " .
+                "'{$c['input']['box-shadow']}'", $this->getSession());
+        }
+    }
+
+    /**
+     * CSS selector of a section by its title.
+     *
+     * @param string $title
+     * @return string
+     */
+    protected function section_selector(string $title): string {
+        $section = $this->find('xpath', "//*[contains(@class, 'block_le_dashboard')]//section[@data-region='ma-section']" .
+            "[.//h3[normalize-space(.) = " . behat_context_helper::escape($title) . "]]");
+        return '[data-section="' . $section->getAttribute('data-section') . '"]';
+    }
+
+    /**
+     * Whether a section has its Show more row.
+     *
+     * @Then /^the "(?P<title>[^"]*)" section should have (?P<which>a|no) Show more row$/
+     * @param string $title
+     * @param string $which
+     */
+    public function the_section_has_a_show_more_row(string $title, string $which): void {
+        $footer = $this->find('css', self::BLOCK . ' ' . $this->section_selector($title) . ' [data-region="ma-more"]');
+        if ($footer->isVisible() !== ($which === 'a')) {
+            throw new ExpectationException("The $title section's Show more row is " .
+                ($footer->isVisible() ? 'shown' : 'hidden'), $this->getSession());
+        }
+    }
+
+    /**
+     * Rounded bottom corners on a section's last visible row or its Show more row.
+     *
+     * @Then /^the (?P<which>last row|Show more row) of the "(?P<title>[^"]*)" section should have the card's bottom corners$/
+     * @param string $which
+     * @param string $title
+     */
+    public function the_section_bottom_has_corners(string $which, string $title): void {
+        $section = $this->section_selector($title);
+        if ($which === 'last row') {
+            $rows = $this->getSession()->getPage()->findAll('css', self::BLOCK . " $section [data-region='ma-row']");
+            $last = null;
+            foreach ($rows as $row) {
+                if ($row->isVisible()) {
+                    $last = $row;
+                }
+            }
+            if (!$last) {
+                throw new ExpectationException("The $title section shows no rows", $this->getSession());
+            }
+            $this->mark_for_measuring($last);
+            $selector = '[data-behat-measure]';
+        } else {
+            $selector = "$section [data-region='ma-more']";
+        }
+        $c = $this->computed(['el' => $selector], ['border-bottom-left-radius', 'border-bottom-right-radius']);
+        if ((float)$c['el']['border-bottom-left-radius'] <= 0 || (float)$c['el']['border-bottom-right-radius'] <= 0) {
+            throw new ExpectationException("The $which of the $title section has bottom corners " .
+                implode(', ', $c['el']), $this->getSession());
+        }
+    }
+
+    /**
+     * A popover names each of several things.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should list "(?P<first>[^"]*)" and "(?P<second>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $first
+     * @param string $second
+     */
+    public function the_popover_should_list(string $key, string $name, string $first, string $second): void {
+        $text = (string)$this->tip_text($this->flag($key, $name));
+        foreach ([$first, $second] as $item) {
+            if (!str_contains($text, $item)) {
+                throw new ExpectationException("The $key popover of '$name' doesn't list '$item': '$text'", $this->getSession());
+            }
+        }
+    }
+
+    /**
+     * A popover links to the activity's settings form.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should link to the settings of "(?P<activity>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $activity
+     */
+    public function the_popover_should_link_to_settings(string $key, string $name, string $activity): void {
+        $id = $this->flag($key, $name)->getAttribute('aria-controls');
+        $url = (new moodle_url('/course/modedit.php', ['update' => $this->cm($activity)->id]))->out(false);
+        if (!$this->find('css', '#' . $id)->find('xpath', ".//a[@href = " . behat_context_helper::escape($url) . "]")) {
+            throw new ExpectationException("The $key popover of '$name' doesn't link to $url", $this->getSession());
+        }
+    }
+
+    /**
+     * Tags every activity with a grade item in some courses.
+     *
+     * @Given /^every compatible activity in (?P<courses>"[^"]*"(?:(?:, | and )"[^"]*")*) is tagged "(?P<tag>[^"]*)"$/
+     * @param string $courses
+     * @param string $tag
+     */
+    public function every_compatible_activity_is_tagged(string $courses, string $tag): void {
+        global $DB;
+        preg_match_all('/"([^"]*)"/', $courses, $m);
+        foreach ($m[1] as $shortname) {
+            $course = self::course($shortname);
+            foreach (get_fast_modinfo($course->id)->get_cms() as $cm) {
+                if (
+                    $DB->record_exists('grade_items', ['courseid' => $course->id, 'itemtype' => 'mod',
+                        'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance])
+                ) {
+                    core_tag_tag::add_item_tag('core', 'course_modules', $cm->id, $cm->context, $tag);
+                }
+            }
+        }
+        \cache::make('block_le_dashboard', 'untagged')->purge();
+    }
+
+    /**
+     * Sets the tagging guidance link.
+     *
+     * @Given /^the My assessments tagging guidance link is "(?P<url>[^"]*)"$/
+     * @param string $url
+     */
+    public function the_tagging_guidance_link_is(string $url): void {
+        set_config('untaggedguidanceurl', $url, 'block_le_dashboard');
+    }
+
+    /**
+     * A visible link to the site's front page.
+     *
+     * @Then /^I should see "(?P<text>[^"]*)" linking to the site home$/
+     * @param string $text
+     */
+    public function i_should_see_linking_to_site_home(string $text): void {
+        global $CFG;
+        $this->i_should_see_linking_to($text, $CFG->wwwroot . '/');
     }
 }

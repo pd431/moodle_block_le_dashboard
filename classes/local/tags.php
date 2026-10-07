@@ -77,4 +77,25 @@ class tags {
         $rs->close();
         return $types;
     }
+
+    /**
+     * Whether an activity has one of these tags.
+     *
+     * @param int $cmid
+     * @param string[] $names Lower-case tag names.
+     * @return bool
+     */
+    public static function has_any(int $cmid, array $names): bool {
+        global $DB;
+        if (!$names) {
+            return false;
+        }
+        [$tagsql, $params] = $DB->get_in_or_equal($names, SQL_PARAMS_NAMED, 't');
+        $params['cmid'] = $cmid;
+        return $DB->record_exists_sql("SELECT 1
+                                         FROM {tag_instance} ti
+                                         JOIN {tag} t ON t.id = ti.tagid
+                                        WHERE ti.component = 'core' AND ti.itemtype = 'course_modules'
+                                          AND ti.itemid = :cmid AND t.name $tagsql", $params);
+    }
 }

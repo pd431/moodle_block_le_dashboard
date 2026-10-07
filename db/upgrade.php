@@ -23,12 +23,41 @@
  */
 
 /**
- * Upgrades the block. block_le_dashboard is installed clean, alongside rc6 (block_my_assessments),
- * so there are no earlier versions to upgrade from yet.
+ * Upgrades the block.
  *
  * @param int $oldversion
  * @return bool
  */
 function xmldb_block_le_dashboard_upgrade($oldversion) {
+    global $DB;
+    $dbman = $DB->get_manager();
+
+    if ($oldversion < 2026100700) {
+        // Assessments where students hand nothing in online. The backfill fills both fields in.
+        $table = new xmldb_table('block_le_dashboard_cm');
+        $field = new xmldb_field('nosubmission', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'stages');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        // Quizzes that never release marks (F10).
+        $field = new xmldb_field('norelease', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'nosubmission');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026100700, 'le_dashboard', 'block');
+    }
+
+    if ($oldversion < 2026100702) {
+        // Settings a tagged assessment is missing, for the staff "Check settings" flag. The backfill fills it in.
+        $table = new xmldb_table('block_le_dashboard_cm');
+        $field = new xmldb_field('setup', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'norelease');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026100702, 'le_dashboard', 'block');
+    }
+
     return true;
 }

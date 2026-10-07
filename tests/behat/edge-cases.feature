@@ -242,7 +242,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
 
   # ---------- EC11: revert to draft after release ----------
 
-  Scenario: A released submission reverted to draft reads as open for resubmission
+  Scenario: A released submission reverted to draft is upcoming work again, with no flag
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
     And "student1" has submitted "A1"
     And "marker1" marks the submission of "student1" for "A1"
@@ -250,7 +250,8 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And the submission of "student1" for "A1" is reverted to draft
     And the My assessments index catches up
     When I log in as "student1" and view my dashboard
-    Then "A1" should show "Resubmission open"
+    Then "A1" should appear in the "Upcoming" section
+    And "A1" should have no status pill
     And "A1" should not appear in the "Overdue" section
 
   # ---------- EC3b: which academic years a course belongs to (Pierre, 2026-10-04) ----------
@@ -311,7 +312,8 @@ Feature: Work stays visible when people and assessments move at awkward moments
   # unsubmitted work for students, nothing to mark for markers, nothing outstanding for the convenor.
   # Work that needs action stays in its action section. Tagging is explicit, so tagged activities without a
   # date are now listed (this replaces R8's "not listed" for tagged activities).
-  # The convenor gets a "No deadline" hint on the row, wherever it sits, pointing to the activity's settings.
+  # Staff get a "Check settings" flag on the row (it replaced the "No deadline" hint on 2026-10-07), wherever it
+  # sits, pointing to the activity's settings.
 
   @javascript
   Scenario: An assignment whose due date is switched off before anyone submits moves to Undated
@@ -326,7 +328,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     Then "A1" should appear in the "Undated" section
     When I log in as "convenor" and view the "Convenor view"
     Then "A1" should appear in the "Undated" section
-    And "A1" should have a no deadline hint
+    And "A1" should have a "setup" hint
 
   @javascript
   Scenario: Switching off the due date mid-marking keeps the marking where it was
@@ -343,24 +345,25 @@ Feature: Work stays visible when people and assessments move at awkward moments
     Then "A1" should show "Feedback released"
     When I log in as "convenor" and view the "Convenor view"
     Then "A1" should appear in the "In progress" section
-    And "A1" should have a no deadline hint
+    And "A1" should have a "setup" hint
 
   @javascript
-  Scenario: The no deadline hint tells the convenor where to add one
+  Scenario: The Check settings flag tells the convenor where to add a deadline
     Given a summative "assign" "A2" in "M1" with no due date exists
     And the My assessments index is up to date
     When I log in as "convenor" and view the "Convenor view"
-    And I click on the no deadline hint of "A2"
-    Then I should see "Add a deadline in the activity's settings" in the "My assessments" block
+    And I click on the "setup" flag of "A2"
+    Then I should see "Fix this in the activity's settings" in the "My assessments" block
     And I should see "settings" linking to the settings page of "A2"
 
-  Scenario: Students and markers get no hint on undated rows
+  # 2026-10-07: markers get the Check settings flag too (setup-flags.feature); students never do.
+  Scenario: Students get no flag on undated rows, markers do
     Given a summative "assign" "A2" in "M1" with no due date exists
     And the My assessments index is up to date
     When I log in as "student1" and view my dashboard
-    Then "A2" should not have a no deadline hint
+    Then "A2" should not have a "setup" hint
     When I log in as "marker1" and view the "My marking"
-    Then "A2" should not have a no deadline hint
+    Then "A2" should have a "setup" hint
 
   Scenario: The Undated section is hidden when nothing is undated
     Given a summative "assign" "A1" in "M1" is due "in 3 days"

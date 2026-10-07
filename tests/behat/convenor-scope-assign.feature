@@ -81,7 +81,7 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     And "A1" is hidden from students
     When I log in as "convenor" and view the "Convenor view"
     Then I should see "A1" in the "My assessments" block
-    And "A1" should show "Hidden from students"
+    And "A1" should have a "hidden" hint
 
   Scenario: A marker who is not a convenor cannot open the convenor view
     When I log in as "marker1" and view my dashboard
@@ -179,4 +179,4 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     And "student2" has an extension on "A1" to "in 3 days"
     When I log in as "convenor" and view the "Convenor view"
     Then "A1" should appear in the "In progress" section
-    And "A1" should show "1 student has an extension"
+    And the "extension" flag of "A1" should be labelled "1 student has an extension"

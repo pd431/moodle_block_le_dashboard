@@ -57,10 +57,9 @@ class format {
      *
      * @param string $key Date key; the label is the date_{key} string, if there is one.
      * @param int $time
-     * @param string|null $note Optional note after the date.
      * @return array
      */
-    public static function date(string $key, int $time, ?string $note = null): array {
+    public static function date(string $key, int $time): array {
         $sm = get_string_manager();
         return [
             'key' => $key,
@@ -68,7 +67,6 @@ class format {
                 ? get_string('date_' . $key, 'block_le_dashboard') : null,
             'text' => self::datetime($time),
             'iso' => date('c', $time),
-            'note' => $note,
         ];
     }
 
@@ -157,30 +155,119 @@ class format {
     }
 
     /**
-     * A hint on a row: a small button that opens a tip by click or focus, never hover.
-     * One component for every hint (no brief, unallocated work, returned work).
+     * A hint on a row: one icon (with its count) that opens a popover with its title and
+     * description on a click, keyboard focus or a short hover (Pierre, 2026-10-06). The same
+     * component for every hint, in the row's meta line or beside a date, pill or grade.
      *
      * @param string $rowid
-     * @param string $key brief, unallocated, returned, feedbackcontact, extensions, nodeadline, received,
-     *                    latepenalty or plagiarism.
-     * @param string $text The tip.
-     * @param string|null $link HTML link sentence after the tip, if any.
-     * @param string|null $label The button's text, when it isn't the hint_{key} string (a count, say).
+     * @param string $key brief, hidden, unallocated, returned, feedbackcontact, extensions, setup,
+     *                    late or plagiarism.
+     * @param string $text The description.
+     * @param string|null $link HTML link sentence after the description, if any.
+     * @param string|null $title The popover title and accessible name, when it isn't the hint_{key} string.
+     * @param int|null $count A number shown beside the icon.
      * @return array
      */
-    public static function hint(string $rowid, string $key, string $text, ?string $link = null, ?string $label = null): array {
+    public static function hint(
+        string $rowid,
+        string $key,
+        string $text,
+        ?string $link = null,
+        ?string $title = null,
+        ?int $count = null
+    ): array {
         return [
             'id' => $rowid . '-hint-' . $key,
             'key' => $key,
-            'icon' => self::HINT_ICONS[$key] ?? 'fa-circle-info',
-            'label' => $label ?? get_string('hint_' . $key, 'block_le_dashboard'),
+            'icon' => self::HINT_ICONS[$key],
+            'tone' => self::HINT_TONES[$key],
+            // Student hints are bare glyphs beside what they explain; staff flags keep their outline.
+            'glyph' => in_array($key, self::GLYPH_HINTS),
+            'title' => $title ?? get_string('hint_' . $key, 'block_le_dashboard'),
+            'count' => $count,
             'text' => $text,
             'link' => $link,
         ];
     }
 
-    /** Hints with their own icon; the rest show the info icon. */
-    const HINT_ICONS = ['plagiarism' => 'fa-flag'];
+    /** Each hint's icon (the Flag icons mockup). */
+    const HINT_ICONS = [
+        'brief' => 'fa-file-circle-exclamation',
+        'hidden' => 'fa-eye-slash',
+        'unallocated' => 'fa-user-slash',
+        'returned' => 'fa-file-circle-plus',
+        'feedbackcontact' => 'fa-circle-question',
+        'extensions' => 'fa-calendar-plus',
+        'setup' => 'fa-screwdriver-wrench',
+        'late' => 'fa-clock',
+        'plagiarism' => 'fa-flag',
+        'nosubmission' => 'fa-person-chalkboard',
+    ];
+
+    /** Each hint's tone. Attention is for staff and convenors only, never on a student's row. */
+    const HINT_TONES = [
+        'brief' => 'info',
+        'hidden' => 'grey',
+        'unallocated' => 'attention',
+        'returned' => 'info',
+        'feedbackcontact' => 'info',
+        'extensions' => 'info',
+        'setup' => 'attention',
+        'late' => 'grey',
+        'nosubmission' => 'grey',
+        'plagiarism' => 'attention',
+    ];
+
+    /** The student hints, shown as bare glyphs. */
+    const GLYPH_HINTS = ['feedbackcontact', 'late'];
+
+    /**
+     * The hint on an assessment where students hand nothing in online: a bare glyph on a student's
+     * row, an outlined flag on staff and convenor rows.
+     *
+     * @param string $rowid
+     * @param bool $staff
+     * @return array
+     */
+    public static function nosubmission_hint(string $rowid, bool $staff): array {
+        $hint = self::hint(
+            $rowid,
+            'nosubmission',
+            get_string($staff ? 'hint_nosubmission_staff' : 'hint_nosubmission_text', 'block_le_dashboard')
+        );
+        $hint['glyph'] = !$staff;
+        return $hint;
+    }
+
+    /** The settings a tagged assessment can be missing, in the order the flag lists them. */
+    const SETUP_PROBLEMS = ['nodue', 'nograde', 'nomarks', 'bothtags'];
+
+    /**
+     * Staff flag on a tagged assessment missing a setting (Pierre, 2026-10-07): each problem on its
+     * own, then a link to the activity's settings.
+     *
+     * @param string $rowid
+     * @param int $cmid
+     * @param string $setup The index's comma-separated problems.
+     * @return array|null Null when nothing is missing.
+     */
+    public static function setup_hint(string $rowid, int $cmid, string $setup): ?array {
+        $problems = array_intersect(self::SETUP_PROBLEMS, explode(',', $setup));
+        if (!$problems) {
+            return null;
+        }
+        $link = \html_writer::link(
+            new \moodle_url('/course/modedit.php', ['update' => $cmid]),
+            get_string('setup_settings', 'block_le_dashboard')
+        );
+        return self::hint(
+            $rowid,
+            'setup',
+            implode(' ', array_map(fn($p) => get_string('setup_' . $p . '_text', 'block_le_dashboard'), $problems)),
+            get_string('setup_link', 'block_le_dashboard', $link),
+            get_string('setup', 'block_le_dashboard')
+        );
+    }
 
     /**
      * The hint on a row with submissions flagged for an academic conduct (plagiarism) check:
@@ -197,7 +284,8 @@ class format {
             $n === 1 ? get_string('hint_plagiarism_text_one', 'block_le_dashboard')
                 : get_string('hint_plagiarism_text_many', 'block_le_dashboard', $n),
             null,
-            get_string('hint_plagiarism', 'block_le_dashboard', $n)
+            get_string('hint_plagiarism', 'block_le_dashboard', $n),
+            $n
         );
     }
 
@@ -246,8 +334,9 @@ class format {
         $options = ['context' => \context_course::instance($cm->courseid), 'escape' => false];
         $name = format_string($cm->name, true, $options);
         $modname = get_string('modulename', $cm->modname);
+        $id = 'ma-' . $view . '-' . $cm->cmid;
         return [
-            'id' => 'ma-' . $view . '-' . $cm->cmid,
+            'id' => $id,
             'cmid' => (int)$cm->cmid,
             'name' => $name,
             'url' => (new \moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cm->cmid]))->out(false),
@@ -261,7 +350,9 @@ class format {
                 'mod' => $modname,
                 'type' => get_string($cm->assesstype, 'block_le_dashboard'),
             ]),
-            'hidden' => !empty($cm->hiddenfromstudents),
+            // The first flag on staff rows; students never see hidden work.
+            'hiddenhint' => empty($cm->hiddenfromstudents) ? null
+                : self::hint($id, 'hidden', get_string('hint_hidden_text', 'block_le_dashboard')),
             'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_le_dashboard')] : []),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),
         ];

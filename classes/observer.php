@@ -57,7 +57,8 @@ class observer {
         // rows now, everyone else's in the queued task.
         if ($event->userid && $DB->record_exists('block_le_dashboard_stu', ['cmid' => $cmid, 'userid' => $event->userid])) {
             try {
-                (new indexer())->index_users($cmid, [(int)$event->userid]);
+                // A short wait: the student's request mustn't hang behind a slow re-index (A6).
+                (new indexer())->index_users($cmid, [(int)$event->userid], indexer::INLINE_LOCK_WAIT);
             } catch (\Throwable $e) {
                 debugging('block_le_dashboard: updating the student\'s own rows failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
             }
@@ -102,13 +103,43 @@ class observer {
     }
 
     /**
-     * Enrolment, role or group change in a course: re-index the course.
+     * Enrolment, role or group change in a course, or a role change on a category: re-index.
      *
      * @param \core\event\base $event
      */
     public static function course_people_changed(\core\event\base $event): void {
-        if (self::active() && $event->courseid && $event->courseid != SITEID) {
+        if (!self::active()) {
+            return;
+        }
+        if ($event->courseid && $event->courseid != SITEID) {
             indexer::queue_course((int)$event->courseid);
+        } else if ($event->contextlevel == CONTEXT_COURSECAT) {
+            // A role on a category counts in every course under it (A12): re-index the indexed ones.
+            self::category_changed((int)$event->contextinstanceid);
+        }
+    }
+
+    /**
+     * Queues a re-index of every indexed course in a category and its subcategories.
+     *
+     * @param int $categoryid
+     */
+    protected static function category_changed(int $categoryid): void {
+        global $DB;
+        $path = $DB->get_field('course_categories', 'path', ['id' => $categoryid]);
+        if ($path === false) {
+            return;
+        }
+        $courses = $DB->get_fieldset_sql(
+            "SELECT DISTINCT c.id
+               FROM {course} c
+               JOIN {course_categories} cc ON cc.id = c.category
+               JOIN {block_le_dashboard_cm} i ON i.courseid = c.id
+              WHERE cc.id = :id OR " . $DB->sql_like('cc.path', ':path'),
+            ['id' => $categoryid, 'path' => $path . '/%']
+        );
+        foreach ($courses as $courseid) {
+            indexer::queue_course((int)$courseid);
         }
     }
 

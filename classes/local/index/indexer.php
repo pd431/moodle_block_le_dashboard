@@ -148,10 +148,11 @@ class indexer {
      *
      * @param int $cmid
      * @param int[] $userids
+     * @param int $wait Seconds to wait for another re-index of the assessment.
      * @return bool True if the assessment is in the index afterwards.
      */
-    public function index_users(int $cmid, array $userids): bool {
-        return $this->locked($cmid, fn() => $this->index_rows($cmid, array_map('intval', $userids)));
+    public function index_users(int $cmid, array $userids, int $wait = self::LOCK_WAIT): bool {
+        return $this->locked($cmid, fn() => $this->index_rows($cmid, array_map('intval', $userids)), $wait);
     }
 
     /**
@@ -159,11 +160,12 @@ class indexer {
      *
      * @param int $cmid
      * @param callable $index
+     * @param int $wait Seconds to wait for the lock.
      * @return bool
      */
-    protected function locked(int $cmid, callable $index): bool {
+    protected function locked(int $cmid, callable $index, int $wait = self::LOCK_WAIT): bool {
         $factory = \core\lock\lock_config::get_lock_factory('block_le_dashboard');
-        $lock = $factory->get_lock('cm' . $cmid, self::LOCK_WAIT);
+        $lock = $factory->get_lock('cm' . $cmid, $wait);
         if (!$lock) {
             throw new \moodle_exception('locktimeout', 'block_le_dashboard', '', $cmid);
         }
@@ -176,6 +178,9 @@ class indexer {
 
     /** Seconds a re-index waits for another re-index of the same assessment to finish. */
     const LOCK_WAIT = 60;
+
+    /** The wait inside a web request (a submission, a student's Refresh): past it, the queued task does it (A6). */
+    const INLINE_LOCK_WAIT = 2;
 
     /**
      * The re-index itself: all students, or only some.
@@ -219,6 +224,13 @@ class indexer {
                 registry::clear_error($cm->modname);
                 return false;
             }
+            if ($cmrow->submissions && registry::no_submission($cm)) {
+                $cmrow->submissions = false;
+            }
+            if (!$cmrow->submissions && !$cmrow->stages && registry::no_submission($cm)) {
+                // Marked from the gradebook (base::no_submission_units), so one marking stage.
+                $cmrow->stages = ['marked'];
+            }
             $students = self::students($courseid);
             $groupids = [];
             if ($only !== null) {
@@ -228,18 +240,10 @@ class indexer {
             $students = $this->accessible($cm, $students);
             $active = array_flip(self::students($courseid, true));
             $starts = self::enrol_starts($courseid, array_keys($students));
-            // One student's or one stage's bad data mustn't fail the whole activity: what failed keeps
-            // its last indexed rows and the error is reported, the rest is indexed as usual.
+            // One student's bad data mustn't fail the whole activity: their rows and marking units keep
+            // what was last indexed and the error is reported; the rest is indexed as usual (A7).
             [$sturows, $failed] = $this->student_rows($adapter, $cm, $cmrow, array_keys($students));
-            try {
-                registry::check_test_part_failure('marking', array_keys($students));
-                $markrows = $adapter->marking_rows($cm, $cmrow, array_keys($students));
-                $keepmarks = false;
-            } catch (\Throwable $e) {
-                registry::record_error($cm->modname, $e);
-                $markrows = [];
-                $keepmarks = true;
-            }
+            [$markrows, $markfailed] = $this->marking_rows($adapter, $cm, $cmrow, array_keys($students));
         } catch (\Throwable $e) {
             registry::record_error($cm->modname, $e);
             debugging(
@@ -276,6 +280,9 @@ class indexer {
             'hasallocation' => $cmrow->hasallocation ? 1 : 0,
             'hasbrief' => self::has_brief($cm) ? 1 : 0,
             'stages' => implode(',', $cmrow->stages),
+            'nosubmission' => $cmrow->submissions ? 0 : 1,
+            'norelease' => $cmrow->releases ? 0 : 1,
+            'setup' => implode(',', self::setup_problems($cm, $cmrow, $types[$cmid])) ?: null,
             'timeindexed' => $now,
         ];
         $markers = array_flip(self::markers($courseid));
@@ -345,14 +352,22 @@ class indexer {
             ];
         }
 
+        foreach ($this->kept_marking_rows($cmid, array_keys($markfailed), $only, $groupids) as $old) {
+            $key = $old->unittype . ':' . $old->unitid . ':' . $old->stage;
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                $mark[] = $old;
+            }
+        }
+
         $failwrite = registry::take_test_write_failure($cmid);
         $transaction = $DB->start_delegated_transaction();
         try {
             if ($only === null) {
-                $this->delete_rows($cmid, !$keepmarks);
+                $this->delete_rows($cmid);
                 $DB->insert_record(self::CM, $record);
             } else {
-                $this->delete_unit_rows($cmid, $only, $keepmarks ? [] : $groupids, !$keepmarks);
+                $this->delete_unit_rows($cmid, $only, $groupids);
             }
             if ($failwrite) {
                 throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'cm ' . $cmid);
@@ -374,7 +389,7 @@ class indexer {
                 registry::record_error($cm->modname, $e);
             }
         }
-        if (!$failed && !$keepmarks) {
+        if (!$failed && !$markfailed) {
             registry::clear_error($cm->modname);
         }
         if ($only === null) {
@@ -421,7 +436,7 @@ class indexer {
     protected function student_rows($adapter, \cm_info $cm, cm_row $cmrow, array $userids): array {
         try {
             registry::check_test_part_failure('student', $userids);
-            return [$adapter->student_rows($cm, $cmrow, $userids), []];
+            return [self::without_submissions($cmrow, $adapter->student_rows($cm, $cmrow, $userids)), []];
         } catch (\Throwable $e) {
             registry::record_error($cm->modname, $e);
         }
@@ -430,12 +445,136 @@ class indexer {
         foreach ($userids as $userid) {
             try {
                 registry::check_test_part_failure('student', [$userid]);
-                $rows += $adapter->student_rows($cm, $cmrow, [$userid]);
+                $rows += self::without_submissions($cmrow, $adapter->student_rows($cm, $cmrow, [$userid]));
             } catch (\Throwable $e) {
                 $failed[$userid] = true;
             }
         }
         return [$rows, $failed];
+    }
+
+    /**
+     * Where students hand nothing in online, there is no submission state to show; a final submission
+     * closes the work for that student.
+     *
+     * @param cm_row $cmrow
+     * @param student_row[] $rows Changed in place.
+     * @return student_row[]
+     */
+    protected static function without_submissions(cm_row $cmrow, array $rows): array {
+        foreach ($rows as $row) {
+            if (!$cmrow->submissions) {
+                $row->submitted = null;
+                $row->timesubmitted = null;
+                $row->reopened = false;
+            } else if ($row->locked && $row->submitted && !$row->reopened && $row->timesubmitted) {
+                // A final submission can't be changed: nothing more can be handed in from then on, so the
+                // shared submittability rule moves it to Past.
+                // Closed from the moment it was handed in: a cut-off is inclusive, so one second before.
+                $closed = (int)$row->timesubmitted - 1;
+                $row->cutoff = $row->cutoff === null ? $closed : min($row->cutoff, $closed);
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * The adapter's marking rows. If the batch fails, each student is tried alone (their own unit,
+     * or their group's), so one bad record fails only its unit (A7).
+     *
+     * @param \block_le_dashboard\local\adapter\adapter $adapter
+     * @param \cm_info $cm
+     * @param cm_row $cmrow
+     * @param int[] $userids
+     * @return array [marking_row[], true[] keyed by the user ids that failed]
+     */
+    protected function marking_rows($adapter, \cm_info $cm, cm_row $cmrow, array $userids): array {
+        // Where students hand nothing in online, every student is ready at the deadline (shared rule).
+        $read = ($cmrow->submissions || $adapter->marks_without_submissions())
+            ? fn(array $ids) => $adapter->marking_rows($cm, $cmrow, $ids)
+            : fn(array $ids) => \block_le_dashboard\local\adapter\base::no_submission_units($cm, $ids);
+        try {
+            registry::check_test_part_failure('marking', $userids);
+            return [$read($userids), []];
+        } catch (\Throwable $e) {
+            registry::record_error($cm->modname, $e);
+        }
+        $rows = [];
+        $failed = [];
+        foreach ($userids as $userid) {
+            try {
+                registry::check_test_part_failure('marking', [$userid]);
+                array_push($rows, ...$read([$userid]));
+            } catch (\Throwable $e) {
+                $failed[$userid] = true;
+            }
+        }
+        return [$rows, $failed];
+    }
+
+    /**
+     * Settings a tagged assessment is missing, for the staff "Check settings" flag (Pierre, 2026-10-07).
+     * The grade checks are for summative work only: formative quizzes often hide marks on purpose.
+     *
+     * @param \cm_info $cm
+     * @param cm_row $cmrow
+     * @param string $type summative or formative
+     * @return string[] Problems in format::SETUP_PROBLEMS.
+     */
+    protected static function setup_problems(\cm_info $cm, cm_row $cmrow, string $type): array {
+        global $CFG;
+        require_once($CFG->libdir . '/gradelib.php');
+        $problems = [];
+        if ($cmrow->due === null) {
+            $problems[] = 'nodue';
+        }
+        if ($type === tags::SUMMATIVE) {
+            $item = \grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname,
+                'iteminstance' => $cm->instance, 'itemnumber' => 0, 'courseid' => $cm->course]);
+            $graded = $item && (int)$item->gradetype !== GRADE_TYPE_NONE
+                && ((int)$item->gradetype !== GRADE_TYPE_VALUE || (float)$item->grademax > 0);
+            if (!$graded) {
+                $problems[] = 'nograde';
+            } else if (!$cmrow->releases) {
+                $problems[] = 'nomarks';
+            }
+            if (tags::has_any($cm->id, config::formative_tags())) {
+                $problems[] = 'bothtags';
+            }
+        }
+        return $problems;
+    }
+
+    /**
+     * The indexed marking units of students whose re-index failed, to write back unchanged: their
+     * own units, and every group unit (which group failed isn't known). Only units this re-index
+     * replaces: all of them, or those of the students and groups it covers.
+     *
+     * @param int $cmid
+     * @param int[] $userids
+     * @param int[]|null $only
+     * @param int[] $groupids
+     * @return \stdClass[] without ids
+     */
+    protected function kept_marking_rows(int $cmid, array $userids, ?array $only, array $groupids): array {
+        global $DB;
+        if (!$userids) {
+            return [];
+        }
+        $out = [];
+        foreach ($DB->get_records(self::MARK, ['cmid' => $cmid]) as $row) {
+            $id = (int)$row->unitid;
+            $user = $row->unittype === marking_row::UNIT_USER;
+            if (
+                $user ? !in_array($id, $userids) || ($only !== null && !in_array($id, $only))
+                    : $only !== null && !in_array($id, $groupids)
+            ) {
+                continue;
+            }
+            unset($row->id);
+            $out[] = $row;
+        }
+        return $out;
     }
 
     /**
@@ -467,16 +606,13 @@ class indexer {
      * @param int[] $userids
      * @param int[] $groupids
      */
-    protected function delete_unit_rows(int $cmid, array $userids, array $groupids, bool $marks = true): void {
+    protected function delete_unit_rows(int $cmid, array $userids, array $groupids): void {
         global $DB;
         if (!$userids) {
             return;
         }
         [$usql, $params] = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED, 'u');
         $DB->delete_records_select(self::STU, "cmid = :cmid AND userid $usql", $params + ['cmid' => $cmid]);
-        if (!$marks) {
-            return;
-        }
         $DB->delete_records_select(
             self::MARK,
             "cmid = :cmid AND unittype = :user AND unitid $usql",
@@ -582,11 +718,9 @@ class indexer {
      *
      * @param int $cmid
      */
-    protected function delete_rows(int $cmid, bool $marks = true): void {
+    protected function delete_rows(int $cmid): void {
         global $DB;
-        if ($marks) {
-            $DB->delete_records(self::MARK, ['cmid' => $cmid]);
-        }
+        $DB->delete_records(self::MARK, ['cmid' => $cmid]);
         $DB->delete_records(self::STU, ['cmid' => $cmid]);
         $DB->delete_records(self::CM, ['cmid' => $cmid]);
     }
@@ -724,8 +858,9 @@ class indexer {
      * are recorded for the activity types admin page.
      *
      * @param callable|null $trace Receives progress lines.
+     * @param bool $all Every course, whatever the live window: what is indexed changed (a backfill, F5).
      */
-    public function reconcile(?callable $trace = null): void {
+    public function reconcile(?callable $trace = null, bool $all = false): void {
         global $DB;
         // Rows whose course module has gone.
         $orphans = $DB->get_fieldset_sql("SELECT i.cmid
@@ -742,7 +877,7 @@ class indexer {
                                                          JOIN {course_modules} cm ON cm.id = ti.itemid
                                                         WHERE ti.component = 'core' AND ti.itemtype = 'course_modules'"))
         ));
-        $live = $this->live_courses();
+        $live = $all ? null : $this->live_courses();
         foreach ($courses as $courseid) {
             if (!$DB->record_exists('course', ['id' => $courseid])) {
                 $this->remove_course($courseid);

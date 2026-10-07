@@ -7,6 +7,24 @@
 
 // Small text (pills, meta, labels): 13.125px, the size the APCA targets were checked at.
 $ma-font-small: 0.8203rem;
+// Names and section titles: 15px.
+$ma-font-name: 0.9375rem;
+
+// Every block button and toggle, for the shared states.
+$ma-buttons: ".ma-btn, .ma-filter-btn, .ma-flag, .ma-row-iconbtn";
+
+// A button's background and border at rest: the tone's fill and no border,
+// unless the button sets --ma-rest or --ma-line.
+$ma-rest: var(--ma-rest, var(--ma-fill));
+$ma-line: var(--ma-line, transparent);
+
+// Corner radii: the small buttons' (Bootstrap 5's variable, or Bootstrap 4's
+// .btn-sm), and a card's inside corner.
+$ma-control-radius: var(--bs-border-radius, 0.2rem);
+$ma-card-inner-radius: var(--bs-card-inner-border-radius, calc(0.5rem - 1px));
+
+// Open, selected or being pressed: a 2px inset ring in the border step.
+$ma-open-ring: inset 0 0 0 2px var(--ma-border);
 
 // Tone palette. Each base colour is written once, here. Fill, hover,
 // border and ink are derived from it in OKLCH at fixed lightness with its
@@ -14,14 +32,15 @@ $ma-font-small: 0.8203rem;
 // hue. The browser does the maths (relative colour syntax), so where a
 // tone names a theme variable the tints follow the theme; older browsers
 // get hex that Sass computes from the same base colours.
-// Tone: (base colour, Boost theme variable or null).
+// Tone: (base colour, Boost theme variable or null, the steps it uses or
+// null for all of them). Danger is only ever the overdue clock's solid.
 $ma-tones: (
-  "primary": (#003c3c, "primary"),
-  "info": (#008196, "info"),
-  "attention": (#f2a42a, null),
-  "grey": (#6c757d, null),
-  "success": (#357a32, "success"),
-  "danger": (#ca3120, "danger"),
+  "primary": (#003c3c, "primary", null),
+  "info": (#008196, "info", null),
+  "attention": (#f2a42a, null, null),
+  "grey": (#6c757d, null, null),
+  "success": (#357a32, "success", ("fill", "border", "ink")),
+  "danger": (#ca3120, "danger", ()),
 );
 
 // Step: (OKLCH lightness, share of the base colour's chroma). Border is
@@ -33,21 +52,32 @@ $ma-steps: (
   "ink": (0.33, 0.75),
 );
 
-// Per-tone exceptions to a step. Orange text turns brown, so attention's
-// ink is darker and nearly neutral.
+// Per-tone exceptions and extra steps. Orange text turns brown, so
+// attention's ink is darker and nearly neutral. Orange is too light for
+// white, so its icons on white take a glyph step: the darkest that still
+// reads as orange, OKLCH L .62 at full chroma (3.7:1, APCA Lc 64.5 on
+// white; non-text needs 3:1 and Lc 45). Used by the due soon and Mitigate
+// overlays.
 $ma-step-overrides: (
-  "attention": ("ink": (0.3, 0.19)),
+  "attention": ("ink": (0.3, 0.19), "glyph": (0.62, 1)),
 );
 
-// The (lightness, chroma share) of a tone's step, after overrides.
-@function ma-step($tone, $step) {
-  $own: map.get($ma-step-overrides, $tone);
+// A tone's steps, as (step: (OKLCH lightness, chroma share)), after its
+// overrides and limited to the steps it uses.
+@function ma-tone-steps($tone) {
+  $steps: map.merge($ma-steps, map.get($ma-step-overrides, $tone) or ());
+  $uses: list.nth(map.get($ma-tones, $tone), 3);
 
-  @if $own and map.has-key($own, $step) {
-    @return map.get($own, $step);
+  @if $uses == null {
+    @return $steps;
   }
 
-  @return map.get($ma-steps, $step);
+  $out: ();
+  @each $step in $uses {
+    $out: map.set($out, $step, map.get($steps, $step));
+  }
+
+  @return $out;
 }
 
 // The primary base colour, for fallbacks outside the palette.
@@ -97,6 +127,7 @@ $ma-state-tones: (
     "submitted": "success",
     "received": "success",
     "inmarking": "info",
+    "awaiting": "info",
     "released": "info",
   ),
   // The modifier icons on a row's activity icon, shown only for the unusual
@@ -121,12 +152,14 @@ $ma-state-tones: (
   ),
 );
 
-// Tones too light for white text on their solid step; they keep their ink.
-$ma-dark-ink-on-solid: ("attention");
+// Tones too light for a glyph in their solid step on white; such glyphs
+// take the tone's glyph step.
+$ma-glyph-tones: ("attention");
 
 // The tone rules for one component: the default tone and the component's
 // own declarations (the @content) on $base, each state on $base--state.
-@mixin ma-state-tones($component, $base) {
+// $glyphs: the component paints icons on white, so it needs --ma-glyph.
+@mixin ma-state-tones($component, $base, $glyphs: false) {
   $states: map.get($ma-state-tones, $component);
 
   #{$base} {
@@ -134,15 +167,21 @@ $ma-dark-ink-on-solid: ("attention");
     @content;
   }
 
+  // States that share a tone share one rule.
+  $by-tone: ();
+
   @each $state, $tone in $states {
     @if $state != "default" {
-      #{$base}--#{$state} {
-        @include ma-tone($tone);
+      $by-tone: map.set($by-tone, $tone, list.append(map.get($by-tone, $tone) or (), "#{$base}--#{$state}", $separator: comma));
+    }
+  }
 
-        @if list.index($ma-dark-ink-on-solid, $tone) {
-          --ma-on-solid: var(--ma-ink);
-          --ma-glyph: var(--ma-#{$tone}-glyph);
-        }
+  @each $tone, $selectors in $by-tone {
+    #{$selectors} {
+      @include ma-tone($tone);
+
+      @if $glyphs and list.index($ma-glyph-tones, $tone) {
+        --ma-glyph: var(--ma-#{$tone}-glyph);
       }
     }
   }
@@ -160,15 +199,9 @@ $ma-dark-ink-on-solid: ("attention");
   --ma-text-muted: #5f6770;
   --ma-rule: #dee2e6;
   // White is set only where something must paint over what's beneath it
-  // (menus, popovers, the active tab, the icon overlay, the header count)
-  // and for text on a solid tone. Everything else shows the block's card.
+  // (menus, popovers, the active tab, the icon overlay, the header count).
+  // Everything else shows the block's card.
   --ma-surface: #fff;
-  --ma-on-solid: #fff;
-  // Icons in a tone too light for white: its solid is under 3:1 on white,
-  // and its ink is brown. This is the darkest step that still reads as
-  // orange: OKLCH L .62 at full chroma, 3.7:1 and APCA Lc 64.5 on white
-  // (non-text needs 3:1 and Lc 45). Used by due soon and every Mitigate icon.
-  --ma-attention-glyph: #bd7300;
   @each $tone, $def in $ma-tones {
     $hex: list.nth($def, 1);
     $theme: list.nth($def, 2);
@@ -179,8 +212,7 @@ $ma-dark-ink-on-solid: ("attention");
       --ma-#{$tone}-solid: #{$hex};
     }
 
-    @each $step, $_ in $ma-steps {
-      $v: ma-step($tone, $step);
+    @each $step, $v in ma-tone-steps($tone) {
       --ma-#{$tone}-#{$step}: oklch(from var(--ma-#{$tone}-solid) #{list.nth($v, 1)} calc(c * #{list.nth($v, 2)}) h);
     }
   }
@@ -201,8 +233,7 @@ $ma-dark-ink-on-solid: ("attention");
   // relative colours (Chrome < 119, Firefox < 128, Safari < 18).
   @supports not (color: oklch(from red l c h)) {
     @each $tone, $def in $ma-tones {
-      @each $step, $_ in $ma-steps {
-        $v: ma-step($tone, $step);
+      @each $step, $v in ma-tone-steps($tone) {
         --ma-#{$tone}-#{$step}: #{ma-step-hex(list.nth($def, 1), list.nth($v, 1), list.nth($v, 2))};
       }
     }
@@ -230,7 +261,6 @@ $ma-dark-ink-on-solid: ("attention");
   .ma-box-label,
   .ma-row-meta,
   .ma-row-date-label,
-  .ma-row-date-note,
   .ma-row-note,
   .ma-bar-label {
     color: var(--ma-text-muted);
@@ -243,15 +273,28 @@ $ma-dark-ink-on-solid: ("attention");
     overflow-x: auto;
     overflow-y: hidden;
 
+    // Boost 4.5 greys the active tab (#495057) under black inactive ones;
+    // Boost 5.2 makes inactive tabs links. Here inactive tabs are muted and
+    // the active or hovered tab takes the body text.
     .nav-link {
+      color: var(--ma-text-muted);
       white-space: nowrap;
+
+      &:hover,
+      &.active {
+        color: var(--ma-text);
+      }
     }
   }
 
   .ma-tabs .nav-link,
-  .ma-btn,
-  .ma-filter-btn,
-  .ma-row-iconbtn {
+  #{$ma-buttons},
+  .ma-section-toggle,
+  .ma-more,
+  .ma-untagged-summary {
+    // Bootstrap 5's ring for .btn, pressed and selected ones included.
+    --bs-btn-focus-box-shadow: var(--ma-focus-ring);
+
     // A mouse click shows no ring (Boost's .nav-link:focus shadow included);
     // keyboard focus gets ours below.
     &:focus {
@@ -325,10 +368,43 @@ $ma-dark-ink-on-solid: ("attention");
     display: inline-block;
   }
 
-  // The icon sits straight in the input group (no Bootstrap 4 .input-group-prepend, PR9).
-  .ma-search .input-group-text {
-    border-top-right-radius: 0;
-    border-bottom-right-radius: 0;
+  // Search: the icon and the input are one control, as tall as the buttons
+  // beside it and with their corners. One border with no divider, one
+  // background, the same padding at both ends, and the focus ring round the
+  // whole control. The icon sits straight in the input group (no Bootstrap 4
+  // .input-group-prepend, PR9).
+  .ma-search {
+    .input-group {
+      border-radius: $ma-control-radius;
+
+      &:focus-within {
+        box-shadow: var(--ma-focus-ring);
+      }
+    }
+
+    .input-group-text,
+    .form-control {
+      border-color: var(--ma-grey-solid);
+      background-color: var(--ma-surface);
+      box-shadow: none;
+    }
+
+    .input-group-text {
+      padding-inline: 0.5rem;
+      border-right-width: 0;
+      border-radius: $ma-control-radius 0 0 $ma-control-radius;
+      color: var(--ma-text-muted);
+    }
+
+    .form-control {
+      padding-inline: 0 0.5rem;
+      border-left-width: 0;
+      border-radius: 0 $ma-control-radius $ma-control-radius 0;
+
+      &::placeholder {
+        color: var(--ma-text-muted);
+      }
+    }
   }
 
   // Space after an icon or spinner, the same on Bootstrap 4 and 5 (no .mr-*, PR9).
@@ -380,30 +456,82 @@ $ma-dark-ink-on-solid: ("attention");
     margin-top: auto;
   }
 
-  // Buttons: soft fills. Pressed or open is the solid tone.
+  // Buttons and toggles. Each takes a tone ($ma-tones); its base rule comes
+  // before any tone modifier.
   .ma-btn {
     @include ma-tone("info");
+  }
 
-    background-color: var(--ma-fill);
-    color: var(--ma-ink);
+  // Control bar buttons (type filter, Show grades): outlined, so they read
+  // as settings rather than actions. Bootstrap's .btn-group joins the type
+  // buttons' borders and corners.
+  .ma-filter-btn {
+    @include ma-tone("primary");
 
-    &:hover,
-    &:focus {
-      background-color: var(--ma-hover);
-      color: var(--ma-ink);
-    }
+    --ma-rest: transparent;
+    --ma-line: var(--ma-grey-solid);
 
-    &:active,
+    font-weight: 400;
+
     &.active,
-    &[aria-pressed="true"],
-    &[aria-expanded="true"] {
-      background-color: var(--ma-solid);
-      color: var(--ma-on-solid);
+    &[aria-pressed="true"] {
+      z-index: 1;
+    }
+  }
+
+  // Flags (hints): one icon, with its count, that opens its popover on a
+  // click, keyboard focus or a short hover (dashboard.js). Staff flags are
+  // outlined in their tone; student hints are bare glyphs, still 24px buttons.
+  .ma-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+  }
+
+  .ma-flag {
+    @include ma-tone("grey");
+
+    --ma-line: var(--ma-border);
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.4rem;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: $ma-font-small;
+    font-weight: 600;
+    line-height: 1;
+    vertical-align: middle;
+    white-space: nowrap;
+    cursor: pointer;
+
+    .fa-solid {
+      font-size: 0.8rem;
+    }
+  }
+
+  .ma-flag-count {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ma-flag--glyph {
+    --ma-rest: transparent;
+    --ma-line: transparent;
+
+    margin-inline-start: 0.15rem;
+    padding: 0 0.2rem;
+
+    &:hover {
+      border-color: var(--ma-border);
     }
 
-    &:disabled,
-    &.disabled {
-      @include ma-tone("grey");
+    .fa-solid {
+      font-size: 0.9rem;
     }
   }
 
@@ -411,33 +539,77 @@ $ma-dark-ink-on-solid: ("attention");
     @include ma-tone("primary");
   }
 
-  // Control bar buttons (type filter, Show grades): the outlined controls,
-  // like Boost's inputs (#8f959e border, 3:1 on white), so they read as
-  // settings rather than actions. Bootstrap's .btn-group joins the type
-  // buttons' borders and corners.
-  .ma-filter-btn {
-    border: 1px solid #8f959e;
-    background-color: transparent;
-    color: var(--ma-text);
-    font-weight: 400;
+  .ma-flag--info {
+    @include ma-tone("info");
+  }
 
-    &:hover {
-      background-color: #f8f9fa;
-      color: var(--ma-text);
+  // Attention: Mitigate, and the staff-only flags that need following up
+  // (unallocated, plagiarism, no deadline): a warning, not an error, so not
+  // danger. Never on a student's hint (no shaming). Icons take the ink: the
+  // orange glyph step is Lc 50 on the fill.
+  .ma-btn--mitigate,
+  .ma-flag--attention {
+    @include ma-tone("attention");
+  }
+
+  // One set of states for every button and toggle. Rest: the tone's fill
+  // (--ma-rest) and ink. Hover: the hover step. Keyboard focus: the rest look
+  // and the focus ring, never the hover look. Open, selected or being
+  // pressed: the hover step, the ink and a 2px inset ring in the border step.
+  // No button goes solid: no ink reaches Lc 75 on solid orange (black gets
+  // 63.7). Bootstrap 5 paints .btn from --bs-btn-*, its :active, .active and
+  // .show rules included, so those are set as well as the declarations
+  // Bootstrap 4 and the plain buttons use.
+  #{$ma-buttons} {
+    --bs-btn-bg: #{$ma-rest};
+    --bs-btn-color: var(--ma-ink);
+    --bs-btn-border-color: #{$ma-line};
+    --bs-btn-hover-bg: var(--ma-hover);
+    --bs-btn-hover-color: var(--ma-ink);
+    --bs-btn-hover-border-color: #{$ma-line};
+    --bs-btn-active-bg: var(--ma-hover);
+    --bs-btn-active-color: var(--ma-ink);
+    --bs-btn-active-border-color: #{$ma-line};
+
+    border-color: $ma-line;
+    background-color: $ma-rest;
+    color: var(--ma-ink);
+
+    &:focus-visible {
+      border-color: $ma-line;
+      background-color: $ma-rest;
+      color: var(--ma-ink);
     }
 
+    &:hover {
+      background-color: var(--ma-hover);
+      color: var(--ma-ink);
+    }
+
+    &:active,
     &.active,
-    &[aria-pressed="true"] {
-      z-index: 1;
-      border-color: var(--ma-primary-solid);
-      background-color: var(--ma-primary-solid);
-      color: var(--ma-on-solid);
+    &.show,
+    &[aria-pressed="true"],
+    &[aria-expanded="true"] {
+      --bs-btn-focus-box-shadow: #{$ma-open-ring}, var(--ma-focus-ring);
+
+      background-color: var(--ma-hover);
+      box-shadow: $ma-open-ring;
+      color: var(--ma-ink);
+
+      &:focus-visible {
+        box-shadow: $ma-open-ring, var(--ma-focus-ring);
+      }
     }
   }
 
-  // No ink reaches Lc 75 on solid orange (black gets 63.7), so open Mitigate
-  // stays on the hover step with tone ink (Lc 80.1) and adds an inset ring
-  // in the border step to mark it as open.
+  // A hint opens on keyboard focus (dashboard.js), so an open hint with
+  // keyboard focus keeps the focus look: focus alone never looks open.
+  [data-action="tip"][aria-expanded="true"]:focus-visible {
+    background-color: $ma-rest;
+    box-shadow: var(--ma-focus-ring);
+  }
+
   // The menu's links come from another plugin and can be long: wrap them,
   // and never let the menu be wider than the block, nor narrower than 12rem
   // when the block has room.
@@ -450,19 +622,77 @@ $ma-dark-ink-on-solid: ("attention");
     white-space: normal;
   }
 
-  // Attention: Mitigate, and the staff-only plagiarism flag (a warning to
-  // follow up, not an error, so not danger).
-  .ma-btn--mitigate,
-  .ma-btn--hint[data-hint="plagiarism"] {
-    @include ma-tone("attention");
+  .ma-status-wrap {
+    display: inline-flex;
+    align-items: center;
   }
 
-  .ma-btn--mitigate {
-    &[aria-expanded="true"] {
-      background-color: var(--ma-hover);
-      box-shadow: inset 0 0 0 2px var(--ma-border);
-      color: var(--ma-ink);
+  // Popovers of hints beside a date, pill or grade open under it, towards the
+  // row's left, so they stay inside the block.
+  .ma-row-dates,
+  .ma-row-status {
+    position: relative;
+
+    .ma-tip--wide {
+      left: auto;
+      width: 17rem;
+      max-width: min(17rem, 90cqi);
     }
+  }
+
+  .ma-tip-title {
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  // Untagged activities (convenor view): a native disclosure under the
+  // control bar, visible but unobtrusive. Muted small text (Lc 78.7); each
+  // module's list is a nested disclosure, indented under the first.
+  .ma-untagged {
+    margin-bottom: 0.75rem;
+    color: var(--ma-text-muted);
+    font-size: $ma-font-small;
+  }
+
+  .ma-untagged-summary {
+    border-radius: 0.25rem;
+    cursor: pointer;
+  }
+
+  .ma-untagged-body {
+    padding-inline-start: 1rem;
+  }
+
+  .ma-untagged-guidance,
+  .ma-untagged-course,
+  .ma-untagged-list {
+    margin: 0.25rem 0 0;
+  }
+
+  .ma-untagged-list {
+    padding-inline-start: 1rem;
+    list-style: none;
+  }
+
+  // Tags after an activity, like the pills: hidden from students in grey,
+  // settings to check in the staff attention tone (convenors only).
+  .ma-untagged-hidden,
+  .ma-untagged-problems {
+    margin-inline-start: 0.5rem;
+    padding: 0 0.35em;
+    border-radius: 0.25rem;
+    background-color: var(--ma-fill);
+    color: var(--ma-ink);
+  }
+
+  .ma-untagged-hidden {
+    @include ma-tone("grey");
+
+    white-space: nowrap;
+  }
+
+  .ma-untagged-problems {
+    @include ma-tone("attention");
   }
 
   // Section cards. The header takes the section's tone ($ma-state-tones).
@@ -494,7 +724,7 @@ $ma-dark-ink-on-solid: ("attention");
 
   .ma-section-title {
     margin: 0;
-    font-size: 0.9375rem;
+    font-size: $ma-font-name;
     font-weight: 600;
     color: inherit;
   }
@@ -506,10 +736,24 @@ $ma-dark-ink-on-solid: ("attention");
     font-weight: 600;
   }
 
+  // A link button: its tone's ink in every state (Bootstrap 5 would make it
+  // the link colour), the hover step on hover. Expanded is its usual state,
+  // shown by the chevron, so it has no open look.
   .ma-section-toggle {
+    --bs-btn-color: var(--ma-ink);
+    --bs-btn-hover-color: var(--ma-ink);
+    --bs-btn-active-color: var(--ma-ink);
+    --bs-btn-active-bg: var(--ma-hover);
+
     margin-left: auto;
     padding: 0 0.25rem;
     color: var(--ma-ink);
+
+    &:hover,
+    &:active {
+      background-color: var(--ma-hover);
+      color: var(--ma-ink);
+    }
 
     .fa {
       @media (prefers-reduced-motion: no-preference) {
@@ -518,11 +762,22 @@ $ma-dark-ink-on-solid: ("attention");
     }
   }
 
-  // Collapsed: only the header shows, so it takes the card's bottom corners.
+  // The card's bottom corners go to whatever shows last: the header of a
+  // collapsed section, or, with the footer hidden (no Show more), the last
+  // row still showing. The hidden footer is the card's last child and rows
+  // hidden by Show more or the search follow the last one showing, so
+  // Bootstrap's :last-child corners miss it. With Show more, Bootstrap gives
+  // the footer the corners.
+  .ma-section--collapsed .ma-section-header,
+  .ma-section:has(> .ma-section-footer[hidden]) .ma-row:not([hidden]):not(:has(~ .ma-row:not([hidden]))) {
+    border-bottom-right-radius: $ma-card-inner-radius;
+    border-bottom-left-radius: $ma-card-inner-radius;
+  }
+
+  // Collapsed: only the header shows.
   .ma-section--collapsed {
     .ma-section-header {
       border-bottom: 0;
-      border-radius: calc(0.5rem - 1px);
     }
 
     .ma-section-toggle .fa {
@@ -653,7 +908,7 @@ $ma-dark-ink-on-solid: ("attention");
   // Row icon: the activity's Font Awesome icon as a button that opens its
   // tip, with up to two modifier icons: status bottom right, mitigation top
   // right. A modifier is its tone's -solid glyph on a white disc; orange
-  // uses its ink, which is the only way it reaches 3:1.
+  // takes its glyph step, the darkest that still reads as orange.
   .ma-row-icon {
     position: relative;
     grid-area: icon;
@@ -662,6 +917,10 @@ $ma-dark-ink-on-solid: ("attention");
   }
 
   .ma-row-iconbtn {
+    @include ma-tone("grey");
+
+    --ma-rest: transparent;
+
     position: relative;
     display: flex;
     align-items: center;
@@ -671,8 +930,6 @@ $ma-dark-ink-on-solid: ("attention");
     padding: 0;
     border: 0;
     border-radius: 0.25rem;
-    background: none;
-    color: var(--ma-text);
     font-size: 1.25rem;
     cursor: pointer;
   }
@@ -687,7 +944,7 @@ $ma-dark-ink-on-solid: ("attention");
     gap: 0.0625rem;
   }
 
-  @include ma-state-tones("overlay", ".ma-row-overlay") {
+  @include ma-state-tones("overlay", ".ma-row-overlay", $glyphs: true) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -719,7 +976,7 @@ $ma-dark-ink-on-solid: ("attention");
 
   .ma-row-name {
     display: block;
-    font-size: 0.9375rem;
+    font-size: $ma-font-name;
     overflow-wrap: anywhere;
   }
 
@@ -729,10 +986,6 @@ $ma-dark-ink-on-solid: ("attention");
     time {
       white-space: nowrap;
     }
-  }
-
-  .ma-row-date-note {
-    display: block;
   }
 
   // Staff only (G10), so the attention tone is allowed: its ink on the card.
@@ -828,10 +1081,10 @@ $ma-dark-ink-on-solid: ("attention");
     background-color: var(--ma-border);
   }
 
-  // Tips: Moodle's help-icon popover look. They open on click or keyboard
-  // focus (never hover) and close on Escape, a click elsewhere or when focus
-  // leaves (dashboard.js). The activity icon's opens to the right of it;
-  // wide ones (the brief hint) open below their button.
+  // Tips: Moodle's help-icon popover look. They open on a click, keyboard
+  // focus or a short hover, and close on Escape, a click elsewhere, when
+  // focus leaves, or when the pointer leaves one a hover opened (dashboard.js).
+  // The activity icon's opens to the right of it; hints' open below them.
   .ma-tip-wrap {
     position: relative;
   }
