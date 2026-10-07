@@ -21,8 +21,9 @@ Feature: Fixes from the dev architecture audit (A1 to A12)
   #   that the queued task does it. Tasks still wait 60 s.
   # - A7: if marking rows fail, each student is tried alone. Only the units of a student who still fails
   #   keep their last state.
-  # - A8: coursework counts a submission only once it is finalised, where the version records that.
-  #   Feedback counts only with a grade that isn't blank, and only when it is finalised.
+  # - A8: feedback counts only with a grade that isn't blank, and only when it is finalised. The first half
+  #   (a submission counts only once finalised) was reversed in beta18 by Pierre's schema: unfinalised
+  #   submissions are handed in and marked (coursework-schema.feature).
   # - A9: the Refresh throttle is per view, and is set only after the refresh did its work. On a
   #   student's Refresh, an activity that is held is left to its queued task.
   # - A10: not a bug. $transaction->rollback($e) rethrows, so index_rows never returns after a failed
@@ -100,15 +101,15 @@ Feature: Fixes from the dev architecture audit (A1 to A12)
     When I log in as "convenor1" and view the "Module convenor view"
     Then "A1" should show a "Released" progress bar with "1" of "1"
 
-  # A8
+  # A8, as reversed in beta18: an unfinalised coursework submission is handed in, and can still be changed.
   @mod_coursework
-  Scenario: A coursework draft isn't counted as submitted
+  Scenario: A coursework draft counts as submitted and stays in Upcoming
     Given a summative "coursework" "C1" in "M1" is due "tomorrow"
     And "student1" has saved a draft of "C1"
     And the My assessments index is up to date
     When I log in as "student1" and view my dashboard
-    Then "C1" should have no status pill
-    And "C1" should appear in the "Upcoming" section
+    Then "C1" should appear in the "Upcoming" section
+    And "C1" should show the status "Submitted"
 
   @mod_coursework
   Scenario: Blank coursework feedback isn't counted as marked

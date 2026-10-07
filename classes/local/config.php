@@ -31,7 +31,7 @@ class config {
      * Number settings and their defaults: grace period (hours), Mitigate window (days before, hours
      * after), and the nightly reconcile's live window (months, 0 for every course).
      */
-    const NUMBERS = ['graceperiod' => 24, 'mitigationopens' => 90, 'mitigationcloses' => 24, 'reconcilemonths' => 13];
+    const NUMBERS = ['graceperiod' => 24, 'mitigationcloses' => 24, 'reconcilemonths' => 13];
 
     /**
      * A whole-number setting, or its default when unset.
@@ -55,15 +55,14 @@ class config {
     }
 
     /**
-     * Whether Mitigate is offered at a time, from the student's effective deadline (G4).
+     * Whether Past work still offers Mitigate: until the hours set after the student's own deadline.
      *
      * @param int|null $due
      * @param int $now
      * @return bool
      */
     public static function mitigation_open(?int $due, int $now): bool {
-        return $due !== null && $now >= $due - self::number('mitigationopens') * DAYSECS
-            && $now <= $due + self::number('mitigationcloses') * HOURSECS;
+        return $due !== null && $now <= $due + self::number('mitigationcloses') * HOURSECS;
     }
 
     /**

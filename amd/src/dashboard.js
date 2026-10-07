@@ -154,6 +154,17 @@ class Dashboard {
             view.classList.toggle('ma-view--showgrades', show);
             target.setAttribute('aria-pressed', show ? 'true' : 'false');
             setUserPreference('block_le_dashboard_showgrades', show ? 1 : 0).catch(Notification.exception);
+        } else if (action === 'mitigate-delete') {
+            // As rc6: block_rhb's delete link is followed in the background, then the page reloads.
+            e.preventDefault();
+            const href = target.getAttribute('href');
+            if (href) {
+                fetch(href, {method: 'GET', credentials: 'same-origin'})
+                    .then(() => window.location.reload())
+                    .catch(() => {
+                        window.location.href = href;
+                    });
+            }
         } else if (action === 'switch-view') {
             this.load('block_le_dashboard_get_view', target.dataset.view);
             setUserPreference('block_le_dashboard_view', target.dataset.view).catch(Notification.exception);

@@ -81,6 +81,7 @@
     <div class="ma-row-status">
         {{#status}}<span class="ma-status-wrap"><span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{#statushint}}{{> block_le_dashboard/hint }}{{/statushint}}</span>{{/status}}
         {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_le_dashboard{{/str}} <strong>{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</span>{{/grade}}
+        {{#grading}}<span class="badge ma-pill ma-pill--{{key}}" data-grading="{{key}}">{{text}}</span>{{/grading}}
         {{#bars}}{{> block_le_dashboard/progress }}{{/bars}}
     </div>
     <div class="ma-row-actions">
@@ -90,20 +91,21 @@
             <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
                     data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_mitigate, block_le_dashboard{{/str}}</button>
             <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
-                {{#links}}{{#url}}<a class="dropdown-item ma-mitigate-item" href="{{url}}">{{label}}</a>{{/url}}{{^url}}<div class="dropdown-item ma-mitigate-item">{{{html}}}</div>{{/url}}{{/links}}
+                {{#items}}<div class="dropdown-item-text ma-mitigate-item">{{{.}}}</div>{{/items}}
+                {{#noselfcert}}<div class="dropdown-item-text ma-mitigate-note">{{#str}}mitigate_noselfcert, block_le_dashboard{{/str}}</div>{{/noselfcert}}
             </div>
         </div>
         {{/mitigation}}
         {{#hasmarkers}}
         <button type="button" class="btn btn-sm ma-btn ma-btn--markers" data-toggle="collapse" data-bs-toggle="collapse"
                 data-target="#{{markersid}}" data-bs-target="#{{markersid}}"
-                aria-expanded="false" aria-controls="{{markersid}}">{{#str}}action_markers, block_le_dashboard{{/str}}</button>
+                aria-expanded="false" aria-controls="{{markersid}}">{{#marking}}{{#str}}action_marking, block_le_dashboard{{/str}}{{/marking}}{{^marking}}{{#str}}action_markers, block_le_dashboard{{/str}}{{/marking}}</button>
         {{/hasmarkers}}
     </div>
     {{#hasmarkers}}
     <ul class="list-unstyled collapse ma-markers" id="{{markersid}}" data-region="ma-markers">
         {{#markers}}
-        <li class="ma-marker">
+        <li class="ma-marker{{#all}} ma-marker--all{{/all}}">
             <span class="ma-marker-name">{{name}}</span>
             <div class="ma-marker-bars">{{#bars}}{{> block_le_dashboard/progress }}{{/bars}}</div>
         </li>

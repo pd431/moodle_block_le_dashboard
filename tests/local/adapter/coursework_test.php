@@ -89,4 +89,126 @@ final class coursework_test extends \advanced_testcase {
             self::forget_columns();
         }
     }
+
+    /**
+     * Creates a stand-in table with the given fields (all integers unless named in $chars), runs the test
+     * body, then drops it. Skips when mod_coursework's own table is there.
+     *
+     * @param array $tables table => [fields, char fields]
+     * @param callable $body
+     */
+    protected function with_tables(array $tables, callable $body): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->preventResetByRollback();
+        $dbman = $DB->get_manager();
+        $made = [];
+        foreach ($tables as $name => [$fields, $chars]) {
+            if ($dbman->table_exists($name)) {
+                $this->markTestSkipped('mod_coursework is installed: its own tests cover the real tables');
+            }
+        }
+        try {
+            foreach ($tables as $name => [$fields, $chars]) {
+                $table = new \xmldb_table($name);
+                $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+                foreach ($fields as $field) {
+                    $table->add_field($field, XMLDB_TYPE_INTEGER, '10');
+                }
+                foreach ($chars as $field) {
+                    $table->add_field($field, XMLDB_TYPE_CHAR, '100');
+                }
+                $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+                $dbman->create_table($table);
+                $made[] = $table;
+            }
+            self::forget_columns();
+            $body();
+        } finally {
+            foreach ($made as $table) {
+                $dbman->drop_table($table);
+            }
+            self::forget_columns();
+        }
+    }
+
+    /**
+     * Pierre's schema (2026-10-07): an unfinalised submission still counts when it has a submission time or a
+     * finalised, non-blank mark; finalised only locks it. A blank or unfinalised mark alone doesn't count.
+     */
+    public function test_submissions(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_submissions' => [['courseworkid', 'allocatableid', 'timesubmitted', 'firstpublished',
+                'lastpublished', 'finalised'], ['allocatabletype']],
+            'coursework_feedbacks' => [['submissionid', 'assessorid', 'finalised'], ['grade', 'stage_identifier']],
+        ], function () use ($DB) {
+            $sub = fn($user, $time, $finalised) => $DB->insert_record('coursework_submissions', ['courseworkid' => 7,
+                'allocatableid' => $user, 'allocatabletype' => 'user', 'timesubmitted' => $time, 'firstpublished' => 0,
+                'lastpublished' => 0, 'finalised' => $finalised]);
+            $sub(1, 100, 1);
+            $sub(2, 100, 0);
+            $draft = $sub(3, 0, 0);
+            $blank = $sub(4, 0, 0);
+            $unfinal = $sub(5, 0, 0);
+            $feedback = fn($id, $grade, $finalised) => $DB->insert_record('coursework_feedbacks', ['submissionid' => $id,
+                'assessorid' => 9, 'grade' => $grade, 'finalised' => $finalised, 'stage_identifier' => 'assessor_1']);
+            $feedback($draft, '62', 1);
+            $feedback($blank, '', 1);
+            $feedback($unfinal, '55', 0);
+
+            $subs = self::call('submissions', 7);
+            $this->assertSame(['user:1', 'user:2', 'user:3'], array_keys($subs));
+            $this->assertEquals(1, $subs['user:1']->finalised);
+            $this->assertEquals(0, $subs['user:2']->finalised);
+            $this->assertEquals(0, $subs['user:3']->timesubmitted);
+        });
+    }
+
+    /**
+     * Released once first published, or last published where only that is set.
+     */
+    public function test_released(): void {
+        $this->assertFalse(self::call('released', (object)['firstpublished' => 0, 'lastpublished' => null]));
+        $this->assertTrue(self::call('released', (object)['firstpublished' => 5, 'lastpublished' => 0]));
+        $this->assertTrue(self::call('released', (object)['firstpublished' => null, 'lastpublished' => 5]));
+    }
+
+    /**
+     * Exeter's coursework names the group setting use_groups; attendance is its courseworktype; flags follow
+     * plagiarismflagenabled where the setting exists.
+     */
+    public function test_settings(): void {
+        $this->assertTrue(self::call('uses_groups', (object)['use_groups' => 1]));
+        $this->assertTrue(self::call('uses_groups', (object)['usegroups' => 1]));
+        $this->assertFalse(self::call('uses_groups', (object)['use_groups' => 0]));
+        $this->assertTrue(self::call('by_attendance', (object)['courseworktype' => 'Attendance']));
+        $this->assertFalse(self::call('by_attendance', (object)['courseworktype' => 'standard']));
+        $this->assertTrue(self::call('flags_enabled', (object)[]));
+        $this->assertTrue(self::call('flags_enabled', (object)['plagiarismflagenabled' => 1]));
+        $this->assertFalse(self::call('flags_enabled', (object)['plagiarismflagenabled' => 0]));
+    }
+
+    /**
+     * Moderator allocations count as the moderation stage, whether flagged or staged moderator_1.
+     */
+    public function test_allocation_pairs(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_allocation_pairs' => [['courseworkid', 'allocatableid', 'assessorid', 'moderator'],
+                ['allocatabletype', 'stage_identifier']],
+        ], function () use ($DB) {
+            $pair = fn($user, $assessor, $stage, $moderator) => $DB->insert_record('coursework_allocation_pairs', [
+                'courseworkid' => 7, 'allocatableid' => $user, 'allocatabletype' => 'user', 'assessorid' => $assessor,
+                'stage_identifier' => $stage, 'moderator' => $moderator]);
+            $pair(1, 10, 'assessor_1', 0);
+            $pair(1, 11, 'moderator_1', 0);
+            $pair(2, 12, 'assessor_1', 0);
+            $pair(2, 13, 'moderator', 1);
+            $this->assertSame([
+                'user:1' => ['assessor_1' => 10, 'moderator' => 11],
+                'user:2' => ['assessor_1' => 12, 'moderator' => 13],
+            ], self::call('allocation_pairs', 7));
+        });
+    }
 }

@@ -129,6 +129,11 @@ $ma-state-tones: (
     "inmarking": "info",
     "awaiting": "info",
     "released": "info",
+    // Staff grading status on finished rows (Pierre, 2026-10-07): staff only, so attention is fine.
+    "grading": "info",
+    "unreleased": "attention",
+    "withheld": "info",
+    "done": "success",
   ),
   // The modifier icons on a row's activity icon, shown only for the unusual
   // case (Pierre, 2026-10-04). "overdue" is a red clock: Pierre's explicit
@@ -262,7 +267,8 @@ $ma-glyph-tones: ("attention");
   .ma-row-meta,
   .ma-row-date-label,
   .ma-row-note,
-  .ma-bar-label {
+  .ma-bar-label,
+  .ma-mitigate-note {
     color: var(--ma-text-muted);
   }
 
@@ -618,8 +624,14 @@ $ma-glyph-tones: ("attention");
     max-width: min(22rem, 100cqi);
   }
 
-  .ma-mitigate-item {
+  // Block_rhb's own HTML, as rc6 showed it, and rc6's note under it.
+  .ma-mitigate-item,
+  .ma-mitigate-note {
     white-space: normal;
+  }
+
+  .ma-mitigate-note {
+    font-size: $ma-font-small;
   }
 
   .ma-status-wrap {

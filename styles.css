@@ -76,7 +76,8 @@
 .block_le_dashboard_dashboard .ma-row-meta,
 .block_le_dashboard_dashboard .ma-row-date-label,
 .block_le_dashboard_dashboard .ma-row-note,
-.block_le_dashboard_dashboard .ma-bar-label {
+.block_le_dashboard_dashboard .ma-bar-label,
+.block_le_dashboard_dashboard .ma-mitigate-note {
   color: var(--ma-text-muted);
 }
 .block_le_dashboard_dashboard .ma-tabs {
@@ -347,8 +348,12 @@
   min-width: min(12rem, 100cqi);
   max-width: min(22rem, 100cqi);
 }
-.block_le_dashboard_dashboard .ma-mitigate-item {
+.block_le_dashboard_dashboard .ma-mitigate-item,
+.block_le_dashboard_dashboard .ma-mitigate-note {
   white-space: normal;
+}
+.block_le_dashboard_dashboard .ma-mitigate-note {
+  font-size: 0.8203rem;
 }
 .block_le_dashboard_dashboard .ma-status-wrap {
   display: inline-flex;
@@ -758,21 +763,21 @@
   text-align: left;
   white-space: normal;
 }
-.block_le_dashboard_dashboard .ma-pill--pending, .block_le_dashboard_dashboard .ma-pill--reopened {
+.block_le_dashboard_dashboard .ma-pill--pending, .block_le_dashboard_dashboard .ma-pill--reopened, .block_le_dashboard_dashboard .ma-pill--unreleased {
   --ma-fill: var(--ma-attention-fill);
   --ma-hover: var(--ma-attention-hover);
   --ma-border: var(--ma-attention-border);
   --ma-ink: var(--ma-attention-ink);
   --ma-solid: var(--ma-attention-solid);
 }
-.block_le_dashboard_dashboard .ma-pill--submitted, .block_le_dashboard_dashboard .ma-pill--received {
+.block_le_dashboard_dashboard .ma-pill--submitted, .block_le_dashboard_dashboard .ma-pill--received, .block_le_dashboard_dashboard .ma-pill--done {
   --ma-fill: var(--ma-success-fill);
   --ma-hover: var(--ma-success-hover);
   --ma-border: var(--ma-success-border);
   --ma-ink: var(--ma-success-ink);
   --ma-solid: var(--ma-success-solid);
 }
-.block_le_dashboard_dashboard .ma-pill--inmarking, .block_le_dashboard_dashboard .ma-pill--awaiting, .block_le_dashboard_dashboard .ma-pill--released {
+.block_le_dashboard_dashboard .ma-pill--inmarking, .block_le_dashboard_dashboard .ma-pill--awaiting, .block_le_dashboard_dashboard .ma-pill--released, .block_le_dashboard_dashboard .ma-pill--grading, .block_le_dashboard_dashboard .ma-pill--withheld {
   --ma-fill: var(--ma-info-fill);
   --ma-hover: var(--ma-info-hover);
   --ma-border: var(--ma-info-border);

@@ -191,8 +191,10 @@ class behat_block_le_dashboard extends behat_base {
      * @return \Behat\Mink\Element\NodeElement|null
      */
     protected function bar(string $name, string $label): ?\Behat\Mink\Element\NodeElement {
-        $xpath = "./div[contains(@class, 'ma-row-status')]/div[@data-bar][span[contains(@class, 'ma-bar-label')]" .
-            "[normalize-space(.) = " . behat_context_helper::escape($label) . "]]";
+        // On the row, or first under Show marking on a finished row.
+        $match = "[span[contains(@class, 'ma-bar-label')][normalize-space(.) = " . behat_context_helper::escape($label) . "]]";
+        $xpath = "./div[contains(@class, 'ma-row-status')]/div[@data-bar]$match" .
+            " | ./ul[contains(@class, 'ma-markers')]/li[contains(@class, 'ma-marker--all')]//div[@data-bar]$match";
         return $this->row($name)->find('xpath', $xpath);
     }
 
@@ -1992,15 +1994,24 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Sets the Mitigate window.
+     * Sets how long Past work keeps Mitigate after the deadline.
      *
-     * @Given /^the My assessments Mitigate window opens "(?P<days>\d+)" days before and closes "(?P<hours>\d+)" hours after the deadline$/
-     * @param int $days
+     * @Given /^the My assessments Mitigate stays open "(?P<hours>\d+)" hours after the deadline$/
      * @param int $hours
      */
-    public function the_mitigate_window_is(int $days, int $hours): void {
-        set_config('mitigationopens', $days, 'block_le_dashboard');
+    public function the_mitigate_window_is(int $hours): void {
         set_config('mitigationcloses', $hours, 'block_le_dashboard');
+    }
+
+    /**
+     * What the block_rhb stand-in offers (tests/fixtures/rhb_stub.php).
+     *
+     * @Given /^block_rhb offers "(?P<what>a link|a delete link|a message only|nothing|no link)" for (?P<which>self-certification|the request form)$/
+     * @param string $what
+     * @param string $which
+     */
+    public function block_rhb_offers(string $what, string $which): void {
+        set_config($which === 'the request form' ? 'behatrhbsrm' : 'behatrhbselfcert', $what, 'block_le_dashboard');
     }
 
     /**
@@ -2635,6 +2646,56 @@ class behat_block_le_dashboard extends behat_base {
         if ($actual !== $expected) {
             throw new ExpectationException("'$name' shows bars " . implode(', ', $actual), $this->getSession());
         }
+    }
+
+    /**
+     * The grading status of a finished staff row.
+     *
+     * @Then /^"(?P<name>[^"]*)" should show the grading status "(?P<text>[^"]*)"$/
+     * @param string $name
+     * @param string $text
+     */
+    public function should_show_grading_status(string $name, string $text): void {
+        $status = $this->row($name)->find('css', '[data-grading]');
+        $actual = $status ? trim($status->getText()) : null;
+        if ($actual !== $text) {
+            throw new ExpectationException("'$name' shows the grading status '$actual'", $this->getSession());
+        }
+    }
+
+    /**
+     * No grading status.
+     *
+     * @Then /^"(?P<name>[^"]*)" should not show a grading status$/
+     * @param string $name
+     */
+    public function should_not_show_grading_status(string $name): void {
+        if ($this->row($name)->find('css', '[data-grading]')) {
+            throw new ExpectationException("'$name' shows a grading status", $this->getSession());
+        }
+    }
+
+    /**
+     * No bars on the row itself (they may be under Show marking).
+     *
+     * @Then /^"(?P<name>[^"]*)" should not show any progress bars$/
+     * @param string $name
+     */
+    public function should_not_show_any_bars(string $name): void {
+        if ($this->row($name)->find('xpath', "./div[contains(@class, 'ma-row-status')]/div[@data-bar]")) {
+            throw new ExpectationException("'$name' shows progress bars", $this->getSession());
+        }
+    }
+
+    /**
+     * Presses a button on a row.
+     *
+     * @When /^I press "(?P<button>[^"]*)" in the "(?P<name>[^"]*)" row$/
+     * @param string $button
+     * @param string $name
+     */
+    public function i_press_in_the_row(string $button, string $name): void {
+        $this->row($name)->pressButton($button);
     }
 
     /**

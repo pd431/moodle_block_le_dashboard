@@ -339,28 +339,34 @@ class student extends base {
             $actions[] = format::view_action($row['url']);
         }
         $row['actions'] = $actions;
-        $links = $this->mitigation_links($r);
-        if ($links) {
+        if ($menu = $this->mitigation_menu($r, $section)) {
             $row['mitigation'] = [
                 'id' => $row['id'] . '-mitigate',
                 'icon' => format::ACTION_ICONS['mitigate'],
-                'links' => $links,
+                'items' => $menu['items'],
+                'noselfcert' => $menu['noselfcert'],
             ];
         }
         return $row;
     }
 
     /**
-     * Mitigate's links around the student's own deadline, whatever the section or status (G4):
-     * none outside the window, on formative work, or without block_rhb.
+     * Mitigate, as rc6 offered it (Pierre, 2026-10-07): on summative work (D8) the student hasn't handed in
+     * and has no feedback on, in Upcoming and Overdue, and in Past until the hours set after their deadline
+     * (submittability rule, 2026-10-06). Shown only when block_rhb gives a real link (mitigation::links()).
      *
      * @param \stdClass $r
-     * @return array[] Menu items (mitigation::links())
+     * @param string $section
+     * @return array|null mitigation::links()
      */
-    protected function mitigation_links(\stdClass $r): array {
-        $open = in_array($r->assesstype, self::MITIGATION_TYPES)
-            && config::mitigation_open($r->due ? (int)$r->due : null, $this->now);
-        return $open ? mitigation::links($r->modname, $r->instance) : [];
+    protected function mitigation_menu(\stdClass $r, string $section): ?array {
+        if (!in_array($r->assesstype, self::MITIGATION_TYPES) || !empty($r->submitted) || !empty($r->timereleased)) {
+            return null;
+        }
+        if ($section === classifier::PAST && !config::mitigation_open($r->due ? (int)$r->due : null, $this->now)) {
+            return null;
+        }
+        return mitigation::links($r->modname, (int)$r->instance);
     }
 
     /**

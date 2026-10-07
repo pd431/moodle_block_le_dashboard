@@ -494,6 +494,20 @@ class staff extends base {
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
 
+        // Finished marking: where the whole assessment stands, with my bars behind Show marking (Pierre, 2026-10-07).
+        $grading = self::grading_counts(array_column($sections[classifier::COMPLETED], 'cmid'), $this->now);
+        foreach ($sections[classifier::COMPLETED] as &$row) {
+            $g = $grading[$row['cmid']] ?? null;
+            $row['grading'] = $g ? format::grading(
+                (int)$g->units,
+                (int)$g->released,
+                (int)$g->unmarked,
+                !empty($cms[$row['cmid']]->norelease)
+            ) : null;
+            $row = format::marking_detail($row, get_string('marking_mine', 'block_le_dashboard'));
+        }
+        unset($row);
+
         $windowcounts = [];
         foreach (self::WINDOWS as $days) {
             $windowcounts[$days] = format::zero_counts();
@@ -581,6 +595,33 @@ class staff extends base {
             $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::COMPLETED, $sections[classifier::COMPLETED]),
         ]), $oldest, ['hasyears' => true, 'years' => $this->years()]);
+    }
+
+    /**
+     * Work on each assessment, over every marker: ready to mark, released to students, and still unmarked at
+     * some stage, each counted once per student or group.
+     *
+     * @param int[] $cmids
+     * @param int $now
+     * @return \stdClass[] cmid => units, released, unmarked
+     */
+    public static function grading_counts(array $cmids, int $now): array {
+        global $DB;
+        if (!$cmids) {
+            return [];
+        }
+        [$insql, $params] = $DB->get_in_or_equal(array_values(array_unique($cmids)), SQL_PARAMS_NAMED);
+        $ready = self::ready_sql($now);
+        $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
+        return $DB->get_records_sql("SELECT m.cmid,
+                                            COUNT(DISTINCT CASE WHEN $ready THEN $unit ELSE NULL END) AS units,
+                                            COUNT(DISTINCT CASE WHEN $ready AND m.released = 1 THEN $unit ELSE NULL END)
+                                                AS released,
+                                            COUNT(DISTINCT CASE WHEN $ready AND m.marked = 0 THEN $unit ELSE NULL END)
+                                                AS unmarked
+                                       FROM {block_le_dashboard_mark} m
+                                      WHERE m.cmid $insql
+                                   GROUP BY m.cmid", $params);
     }
 
     /**

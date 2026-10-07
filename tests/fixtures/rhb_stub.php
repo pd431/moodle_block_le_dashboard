@@ -15,7 +15,7 @@
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * A stand-in for block_rhb's request link, for Behat scenarios tagged @block_rhb on
+ * A stand-in for block_rhb's request and self-certification links, for Behat scenarios tagged @block_rhb on
  * sites without block_rhb. Loaded only on a Behat site (see mitigation::available()).
  *
  * @package    block_le_dashboard
@@ -26,11 +26,35 @@
 
 if (!function_exists('block_rhb_get_srm_link')) {
     /**
-     * The student request form link.
+     * The student request form link, or what block_rhb offers instead (behatrhbsrm).
      *
      * @return string
      */
     function block_rhb_get_srm_link(): string {
+        if (get_config('block_le_dashboard', 'behatrhbsrm') === 'no link') {
+            return html_writer::span('Requests are closed');
+        }
         return html_writer::link(new moodle_url('/'), 'Request mitigating circumstances');
+    }
+}
+
+if (!function_exists('block_rhb_get_self_certification_link')) {
+    /**
+     * The self-certification link for a coursework, or what block_rhb offers instead (behatrhbselfcert).
+     *
+     * @param object $coursework
+     * @return string
+     */
+    function block_rhb_get_self_certification_link($coursework): string {
+        switch (get_config('block_le_dashboard', 'behatrhbselfcert') ?: 'a link') {
+            case 'a delete link':
+                return html_writer::link(new moodle_url('/', ['deleteselfcert' => 1]), 'Remove self-certification');
+            case 'a message only':
+                return html_writer::span('You have used all your self-certifications');
+            case 'nothing':
+                return '';
+            default:
+                return html_writer::link(new moodle_url('/', ['selfcert' => 1]), 'Self-certify');
+        }
     }
 }

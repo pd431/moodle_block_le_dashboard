@@ -148,23 +148,34 @@ class coursework extends base {
         );
     }
 
-    /** Submission type values meaning students attend rather than hand work in online. */
+    /** Coursework type values meaning students attend rather than hand work in online. */
     const ATTENDANCE_TYPES = ['attendance'];
 
     /**
-     * Whether the coursework is assessed by attendance: nothing is handed in online. Versions name the
-     * setting differently, so any of these columns counts (unverified without the plugin: Pierre tests).
+     * Whether the coursework is assessed by attendance: nothing is handed in online. Exeter's coursework
+     * keeps this in courseworktype (Pierre's schema, 2026-10-07; the value is unconfirmed); the other
+     * columns are kept for versions that name it differently.
      *
      * @param \stdClass $cw
      * @return bool
      */
     protected static function by_attendance(\stdClass $cw): bool {
-        foreach (['submissiontype', 'submissionmethod'] as $field) {
+        foreach (['courseworktype', 'submissiontype', 'submissionmethod'] as $field) {
             if (isset($cw->$field) && in_array(\core_text::strtolower((string)$cw->$field), self::ATTENDANCE_TYPES)) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Whether students hand work in as groups: use_groups in Exeter's coursework, usegroups elsewhere.
+     *
+     * @param \stdClass $cw
+     * @return bool
+     */
+    protected static function uses_groups(\stdClass $cw): bool {
+        return !empty($cw->use_groups) || !empty($cw->usegroups);
     }
 
     /**
@@ -177,7 +188,7 @@ class coursework extends base {
      */
     protected function allocatables(\cm_info $cm, \stdClass $cw, array $userids): array {
         $out = [];
-        if (!empty($cw->usegroups)) {
+        if (self::uses_groups($cw)) {
             $groups = self::user_groups($cm->course, $userids, (int)($cw->grouping_id ?? 0));
             foreach ($userids as $userid) {
                 if (!empty($groups[$userid])) {
@@ -245,25 +256,48 @@ class coursework extends base {
     }
 
     /**
-     * Submitted submissions by allocatable.
+     * Handed-in submissions by allocatable: those with a submission time, and those with a mark. Many
+     * submissions stay unfinalised and are still marked (Pierre's schema, 2026-10-07), so finalised
+     * only says the student can't change the work any more (locked), not whether it was handed in.
      *
      * @param int $courseworkid
-     * @return \stdClass[] "type:id" => submission
+     * @return \stdClass[] "type:id" => submission, with finalised (null where the version has no such column)
      */
     protected static function submissions(int $courseworkid): array {
-        // A draft isn't handed in until it is finalised, by the student or at the deadline (A8).
+        global $DB;
         $finalised = self::column('coursework_submissions', ['finalisedstatus', 'finalised']);
-        return self::by_allocatable(
-            'coursework_submissions',
-            $courseworkid,
-            'timesubmitted, firstpublished, lastpublished',
-            'AND timesubmitted > 0' . ($finalised ? " AND $finalised = 1" : '')
-        );
+        $marked = "f.grade IS NOT NULL AND f.grade <> ''"
+            . (self::column('coursework_feedbacks', ['finalised']) ? ' AND f.finalised = 1' : '');
+        $hasmark = self::column('coursework_feedbacks', ['submissionid'])
+            ? " OR EXISTS (SELECT 1 FROM {coursework_feedbacks} f WHERE f.submissionid = s.id AND $marked)" : '';
+        $finalisedsql = $finalised ? "s.$finalised" : 'NULL';
+        $rs = $DB->get_recordset_sql("SELECT s.id, s.allocatableid, s.allocatabletype, s.timesubmitted,
+                                             s.firstpublished, s.lastpublished, $finalisedsql AS finalised
+                                        FROM {coursework_submissions} s
+                                       WHERE s.courseworkid = :cwid AND (s.timesubmitted > 0$hasmark)
+                                    ORDER BY s.id", ['cwid' => $courseworkid]);
+        $out = [];
+        foreach ($rs as $r) {
+            $out[$r->allocatabletype . ':' . $r->allocatableid] = $r;
+        }
+        $rs->close();
+        return $out;
     }
 
     /**
-     * Whether feedback counts as marking done: a grade that isn't blank, and final where this
-     * coursework version marks drafts (A8).
+     * Whether a submission's feedback is released to the student: first published (Pierre's schema),
+     * or last published for versions that only set that.
+     *
+     * @param \stdClass $s
+     * @return bool
+     */
+    protected static function released(\stdClass $s): bool {
+        return (int)$s->firstpublished > 0 || (int)$s->lastpublished > 0;
+    }
+
+    /**
+     * Whether feedback counts as marking done: a grade that isn't blank, and finalised where this
+     * coursework version records it (Pierre's schema: the reliable "graded" signal).
      *
      * @param \stdClass|null $f Feedback, with grade and, if the version has it, finalised.
      * @return bool
@@ -286,7 +320,7 @@ class coursework extends base {
         $submissions = self::submissions($cw->id);
         $finalgrades = $this->final_grades($cw);
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id) : [];
-        $flagged = self::flagged_submissions((int)$cw->id);
+        $flagged = self::flags_enabled($cw) ? self::flagged_submissions((int)$cw->id) : [];
 
         foreach ($rows as $userid => $row) {
             if (!isset($allocatables[$userid])) {
@@ -314,11 +348,12 @@ class coursework extends base {
             if (isset($submissions[$key])) {
                 $s = $submissions[$key];
                 $row->submitted = true;
-                $row->timesubmitted = (int)$s->timesubmitted;
-                // Only finalised work counts as submitted, where the version records it, and that is final (A8).
-                $row->locked = self::column('coursework_submissions', ['finalisedstatus', 'finalised']) !== null;
+                // A marked draft may never have been handed in by the student: no time, so never late.
+                $row->timesubmitted = (int)$s->timesubmitted ?: null;
+                // Finalised work can't be changed any more.
+                $row->locked = !empty($s->finalised);
                 // D4: released once the final grade is published, dated by publish time.
-                if (!empty($s->lastpublished)) {
+                if (self::released($s)) {
                     $row->timereleased = (int)($s->firstpublished ?: $s->lastpublished);
                     // Coursework keeps the grade as text, which can be empty: show only a number.
                     if (is_numeric($finalgrades[$s->id] ?? null) && (float)$cw->grade > 0) {
@@ -352,11 +387,15 @@ class coursework extends base {
             return [];
         }
         $pairs = [];
-        $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, assessorid, $stagecol AS stage
+        $moderator = self::column('coursework_allocation_pairs', ['moderator']) ? ', moderator' : ', 0 AS moderator';
+        $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, assessorid, $stagecol AS stage $moderator
                                         FROM {coursework_allocation_pairs}
                                        WHERE courseworkid = :cwid", ['cwid' => $courseworkid]);
         foreach ($rs as $p) {
-            $pairs[$p->allocatabletype . ':' . $p->allocatableid][$p->stage] = (int)$p->assessorid;
+            // Moderator allocations may be staged moderator_1 (Pierre's schema): any is moderation.
+            $stage = !empty($p->moderator) || str_starts_with((string)$p->stage, self::STAGE_MODERATOR)
+                ? self::STAGE_MODERATOR : $p->stage;
+            $pairs[$p->allocatabletype . ':' . $p->allocatableid][$stage] = (int)$p->assessorid;
         }
         $rs->close();
         return $pairs;
@@ -367,6 +406,16 @@ class coursework extends base {
      * one (Pierre, 2026-10-07, as in his rc7 commit). B42: the others are still inferred from rc6.
      */
     const OPEN_FLAG_STATUSES = ['0', '1', '3'];
+
+    /**
+     * Whether the coursework uses plagiarism flags: off only where the setting exists and is off.
+     *
+     * @param \stdClass $cw
+     * @return bool
+     */
+    protected static function flags_enabled(\stdClass $cw): bool {
+        return !property_exists($cw, 'plagiarismflagenabled') || !empty($cw->plagiarismflagenabled);
+    }
 
     /**
      * Submissions with an open plagiarism (academic conduct) flag, from mod_coursework's own table.
@@ -402,11 +451,13 @@ class coursework extends base {
             return [];
         }
         $final = (int)$cw->numberofmarkers > 1 ? self::STAGE_AGREED : self::STAGE_FIRST;
+        $finalised = self::column('coursework_feedbacks', ['finalised']) ? ' AND f.finalised = 1' : '';
         return $DB->get_records_sql_menu(
             "SELECT f.submissionid, f.grade
                                             FROM {coursework_feedbacks} f
                                             JOIN {coursework_submissions} s ON s.id = f.submissionid
-                                           WHERE s.courseworkid = :cwid AND f.$stagecol = :stage AND f.grade IS NOT NULL",
+                                           WHERE s.courseworkid = :cwid AND f.$stagecol = :stage AND f.grade IS NOT NULL
+                                                 AND f.grade <> ''$finalised",
             ['cwid' => $cw->id, 'stage' => $final]
         );
     }
@@ -454,7 +505,7 @@ class coursework extends base {
                                                   WHERE s.courseworkid = :cwid", ['cwid' => $cw->id]);
         }
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id) : [];
-        $flagged = self::flagged_submissions((int)$cw->id);
+        $flagged = self::flags_enabled($cw) ? self::flagged_submissions((int)$cw->id) : [];
 
         $rows = [];
         foreach ($submissions as $key => $s) {
@@ -464,7 +515,7 @@ class coursework extends base {
             [$type, $id] = explode(':', $key);
             $done = [];
             $times = [];
-            $released = !empty($s->lastpublished);
+            $released = self::released($s);
             foreach ($map as $stagekey => $identifier) {
                 $f = $feedback[(int)$s->id][$identifier] ?? null;
                 $marked = self::marked($f);

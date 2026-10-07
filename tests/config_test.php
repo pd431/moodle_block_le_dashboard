@@ -28,22 +28,19 @@ use block_le_dashboard\local\config;
  */
 final class config_test extends \advanced_testcase {
     /**
-     * G4: Mitigate from 90 days before the student's deadline to 24 hours after, by default,
-     * and as set.
+     * Past work keeps Mitigate until 24 hours after the student's deadline, by default, and as set.
      */
     public function test_mitigation_window(): void {
         $this->resetAfterTest();
         $now = 1790000000;
         $this->assertFalse(config::mitigation_open(null, $now));
-        $this->assertFalse(config::mitigation_open($now + 91 * DAYSECS, $now));
-        $this->assertTrue(config::mitigation_open($now + 90 * DAYSECS, $now));
+        $this->assertTrue(config::mitigation_open($now + 91 * DAYSECS, $now));
         $this->assertTrue(config::mitigation_open($now - 24 * HOURSECS, $now));
         $this->assertFalse(config::mitigation_open($now - 25 * HOURSECS, $now));
 
-        set_config('mitigationopens', 30, 'block_le_dashboard');
         set_config('mitigationcloses', 48, 'block_le_dashboard');
-        $this->assertFalse(config::mitigation_open($now + 40 * DAYSECS, $now));
         $this->assertTrue(config::mitigation_open($now - 30 * HOURSECS, $now));
+        $this->assertFalse(config::mitigation_open($now - 49 * HOURSECS, $now));
     }
 
     /**

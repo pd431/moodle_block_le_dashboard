@@ -214,7 +214,9 @@ class convenor extends base {
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
-                $outstanding += max(0, $units - $released);
+                // Release is outstanding until some is released: what is held back after that is withheld on
+                // purpose, so the assessment can go to Past (Pierre, 2026-10-07).
+                $outstanding += $released > 0 ? 0 : $units;
             }
             // Nothing more can be handed in: a generic type, or every student's cut-off has passed (F3).
             $closed = $cm->adapter === 'generic'
@@ -291,6 +293,11 @@ class convenor extends base {
             $late = (int)($unmarked[$cmid] ?? 0);
             if ($cm->markingdue && (int)$cm->markingdue < $this->now && $late && !$upcoming) {
                 $row['alert'] = get_string('unmarkedafterdeadline', 'block_le_dashboard', $late);
+            }
+            if ($section === classifier::CONVENOR_PAST) {
+                // Where it stands at a glance; the bars and markers behind Show marking (Pierre, 2026-10-07).
+                $row['grading'] = format::grading($units, $released, (int)($unmarked[$cmid] ?? 0), !empty($cm->norelease));
+                $row = format::marking_detail($row, get_string('marking_all', 'block_le_dashboard'));
             }
             $row['sortkey'] = [(int)($cm->markingdue ?: PHP_INT_MAX), (int)$cm->due];
             $sections[$section][] = $row;

@@ -59,5 +59,13 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100702, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026100800) {
+        // Mitigate is offered as rc6 did, so the window's opening setting goes. Coursework is read from the
+        // fields Exeter's coursework relies on: re-index it.
+        unset_config('mitigationopens', 'block_le_dashboard');
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026100800, 'le_dashboard', 'block');
+    }
+
     return true;
 }

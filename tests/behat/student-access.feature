@@ -182,42 +182,17 @@ Feature: Students see only assessments they can actually access
     Then "A1" should show "Feedback expected"
     And "A1" should not have a feedback contact hint
 
-  # G4 (Pierre, 2026-10-03, Q1). Mitigate needs block_rhb's links: without block_rhb, a stand-in gives one.
+  # G4 (Pierre, 2026-10-03), as rc6 again from beta18 (mitigate-rc6.feature): Past work the student didn't hand
+  # in keeps Mitigate for the hours set after their own deadline, extensions included.
   @block_rhb
-  Scenario Outline: Mitigate is offered from 3 months before the deadline to 24 hours after it
-    Given a summative "assign" "A1" in "M1" <is> due "<due>"
-    And <step>
+  Scenario: Past work keeps Mitigate for the hours set after the student's own deadline
+    Given the My assessments Mitigate stays open "48" hours after the deadline
+    And a summative "assign" "A1" in "M1" with a cut-off "3 days ago" was due "3 days ago"
+    And a summative "assign" "A3" in "M1" with a cut-off "30 hours ago" was due "30 hours ago"
+    And "student1" has an extension on "A1" to "1 hour ago"
     When I log in as "student1" and view my dashboard
-    Then "A1" should <show> "Mitigate"
-
-    Examples:
-      | is  | due          | step                          | show     |
-      | is  | in 100 days  | nothing happens               | not show |
-      | is  | in 80 days   | nothing happens               | show     |
-      | is  | in 3 days    | "student1" has submitted "A1" | show     |
-      | was | 20 hours ago | nothing happens               | show     |
-      | was | 20 hours ago | "student1" has submitted "A1" | show     |
-      | was | 2 days ago   | nothing happens               | not show |
-
-  # D8 (Pierre, 2026-10-04): Mitigate is for summative assessments only.
-  @block_rhb
-  Scenario: Formative assessments never offer Mitigate
-    Given a summative "assign" "A1" in "M1" is due "in 3 days"
-    And a formative "assign" "F1" in "M1" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should show "Mitigate"
-    And "F1" should not show "Mitigate"
-
-  @block_rhb
-  Scenario: The Mitigate window follows the settings and the student's own deadline
-    Given the My assessments Mitigate window opens "30" days before and closes "48" hours after the deadline
-    And a summative "assign" "A1" in "M1" was due "3 days ago"
-    And a summative "assign" "A2" in "M1" is due "in 40 days"
-    And a summative "assign" "A3" in "M1" was due "30 hours ago"
-    And "student1" has an extension on "A1" to "tomorrow"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should show "Mitigate"
-    And "A2" should not show "Mitigate"
+    Then "A1" should appear in the "Past" section
+    And "A1" should show "Mitigate"
     And "A3" should show "Mitigate"
 
   # beta6 (Pierre, 2026-10-03): two lines, the module's full name, then the kind of activity.

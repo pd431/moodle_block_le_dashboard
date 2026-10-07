@@ -28,20 +28,44 @@ use block_le_dashboard\local\mitigation;
  */
 final class mitigation_test extends \advanced_testcase {
     /**
-     * Only the address is kept; the label is ours, by kind. Unreadable addresses keep block_rhb's HTML,
-     * and HTML with no link gives no item.
+     * rc6's test for a real link: an anchor with an href.
      */
-    public function test_item(): void {
-        global $CFG;
-        $item = mitigation::item(
-            mitigation::KIND_REQUEST,
-            '<a class="btn" href="' . $CFG->wwwroot . '/blocks/rhb/srm.php?a=1&amp;b=2" target="_blank">Old wording</a>'
+    public function test_has_link(): void {
+        $this->assertTrue(mitigation::has_link('<a class="btn" href="https://example.com/x">Apply</a>'));
+        $this->assertTrue(mitigation::has_link("<A HREF='/x'>Apply</A>"));
+        $this->assertFalse(mitigation::has_link('<span>Limit reached</span>'));
+        $this->assertFalse(mitigation::has_link('<a name="x">Anchor</a>'));
+        $this->assertFalse(mitigation::has_link(''));
+    }
+
+    /**
+     * Links for deleting a self-certification read "Delete mitigation", found by their text or address as
+     * rc6 did; other links and the rest of the HTML are left as they are.
+     */
+    public function test_delete_label(): void {
+        $this->resetAfterTest();
+        $this->assertSame(
+            '<div><a href="/rhb/delete.php?id=3" class="btn" data-action="mitigate-delete">Delete mitigation</a></div>',
+            mitigation::delete_label('<div><a href="/rhb/delete.php?id=3" class="btn">Remove</a></div>')
         );
-        $this->assertSame(['url' => $CFG->wwwroot . '/blocks/rhb/srm.php?a=1&b=2', 'label' => 'Request mitigation'], $item);
-        $item = mitigation::item(mitigation::KIND_SELFCERT, "<a href='https://forms.example.com/x'>Apply</a>");
-        $this->assertSame(['url' => 'https://forms.example.com/x', 'label' => 'Self-certify an extension'], $item);
-        $odd = '<a href="javascript:void(0)" data-action="open">Request</a>';
-        $this->assertSame(['html' => $odd], mitigation::item(mitigation::KIND_REQUEST, $odd));
-        $this->assertNull(mitigation::item(mitigation::KIND_SELFCERT, '<span>Limit reached</span>'));
+        $this->assertSame(
+            '<a href="/rhb/x.php?id=3" data-action="mitigate-delete">Delete mitigation</a>',
+            mitigation::delete_label('<a href="/rhb/x.php?id=3"><i></i> Delete self-cert</a>')
+        );
+        $plain = '<a href="/rhb/selfcert.php?id=3">Self-certify</a> <span>2 left</span>';
+        $this->assertSame($plain, mitigation::delete_label($plain));
+    }
+
+    /**
+     * Without block_rhb there is no Mitigate.
+     */
+    public function test_links_without_block_rhb(): void {
+        global $CFG;
+        if (file_exists($CFG->dirroot . '/blocks/rhb/lib.php')) {
+            $this->markTestSkipped('block_rhb is installed');
+        }
+        mitigation::reset_caches();
+        $this->assertNull(mitigation::links('assign', 1));
+        $this->assertNull(mitigation::links('coursework', 1));
     }
 }

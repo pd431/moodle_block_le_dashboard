@@ -80,7 +80,7 @@ Feature: Fixes from the LMS support map audit (F1 to F9)
   # F2
   @block_rhb
   Scenario: A closed quiz goes to Past, with Mitigate while its window is open
-    Given the My assessments Mitigate window opens "7" days before and closes "48" hours after the deadline
+    Given the My assessments Mitigate stays open "48" hours after the deadline
     And a summative "quiz" "Q1" in "M1" was due "2 hours ago"
     And the My assessments index is up to date
     When I log in as "student1" and view my dashboard
@@ -93,7 +93,7 @@ Feature: Fixes from the LMS support map audit (F1 to F9)
 
   @block_rhb
   Scenario: Mitigate leaves the Past row once its window ends
-    Given the My assessments Mitigate window opens "7" days before and closes "48" hours after the deadline
+    Given the My assessments Mitigate stays open "48" hours after the deadline
     And a summative "quiz" "Q1" in "M1" was due "3 days ago"
     And the My assessments index is up to date
     When I log in as "student1" and view my dashboard

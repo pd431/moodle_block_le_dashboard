@@ -218,6 +218,55 @@ class format {
         'plagiarism' => 'attention',
     ];
 
+    /**
+     * Where a finished assessment stands, for staff Past rows (Pierre, 2026-10-07): one status over the whole
+     * assessment, every marker's share included. Still being marked first, then release.
+     *
+     * @param int $units Work ready to mark.
+     * @param int $released Of which released to students.
+     * @param int $unmarked Of which still unmarked at some stage.
+     * @param bool $norelease Nothing is ever released (a quiz whose review never shows marks, F10).
+     * @return array|null key and text, or null with no work
+     */
+    public static function grading(int $units, int $released, int $unmarked, bool $norelease): ?array {
+        if ($units <= 0) {
+            return null;
+        }
+        if ($unmarked > 0) {
+            $key = 'grading';
+        } else if ($norelease) {
+            $key = 'done';
+        } else if ($released <= 0) {
+            $key = 'unreleased';
+        } else if ($released < $units) {
+            $key = 'withheld';
+        } else {
+            $key = 'released';
+        }
+        return ['key' => $key, 'text' => get_string('grading_' . $key, 'block_le_dashboard', $units - $released)];
+    }
+
+    /**
+     * Moves a finished row's bars behind its Show marking button, first in the list under the row, above any
+     * markers: at a glance the row shows its grading status only (Pierre, 2026-10-07).
+     *
+     * @param array $row
+     * @param string $label The name beside the row's own bars.
+     * @return array
+     */
+    public static function marking_detail(array $row, string $label): array {
+        $markers = $row['markers'] ?? [];
+        if (!empty($row['bars'])) {
+            array_unshift($markers, ['name' => $label, 'bars' => $row['bars'], 'all' => true]);
+        }
+        $row['bars'] = [];
+        $row['markers'] = $markers;
+        $row['hasmarkers'] = !empty($markers);
+        $row['markersid'] = $row['id'] . '-markers';
+        $row['marking'] = true;
+        return $row;
+    }
+
     /** The student hints, shown as bare glyphs. */
     const GLYPH_HINTS = ['feedbackcontact', 'late'];
 

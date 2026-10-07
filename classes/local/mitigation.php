@@ -25,7 +25,7 @@ namespace block_le_dashboard\local;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class mitigation {
-    /** @var string|null|false Cached request-form link; false until loaded. */
+    /** @var string|false Cached request form HTML; false until loaded. */
     protected static $srm = false;
 
     /**
@@ -47,80 +47,87 @@ class mitigation {
         return true;
     }
 
-    /** Link kinds, each with its own menu label (mitigate_<kind>). */
-    const KIND_SELFCERT = 'selfcert';
-    /** The student request form. */
-    const KIND_REQUEST = 'request';
-
     /**
-     * Links for the Mitigate menu of one row. block_rhb returns each link as HTML; only its address is
-     * kept, and the label comes from this plugin's strings by the kind of link (Pierre, 2026-10-06).
-     * A link whose address can't be read falls back to block_rhb's own HTML, so no route is lost.
-     *
-     * Shown only when there is at least one real link, as rc6 did.
+     * The Mitigate menu of one row, as rc6 built it (Pierre, 2026-10-07: "pull back the behaviour from rc6"):
+     * block_rhb's own HTML, shown as it is.
+     * - Coursework: only when its self-certification HTML holds a real link; the request form follows it.
+     * - Anything else: never self-certification; only when the request form HTML holds a real link, with
+     *   the note that self-certification isn't allowed.
+     * A link for deleting a self-certification reads "Delete mitigation" (rc6 did this in its JavaScript).
      *
      * @param string $modname
      * @param int $instanceid
-     * @return array[] Each with url and label, or html for the fallback.
+     * @return array|null items (HTML) and noselfcert, or null for no Mitigate
      */
-    public static function links(string $modname, int $instanceid): array {
+    public static function links(string $modname, int $instanceid): ?array {
         if (!self::available()) {
-            return [];
+            return null;
         }
-        $links = [];
-        if (
-            $modname === 'coursework' && function_exists('block_rhb_get_self_certification_link')
-                && class_exists('\mod_coursework\models\coursework')
-        ) {
+        $selfcert = '';
+        if ($modname === 'coursework') {
+            if (!function_exists('block_rhb_get_self_certification_link') || !class_exists('\mod_coursework\models\coursework')) {
+                return null;
+            }
             try {
                 $coursework = \mod_coursework\models\coursework::find($instanceid);
-                if ($coursework) {
-                    // Block_rhb's self-certification link (blocks/rhb/lib.php).
-                    $links[] = self::item(self::KIND_SELFCERT, (string)block_rhb_get_self_certification_link($coursework));
-                }
+                // Block_rhb's self-certification link (blocks/rhb/lib.php).
+                $selfcert = $coursework ? (string)block_rhb_get_self_certification_link($coursework) : '';
             } catch (\Throwable $e) {
                 debugging('block_rhb self-certification link failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
             }
+            if (!self::has_link($selfcert)) {
+                return null;
+            }
         }
         if (self::$srm === false) {
-            self::$srm = null;
+            self::$srm = '';
             if (function_exists('block_rhb_get_srm_link')) {
                 try {
                     // Block_rhb's student request form link (blocks/rhb/lib.php), the same for every row.
-                    self::$srm = self::item(self::KIND_REQUEST, (string)block_rhb_get_srm_link());
+                    self::$srm = (string)block_rhb_get_srm_link();
                 } catch (\Throwable $e) {
                     debugging('block_rhb request link failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
                 }
             }
         }
-        $links = array_values(array_filter($links));
-        if (!$links && $modname === 'coursework') {
-            return [];
+        if ($modname !== 'coursework' && !self::has_link(self::$srm)) {
+            return null;
         }
-        if (self::$srm) {
-            $links[] = self::$srm;
-        }
-        return $links;
+        $items = array_values(array_filter([self::delete_label($selfcert), self::delete_label(self::$srm)], 'strlen'));
+        return ['items' => $items, 'noselfcert' => $selfcert === ''];
     }
 
     /**
-     * One menu item from block_rhb's HTML: its address with our label, the HTML itself when the address
-     * can't be read, or null when there is no link at all (a message such as "limit reached").
+     * Whether block_rhb's HTML holds a real link, as rc6 checked it.
      *
-     * @param string $kind
      * @param string $html
-     * @return array|null
+     * @return bool
      */
-    public static function item(string $kind, string $html): ?array {
-        if (!preg_match('/<a\b[^>]*\bhref\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>]+))/i', $html, $m)) {
-            return null;
-        }
-        $href = html_entity_decode($m[2] !== '' ? $m[2] : ($m[3] ?? '') . ($m[4] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        $url = clean_param($href, PARAM_LOCALURL) ?: clean_param($href, PARAM_URL);
-        if ($url === '' || $url === '#') {
-            return ['html' => $html];
-        }
-        return ['url' => $url, 'label' => get_string('mitigate_' . $kind, 'block_le_dashboard')];
+    public static function has_link(string $html): bool {
+        return preg_match('/<a\b[^>]*href=/i', $html) === 1;
+    }
+
+    /**
+     * Relabels block_rhb's links for deleting a self-certification "Delete mitigation", as rc6 did: any link
+     * whose text or address mentions delete. dashboard.js follows them in the background and reloads.
+     *
+     * @param string $html
+     * @return string
+     */
+    public static function delete_label(string $html): string {
+        return preg_replace_callback('~<a\b([^>]*)>(.*?)</a>~is', function ($m) {
+            if (stripos(strip_tags($m[2]), 'delete') === false && stripos($m[1], 'delete') === false) {
+                return $m[0];
+            }
+            return '<a' . $m[1] . ' data-action="mitigate-delete">' . get_string('mitigate_delete', 'block_le_dashboard') . '</a>';
+        }, $html) ?? $html;
+    }
+
+    /**
+     * Forgets the cached request link (tests change block_rhb's answer).
+     */
+    public static function reset_caches(): void {
+        self::$srm = false;
     }
 
     /**
