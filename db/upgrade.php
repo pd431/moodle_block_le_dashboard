@@ -67,5 +67,15 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100800, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026100801) {
+        // Whether the last index couldn't read all student data, so staff rows can say so (Pierre, 2026-10-08).
+        $table = new xmldb_table('block_le_dashboard_cm');
+        $field = new xmldb_field('loaderror', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'setup');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        upgrade_block_savepoint(true, 2026100801, 'le_dashboard', 'block');
+    }
+
     return true;
 }

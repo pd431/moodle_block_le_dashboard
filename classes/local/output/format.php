@@ -199,6 +199,7 @@ class format {
         'feedbackcontact' => 'fa-circle-question',
         'extensions' => 'fa-calendar-plus',
         'setup' => 'fa-screwdriver-wrench',
+        'loaderror' => 'fa-triangle-exclamation',
         'late' => 'fa-clock',
         'plagiarism' => 'fa-flag',
         'nosubmission' => 'fa-person-chalkboard',
@@ -213,6 +214,7 @@ class format {
         'feedbackcontact' => 'info',
         'extensions' => 'info',
         'setup' => 'attention',
+        'loaderror' => 'attention',
         'late' => 'grey',
         'nosubmission' => 'grey',
         'plagiarism' => 'attention',
@@ -316,6 +318,27 @@ class format {
             get_string('setup_link', 'block_le_dashboard', $link),
             get_string('setup', 'block_le_dashboard')
         );
+    }
+
+    /**
+     * Staff rows of an assessment whose last index couldn't read all student data: a flag, and with no
+     * student data at all, a note in place of the bars that would read 0 of 0 (Pierre, 2026-10-08).
+     *
+     * @param array $row
+     * @param \stdClass $cm Index row, with loaderror.
+     * @param bool $nostudents Whether no student's data was read.
+     * @return array
+     */
+    public static function load_error(array $row, \stdClass $cm, bool $nostudents): array {
+        if (empty($cm->loaderror)) {
+            return $row;
+        }
+        $row['hints'][] = self::hint($row['id'], 'loaderror', get_string('hint_loaderror_text', 'block_le_dashboard'));
+        if ($nostudents) {
+            $row['bars'] = array_values(array_filter($row['bars'] ?? [], fn($bar) => (int)$bar['max'] > 0));
+            $row['alert'] = get_string('hint_loaderror', 'block_le_dashboard');
+        }
+        return $row;
     }
 
     /**

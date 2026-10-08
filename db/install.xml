@@ -40,6 +40,7 @@
         <FIELD NAME="nosubmission" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when students hand nothing in online (attendance, in-person, mark-only)"/>
         <FIELD NAME="norelease" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when grades are never released to students (a quiz that never shows marks)"/>
         <FIELD NAME="setup" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false" COMMENT="Settings to check, comma-separated: nodue, nograde, nomarks, bothtags; null when none"/>
+        <FIELD NAME="loaderror" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false" COMMENT="1 when the last index couldn't read all student data: counts may be missing or out of date"/>
         <FIELD NAME="timeindexed" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
       </FIELDS>
       <KEYS>

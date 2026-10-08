@@ -526,6 +526,25 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Makes reading every student's data fail, for every activity.
+     *
+     * @Given /^reading student data fails for every student$/
+     */
+    public function reading_student_data_fails(): void {
+        set_config('testfailstudent', -1, 'block_le_dashboard');
+    }
+
+    /**
+     * Undoes the indexing failures.
+     *
+     * @Given /^reading student data works again$/
+     */
+    public function reading_student_data_works(): void {
+        unset_config('testfailstudent', 'block_le_dashboard');
+        unset_config('testfailtypes', 'block_le_dashboard');
+    }
+
+    /**
      * Asserts a module is not installed, skipping the scenario on a site that has it.
      *
      * @Given /^"mod_(?P<mod>\w+)" is not installed$/
@@ -2370,7 +2389,8 @@ class behat_block_le_dashboard extends behat_base {
         'returned' => 'returned', 'feedback contact' => 'feedbackcontact', 'feedback' => 'feedbackcontact',
         'feedbackcontact' => 'feedbackcontact', 'extension' => 'extensions', 'extensions' => 'extensions',
         'setup' => 'setup', 'check settings' => 'setup', 'nodeadline' => 'nodeadline', 'received' => 'received', 'late' => 'late',
-        'late penalty' => 'late', 'plagiarism' => 'plagiarism', 'hidden' => 'hidden', 'nosubmission' => 'nosubmission'];
+        'late penalty' => 'late', 'plagiarism' => 'plagiarism', 'hidden' => 'hidden', 'nosubmission' => 'nosubmission',
+        'load error' => 'loaderror'];
 
     /**
      * Clicks a row's hint.

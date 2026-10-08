@@ -186,6 +186,61 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * An assessment that can't be indexed is still listed, marked as not loaded (Pierre, 2026-10-08): when the
+     * adapter fails on its first index, when every student fails, and when the first write fails. A later
+     * good index clears the mark.
+     */
+    public function test_load_error_keeps_assessment_listed(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $student = $gen->create_and_enrol($course, 'student');
+        $due = time() + DAYSECS;
+
+        // The adapter fails before reading the activity: listed, without dates.
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => $due]);
+        $this->ma->tag($a->cmid);
+        $DB->delete_records(indexer::CM, ['cmid' => $a->cmid]);
+        $DB->delete_records(indexer::STU, ['cmid' => $a->cmid]);
+        set_config('testfailtypes', 'assign', 'block_le_dashboard');
+        $this->assertTrue((new indexer())->index_cm($a->cmid));
+        $this->assertDebuggingCalled();
+        $row = $DB->get_record(indexer::CM, ['cmid' => $a->cmid], '*', MUST_EXIST);
+        $this->assertEquals(1, $row->loaderror);
+        $this->assertNull($row->due);
+        unset_config('testfailtypes', 'block_le_dashboard');
+
+        // Every student fails: listed with its dates, no student rows.
+        set_config('testfailstudent', -1, 'block_le_dashboard');
+        $this->assertTrue((new indexer())->index_cm($a->cmid));
+        $row = $DB->get_record(indexer::CM, ['cmid' => $a->cmid], '*', MUST_EXIST);
+        $this->assertEquals(1, $row->loaderror);
+        $this->assertEquals($due, $row->due);
+        $this->assertSame(0, $DB->count_records(indexer::STU, ['cmid' => $a->cmid]));
+        unset_config('testfailstudent', 'block_le_dashboard');
+
+        // Indexed fine: the mark goes.
+        $this->assertTrue((new indexer())->index_cm($a->cmid));
+        $this->assertEquals(0, $DB->get_field(indexer::CM, 'loaderror', ['cmid' => $a->cmid]));
+        $this->assertSame(1, $DB->count_records(indexer::STU, ['cmid' => $a->cmid, 'userid' => $student->id]));
+
+        // The first write fails: the row written before reading students stays, marked.
+        $b = $gen->create_module('assign', ['course' => $course->id, 'duedate' => $due]);
+        $this->ma->tag($b->cmid);
+        $DB->delete_records(indexer::CM, ['cmid' => $b->cmid]);
+        set_config('testfailwrite', $b->cmid, 'block_le_dashboard');
+        try {
+            (new indexer())->index_cm($b->cmid);
+        } catch (\moodle_exception $e) {
+            $this->assertSame('testfailure', $e->errorcode);
+        }
+        $row = $DB->get_record(indexer::CM, ['cmid' => $b->cmid], '*', MUST_EXIST);
+        $this->assertEquals(1, $row->loaderror);
+        $this->assertEquals($due, $row->due);
+        registry::flush_errors();
+    }
+
+    /**
      * Group restrictions: students outside the group can't access.
      */
     public function test_availability(): void {

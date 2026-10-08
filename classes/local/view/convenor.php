@@ -208,9 +208,14 @@ class convenor extends base {
             // Marking bars only once there is something to mark: "0 of 0" says nothing.
             $outstanding = 0;
             if ($units > 0) {
-                foreach ($stages as $stage) {
+                foreach ($stages as $i => $stage) {
                     $marked = isset($m[$stage]) ? (int)$m[$stage]->marked : 0;
-                    $bars[] = format::bar($stage, format::stage($stage), $marked, $units, $groups);
+                    // Each stage out of the work it owes: sampled moderation owes nothing on work already
+                    // released, so it isn't "0 of 276"; a later stage owing nothing has no bar (EC9, as staff).
+                    $owed = $i === array_key_first($stages) ? $units : (int)($m[$stage]->ready ?? 0);
+                    if ($owed > 0) {
+                        $bars[] = format::bar($stage, format::stage($stage), $marked, $owed, $groups);
+                    }
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
@@ -289,6 +294,7 @@ class convenor extends base {
             if (!empty($flagged[$cmid])) {
                 $row['hints'][] = format::plagiarism_hint($row['id'], (int)$flagged[$cmid]);
             }
+            $row = format::load_error($row, $cm, (int)($s->total ?? 0) === 0);
             // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
             $late = (int)($unmarked[$cmid] ?? 0);
             if ($cm->markingdue && (int)$cm->markingdue < $this->now && $late && !$upcoming) {

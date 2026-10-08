@@ -231,6 +231,12 @@ class indexer {
                 // Marked from the gradebook (base::no_submission_units), so one marking stage.
                 $cmrow->stages = ['marked'];
             }
+            // A first index lists the assessment before reading any student, marked as not loaded, so a
+            // failure, or a process that dies part way (memory, time limit), leaves it listed for staff
+            // with an honest note rather than missing (Pierre, 2026-10-08).
+            if (!$DB->record_exists(self::CM, ['cmid' => $cmid])) {
+                $DB->insert_record(self::CM, $this->cm_record($cm, $courseid, $types[$cmid], $cmrow, true));
+            }
             $students = self::students($courseid);
             $groupids = [];
             if ($only !== null) {
@@ -250,7 +256,8 @@ class indexer {
                 "block_le_dashboard: indexing cm $cmid ({$cm->modname}) failed: " . $e->getMessage(),
                 DEBUG_DEVELOPER
             );
-            return $DB->record_exists(self::CM, ['cmid' => $cmid]);
+            $this->load_error($cm, $courseid, $types[$cmid], $cmrow ?? null);
+            return true;
         }
 
         // A group unit outside the groups gathered can't be re-indexed in part: do it all.
@@ -262,34 +269,15 @@ class indexer {
             }
         }
 
-        $now = $this->now ?? time();
-        $section = $cm->get_section_info();
-        $record = (object)[
-            'cmid' => $cmid,
-            'courseid' => $courseid,
-            'modname' => $cm->modname,
-            // Without submissions it is shown like the generic tier: no Submitted bar, never Overdue (EC5).
-            'adapter' => isset(registry::OWN[$cm->modname]) && $cmrow->submissions ? $cm->modname : 'generic',
-            'name' => \core_text::substr($cm->get_name(), 0, 1333),
-            'assesstype' => $types[$cmid],
-            'opens' => $cmrow->opens,
-            'due' => $cmrow->due,
-            'cutoff' => $cmrow->cutoff,
-            'markingdue' => $cmrow->markingdue,
-            'hiddenfromstudents' => (!$cm->visible || ($section && !$section->visible)) ? 1 : 0,
-            'hasallocation' => $cmrow->hasallocation ? 1 : 0,
-            'hasbrief' => self::has_brief($cm) ? 1 : 0,
-            'stages' => implode(',', $cmrow->stages),
-            'nosubmission' => $cmrow->submissions ? 0 : 1,
-            'norelease' => $cmrow->releases ? 0 : 1,
-            'setup' => implode(',', self::setup_problems($cm, $cmrow, $types[$cmid])) ?: null,
-            'timeindexed' => $now,
-        ];
+        $record = $this->cm_record($cm, $courseid, $types[$cmid], $cmrow, $failed || $markfailed);
         $markers = array_flip(self::markers($courseid));
         $stu = [];
         $dues = [];
         $kept = $this->kept_student_rows($cmid, array_keys($failed));
         foreach ($students as $userid => $canaccess) {
+            $row = $sturows[$userid] ?? null;
+            // Each adapter row is dropped once written out, so a large activity isn't held twice (scale).
+            unset($sturows[$userid]);
             if (isset($failed[$userid])) {
                 if (isset($kept[$userid])) {
                     $dues[$userid] = $kept[$userid]->due ?? $cmrow->due;
@@ -297,7 +285,7 @@ class indexer {
                 }
                 continue;
             }
-            $row = $sturows[$userid] ?? new student_row($userid, $cmrow->due, $cmrow->cutoff);
+            $row = $row ?? new student_row($userid, $cmrow->due, $cmrow->cutoff);
             $dues[$userid] = $row->due ?? $cmrow->due;
             // Markers who left the module no longer hold work still to come (EC1).
             $allocated = array_unique(array_filter(array_map('intval', $row->allocatedto), fn($id) => isset($markers[$id])));
@@ -322,7 +310,9 @@ class indexer {
         $mark = [];
         $seen = [];
         $groupdues = $this->group_dues($markrows, $dues, $cmrow->due);
-        foreach ($markrows as $row) {
+        foreach (array_keys($markrows) as $i) {
+            $row = $markrows[$i];
+            unset($markrows[$i]);
             $key = $row->unittype . ':' . $row->unitid . ':' . $row->stage;
             if (isset($seen[$key])) {
                 continue;
@@ -387,7 +377,11 @@ class indexer {
                 $transaction->rollback($e);
             } finally {
                 registry::record_error($cm->modname, $e);
+                $this->load_error($cm, $courseid, $types[$cmid], $cmrow);
             }
+        }
+        if ($only !== null && ($failed || $markfailed)) {
+            $DB->set_field(self::CM, 'loaderror', 1, ['cmid' => $cmid]);
         }
         if (!$failed && !$markfailed) {
             registry::clear_error($cm->modname);
@@ -397,6 +391,63 @@ class indexer {
             memo::reset();
         }
         return true;
+    }
+
+    /**
+     * The assessment's index row.
+     *
+     * @param \cm_info $cm
+     * @param int $courseid
+     * @param string $type summative or formative
+     * @param cm_row|null $cmrow Null when the adapter couldn't even read the activity.
+     * @param bool $loaderror Whether student data couldn't be read, in whole or in part.
+     * @return \stdClass
+     */
+    protected function cm_record(\cm_info $cm, int $courseid, string $type, ?cm_row $cmrow, bool $loaderror): \stdClass {
+        $section = $cm->get_section_info();
+        return (object)[
+            'cmid' => $cm->id,
+            'courseid' => $courseid,
+            'modname' => $cm->modname,
+            // Without submissions it is shown like the generic tier: no Submitted bar, never Overdue (EC5).
+            'adapter' => isset(registry::OWN[$cm->modname]) && $cmrow && $cmrow->submissions ? $cm->modname : 'generic',
+            'name' => \core_text::substr($cm->get_name(), 0, 1333),
+            'assesstype' => $type,
+            'opens' => $cmrow?->opens,
+            'due' => $cmrow?->due,
+            'cutoff' => $cmrow?->cutoff,
+            'markingdue' => $cmrow?->markingdue,
+            'hiddenfromstudents' => (!$cm->visible || ($section && !$section->visible)) ? 1 : 0,
+            'hasallocation' => $cmrow && $cmrow->hasallocation ? 1 : 0,
+            'hasbrief' => self::has_brief($cm) ? 1 : 0,
+            'stages' => $cmrow ? implode(',', $cmrow->stages) : '',
+            'nosubmission' => !$cmrow || $cmrow->submissions ? 0 : 1,
+            'norelease' => !$cmrow || $cmrow->releases ? 0 : 1,
+            'setup' => $cmrow ? (implode(',', self::setup_problems($cm, $cmrow, $type)) ?: null) : null,
+            'loaderror' => $loaderror ? 1 : 0,
+            'timeindexed' => $this->now ?? time(),
+        ];
+    }
+
+    /**
+     * Marks the assessment's row as not loaded, writing the row first if it has none, so it stays listed.
+     *
+     * @param \cm_info $cm
+     * @param int $courseid
+     * @param string $type
+     * @param cm_row|null $cmrow
+     */
+    protected function load_error(\cm_info $cm, int $courseid, string $type, ?cm_row $cmrow): void {
+        global $DB;
+        try {
+            if ($DB->record_exists(self::CM, ['cmid' => $cm->id])) {
+                $DB->set_field(self::CM, 'loaderror', 1, ['cmid' => $cm->id]);
+            } else {
+                $DB->insert_record(self::CM, $this->cm_record($cm, $courseid, $type, $cmrow, true));
+            }
+        } catch (\Throwable $e) {
+            debugging('block_le_dashboard: marking cm ' . $cm->id . ' as not loaded failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
+        }
     }
 
     /**

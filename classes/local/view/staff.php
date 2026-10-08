@@ -487,6 +487,7 @@ class staff extends base {
                 $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
             }
             $row['actions'] = [format::view_action($row['url'])];
+            $row = format::load_error($row, $cm, false);
             $sections[$section][] = $row + ['sortkey' => (int)($cm->markingdue ?: $cm->due)];
             if ($section === classifier::TOMARK) {
                 format::count($tomarkcounts, $cm->assesstype, $tomark);
@@ -560,6 +561,7 @@ class staff extends base {
                 $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
             }
             $row['actions'] = [format::view_action($row['url'])];
+            $row = format::load_error($row, $cm, (int)$cm->students === 0);
             $section = $cm->due === null ? classifier::UNDATED : classifier::STAFF_UPCOMING;
             $sections[$section][] = $row + ['sortkey' => (int)$cm->due];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);

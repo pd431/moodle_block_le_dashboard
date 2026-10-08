@@ -148,7 +148,8 @@ class registry {
     public static function check_test_part_failure(string $part, array $userids): void {
         if ((defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
             $student = (int)get_config('block_le_dashboard', 'testfailstudent');
-            if ($part === 'student' && $student && in_array($student, $userids)) {
+            // Minus one fails every student.
+            if ($part === 'student' && $student && ($student === -1 || in_array($student, $userids))) {
                 throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'student ' . $student);
             }
             $marking = (int)get_config('block_le_dashboard', 'testfailmarking');

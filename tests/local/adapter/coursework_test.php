@@ -162,6 +162,11 @@ final class coursework_test extends \advanced_testcase {
             $this->assertEquals(1, $subs['user:1']->finalised);
             $this->assertEquals(0, $subs['user:2']->finalised);
             $this->assertEquals(0, $subs['user:3']->timesubmitted);
+
+            // Scale (beta19): a call for some students reads only their submissions.
+            $this->assertSame(['user:1', 'user:3'], array_keys(self::call('submissions', 7, [['user', 1], ['user', 3]])));
+            $this->assertSame([], self::call('submissions', 7, [['group', 1]]));
+            $this->assertSame([], self::call('submissions', 7, []));
         });
     }
 
@@ -209,6 +214,23 @@ final class coursework_test extends \advanced_testcase {
                 'user:1' => ['assessor_1' => 10, 'moderator' => 11],
                 'user:2' => ['assessor_1' => 12, 'moderator' => 13],
             ], self::call('allocation_pairs', 7));
+            // Allocated only with marker pairs: coursework 8 has only moderator pairs, 9 has none (beta19).
+            $DB->insert_record('coursework_allocation_pairs', ['courseworkid' => 8, 'allocatableid' => 1,
+                'allocatabletype' => 'user', 'assessorid' => 14, 'stage_identifier' => 'moderator_1', 'moderator' => 1]);
+            $DB->insert_record('coursework_allocation_pairs', ['courseworkid' => 8, 'allocatableid' => 2,
+                'allocatabletype' => 'user', 'assessorid' => 14, 'stage_identifier' => 'assessor_1', 'moderator' => 1]);
+            $this->assertTrue(self::call('has_assessor_pairs', 7));
+            $this->assertFalse(self::call('has_assessor_pairs', 8));
+            $this->assertFalse(self::call('has_assessor_pairs', 9));
+            // Moderation is a sample wherever a moderator is allocated, by flag or stage.
+            $this->assertTrue(self::call('has_moderator_pairs', 7));
+            $this->assertTrue(self::call('has_moderator_pairs', 8));
+            $this->assertFalse(self::call('has_moderator_pairs', 9));
+            // Scale (beta19): only the students asked for.
+            $this->assertSame(
+                ['user:2' => ['assessor_1' => 12, 'moderator' => 13]],
+                self::call('allocation_pairs', 7, [['user', 2]])
+            );
         });
     }
 }

@@ -138,6 +138,9 @@ final class quiz_test extends \advanced_testcase {
         self::attempt($quiz->id, $s1->id, 1, 1.0);
         self::attempt($quiz->id, $s2->id, 1, 1.0);
         self::attempt($quiz->id, $s3->id, 1, null, 'inprogress');
+        // S1's attempt ended this very second: the quiz must already be closed for them (regression, beta19).
+        $finished = time();
+        $DB->set_field('quiz_attempts', 'timefinish', $finished, ['quiz' => $quiz->id, 'userid' => $s1->id]);
         // A second attempt for s2.
         $DB->insert_record('quiz_overrides', (object)['quiz' => $quiz->id, 'userid' => $s2->id, 'attempts' => 2]);
 
@@ -145,7 +148,7 @@ final class quiz_test extends \advanced_testcase {
         $adapter = new quiz();
         $cmrow = $adapter->cm_row($cm);
         $rows = $adapter->student_rows($cm, $cmrow, [$s1->id, $s2->id, $s3->id, $s4->id]);
-        $this->assertLessThan(time(), $rows[$s1->id]->cutoff, 'every attempt used');
+        $this->assertSame($finished - 1, $rows[$s1->id]->cutoff, 'every attempt used, closed when the last ended');
         $this->assertSame($close, $rows[$s1->id]->due, 'the deadline stays');
         $this->assertSame($close, $rows[$s2->id]->cutoff, 'an override allows another');
         $this->assertSame($close, $rows[$s3->id]->cutoff, 'an attempt still open');

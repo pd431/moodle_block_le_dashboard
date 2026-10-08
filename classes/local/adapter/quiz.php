@@ -370,7 +370,9 @@ class quiz extends base {
                 continue;
             }
             $row = $rows[$userid];
-            $end = (int)$u->lastend;
+            // Closed from the moment the last attempt ended: a cut-off is inclusive, so one second before, or
+            // the student's view in that same second still offers the quiz (MariaDB lane, beta18 and beta19).
+            $end = (int)$u->lastend - 1;
             $row->cutoff = $row->cutoff === null ? $end : min((int)$row->cutoff, $end);
         }
     }
