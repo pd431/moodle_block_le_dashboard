@@ -54,6 +54,30 @@ const SELECTORS = {
     typeButton: '[data-action="filter-type"]',
 };
 
+/** Pixels an open tip keeps from the window's edges. */
+const EDGE = 8;
+
+/**
+ * Slides an open tip sideways back into the window when its anchor would put it past an edge, so it
+ * stays next to its control at every width (beta23 anchoring check).
+ *
+ * @param {HTMLElement} tip
+ */
+const keepOnScreen = (tip) => {
+    const box = tip.getBoundingClientRect();
+    const width = document.documentElement.clientWidth;
+    let shift = 0;
+    if (box.right > width - EDGE) {
+        shift = width - EDGE - box.right;
+    }
+    if (box.left + shift < EDGE) {
+        shift = EDGE - box.left;
+    }
+    if (shift) {
+        tip.style.transform = `translateX(${Math.round(shift)}px)`;
+    }
+};
+
 /**
  * Per-dashboard state that survives a view being re-rendered.
  */
@@ -232,10 +256,12 @@ class Dashboard {
     setTip(trigger, open, how = 'click') {
         const tip = this.tipFor(trigger);
         if (tip) {
+            tip.style.transform = '';
             tip.hidden = !open;
             trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
             if (open) {
                 trigger.dataset.opened = how;
+                keepOnScreen(tip);
             } else {
                 delete trigger.dataset.opened;
             }

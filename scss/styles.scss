@@ -681,8 +681,13 @@ $ma-glyph-tones: ("attention");
 
     // Popovers of hints beside a date, pill or grade open under it, towards the
     // row's left, so they stay inside the block.
+    // Each date, pill and grade anchors its own hint's popover, so it opens under that line rather
+    // than under the whole column (beta23 anchoring check).
     .ma-row-dates,
-    .ma-row-status {
+    .ma-row-status,
+    .ma-row-date,
+    .ma-status-wrap,
+    .ma-grade {
         position: relative;
 
         .ma-tip--wide {
@@ -1064,6 +1069,12 @@ $ma-glyph-tones: ("attention");
 
     .ma-row-dates {
         grid-area: dates;
+
+        // As wide as its text and globe, so a hint's popover ends at the globe, not at the column's edge.
+        .ma-row-date {
+            width: fit-content;
+            max-width: 100%;
+        }
 
         time {
             white-space: nowrap;
