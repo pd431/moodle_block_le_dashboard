@@ -994,10 +994,18 @@ class indexer {
      * Queues a background re-index of one assessment.
      *
      * @param int $cmid
+     * @param int $delay Seconds to hold it back, so a burst of events becomes one run (deadline rush).
      */
-    public static function queue_cm(int $cmid): void {
-        self::queue(['cmid' => $cmid]);
+    public static function queue_cm(int $cmid, int $delay = 0): void {
+        self::queue(['cmid' => $cmid], $delay);
     }
+
+    /**
+     * Seconds a re-index queued by a student's own action waits, so the submissions of a deadline rush
+     * become one run per assessment rather than one each. The student's own rows are updated at once
+     * (observer::module_event), so only staff numbers wait.
+     */
+    const COALESCE = 120;
 
     /**
      * Queues a background re-index of a course.
@@ -1013,20 +1021,32 @@ class indexer {
      * also matches a task that is running, which has read its data already: a change made
      * meanwhile would be lost. So one may wait while another runs; re-indexing is idempotent.
      *
+     * A waiting one due later than this one would run is brought forward instead, so a held-back
+     * re-index never delays one asked for now.
+     *
      * @param array $data Task custom data.
+     * @param int $delay Seconds to hold it back.
      */
-    protected static function queue(array $data): void {
+    protected static function queue(array $data, int $delay = 0): void {
         global $DB;
         $task = new \block_le_dashboard\task\reindex();
         $task->set_custom_data($data);
-        $waiting = $DB->record_exists_select(
+        $runat = time() + $delay;
+        $waiting = $DB->get_record_select(
             'task_adhoc',
             'classname = :classname AND timestarted IS NULL AND ' . $DB->sql_compare_text('customdata', 255) . ' = ' .
                 $DB->sql_compare_text(':customdata', 255),
-            ['classname' => '\\' . get_class($task), 'customdata' => $task->get_custom_data_as_string()]
+            ['classname' => '\\' . get_class($task), 'customdata' => $task->get_custom_data_as_string()],
+            'id, nextruntime',
+            IGNORE_MULTIPLE
         );
         if (!$waiting) {
+            if ($delay) {
+                $task->set_next_run_time($runat);
+            }
             \core\task\manager::queue_adhoc_task($task);
+        } else if ((int)$waiting->nextruntime > $runat) {
+            $DB->set_field('task_adhoc', 'nextruntime', $runat, ['id' => $waiting->id]);
         }
     }
 }

@@ -320,6 +320,47 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * Deadline rush: a held-back re-index waits; one asked for now brings it forward rather than waiting behind it.
+     */
+    public function test_queue_delay_and_bring_forward(): void {
+        global $DB;
+        $params = ['classname' => '\\block_le_dashboard\\task\\reindex'];
+        $before = time();
+        indexer::queue_cm(42, indexer::COALESCE);
+        indexer::queue_cm(42, indexer::COALESCE);
+        $this->assertSame(1, $DB->count_records('task_adhoc', $params), 'a rush of submissions is one run');
+        $this->assertGreaterThanOrEqual($before + indexer::COALESCE, (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
+        indexer::queue_cm(42);
+        $this->assertSame(1, $DB->count_records('task_adhoc', $params));
+        $this->assertLessThanOrEqual(time(), (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
+        // A later hold-back never delays it again.
+        indexer::queue_cm(42, indexer::COALESCE);
+        $this->assertLessThanOrEqual(time(), (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
+    }
+
+    /**
+     * Deadline rush: a student's submission updates their own row at once and holds back everyone else's re-index.
+     */
+    public function test_submission_holds_back_reindex(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS,
+            'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1]);
+        $this->ma->tag($a->cmid);
+        $DB->delete_records('task_adhoc', ['component' => 'block_le_dashboard']);
+        $before = time();
+        $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid,
+            'onlinetext' => 'Mine']);
+        $own = ['cmid' => $a->cmid, 'userid' => $s1->id];
+        $this->assertEquals(1, $DB->get_field('block_le_dashboard_stu', 'submitted', $own));
+        $tasks = $DB->get_records('task_adhoc', ['component' => 'block_le_dashboard']);
+        $this->assertCount(1, $tasks);
+        $this->assertGreaterThanOrEqual($before + indexer::COALESCE, (int)reset($tasks)->nextruntime);
+    }
+
+    /**
      * F4: re-indexing some students rewrites their rows only.
      */
     public function test_index_users(): void {
