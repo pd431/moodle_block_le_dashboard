@@ -312,7 +312,7 @@ Feature: Students see only assessments they can actually access
       | due           | text          |
       | in 40 minutes | Due in 39 min |
       | in 5 hours    | Due in 4 h    |
-      | in 3 days     | Due in 2 days |
+      | in 3 days     | Due in 3 days |
 
   # G14: the pill already says "Feedback released". Pierre, 2026-10-06: the date is labelled
   # "Feedback received", so a first-time student knows what it is.

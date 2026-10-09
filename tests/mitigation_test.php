@@ -83,7 +83,7 @@ final class mitigation_test extends \advanced_testcase {
      * @param string $selfcert
      * @param string $srm
      * @param array|null $count
-     * @param string|null $here
+     * @param int|null $here
      * @param array|null $expected Each item as [kind, text]: live, greyed (text: the reason), html, or null.
      */
     public function test_menu(
@@ -91,10 +91,11 @@ final class mitigation_test extends \advanced_testcase {
         string $selfcert,
         string $srm,
         ?array $count,
-        ?string $here,
+        ?int $here,
         ?array $expected
     ): void {
         $this->resetAfterTest();
+        $this->setUser($this->getDataGenerator()->create_user(['timezone' => 'Australia/Perth']));
         $menu = mitigation::menu($coursework, $selfcert, $srm, $count, $here);
         if ($expected === null) {
             $this->assertNull($menu);
@@ -106,6 +107,11 @@ final class mitigation_test extends \advanced_testcase {
                 return ['delete', $item['label'] . ' ' . $item['url']];
             }
             if (!empty($item['greyed'])) {
+                // A date in the reason is marked up for the page (item 8), the same text around it.
+                if ($item['reasondated']) {
+                    $dated = $item['reasondated'];
+                    $this->assertSame($item['reason'], $dated['before'] . $dated['date'] . $dated['after']);
+                }
                 return ['greyed', $item['label'] . ': ' . $item['reason']];
             }
             if (isset($item['url'])) {
@@ -135,7 +141,7 @@ final class mitigation_test extends \advanced_testcase {
                     $stillrequest], $request]],
             'already self-certified here: the new deadline, and Delete mitigation' => [true,
                 '<a href="https://example.com/blocks/rhb/delete.php?id=3">Remove self-certification</a>', self::SRM,
-                ['used' => 1, 'max' => 3], '17 Oct 2026, 13:47',
+                ['used' => 1, 'max' => 3], (new \DateTime('2026-10-17 13:47 Australia/Perth'))->getTimestamp(),
                 [['greyed', 'Self-certify an extension: You already self-certified an extension for this assessment. ' .
                     'Your deadline is now 17 Oct 2026, 13:47.'],
                     ['delete', 'Delete mitigation https://example.com/blocks/rhb/delete.php?id=3'], $request]],

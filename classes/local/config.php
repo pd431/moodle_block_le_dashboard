@@ -160,6 +160,19 @@ class config {
     }
 
     /**
+     * The time the dashboard is drawn at. A Behat run can set it, so a scenario can say what day it is: day counts
+     * such as "Due tomorrow" depend on the calendar, not only on the time left.
+     *
+     * @return int
+     */
+    public static function now(): int {
+        if (defined('BEHAT_SITE_RUNNING') && ($now = (int)get_config('block_le_dashboard', 'behatnow'))) {
+            return $now;
+        }
+        return time();
+    }
+
+    /**
      * Assessments a Refresh re-indexes inline before it queues the rest instead.
      *
      * @return int

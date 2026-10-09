@@ -86,7 +86,7 @@
         </span>
         {{/freshness.refreshing}}
         {{^freshness.refreshing}}
-        <span class="ma-freshness-text">{{freshness.text}}</span>
+        <span class="ma-freshness-text">{{#freshness.dated}}{{> block_le_dashboard/datedtext}}{{/freshness.dated}}{{^freshness.dated}}{{freshness.text}}{{/freshness.dated}}</span>
         <button type="button" class="btn btn-sm ma-btn ma-btn--refresh" data-action="refresh">
             <i class="fa fa-rotate-right ma-icon" aria-hidden="true"></i>{{#str}}refresh, block_le_dashboard{{/str}}
         </button>

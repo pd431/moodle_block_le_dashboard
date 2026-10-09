@@ -31,5 +31,5 @@
             data-hint="{{key}}" aria-expanded="false" aria-controls="{{id}}" aria-label="{{title}}">
         <i class="fa-solid {{icon}}" aria-hidden="true"></i>{{#count}}<span class="ma-flag-count" aria-hidden="true">{{count}}</span>{{/count}}
     </button>
-    <div class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden><strong class="ma-tip-title">{{title}}</strong>{{text}}{{#link}} {{{link}}}{{/link}}{{#guidance}}<div class="ma-tip-guidance">{{{guidance}}}</div>{{/guidance}}</div>
+    <div class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden><strong class="ma-tip-title">{{title}}</strong>{{#dated}}{{> block_le_dashboard/datedtext}}{{/dated}}{{^dated}}{{text}}{{/dated}}{{#link}} {{{link}}}{{/link}}{{#guidance}}<div class="ma-tip-guidance">{{{guidance}}}</div>{{/guidance}}</div>
 </div>

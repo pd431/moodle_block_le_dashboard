@@ -47,7 +47,7 @@ abstract class base {
      */
     public function __construct(int $userid, ?int $now = null, ?int $yearid = null) {
         $this->userid = $userid;
-        $this->now = $now ?? time();
+        $this->now = $now ?? config::now();
         if ($yearid === null) {
             $saved = get_user_preferences('block_le_dashboard_year', null, $userid);
             $yearid = ($saved !== null && ((int)$saved === 0 || years::get((int)$saved))) ? (int)$saved
@@ -151,6 +151,7 @@ abstract class base {
         $refreshing = $since > $this->now - self::REFRESHING_EXPIRES;
         return [
             'text' => format::updated($oldest, $this->now),
+            'dated' => format::updated_dated($oldest, $this->now),
             'refreshing' => $refreshing,
             // Only while this view has nothing indexed yet, or the index has never been filled.
             'preparing' => get_config('block_le_dashboard', 'backfillpending')

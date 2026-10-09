@@ -72,8 +72,29 @@ const format = (date, zone, lang) => {
     return `${parts.day} ${parts.month} ${parts.year}, ${parts.hour}:${parts.minute}`;
 };
 
+/** A day, in milliseconds. */
+const DAY = 86400000;
+
 /**
- * Shows the row dates under a root in the browser's time zone, where it differs from Moodle's.
+ * A time's calendar date in a time zone, as a number that counts days (midnight UTC of that date).
+ *
+ * @param {Date} date
+ * @param {string} zone
+ * @returns {number}
+ */
+const day = (date, zone) => {
+    const parts = {};
+    new Intl.DateTimeFormat('en-GB', {timeZone: zone, year: 'numeric', month: 'numeric', day: 'numeric'})
+        .formatToParts(date).forEach(part => {
+            parts[part.type] = part.value;
+        });
+    return Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+};
+
+/**
+ * Shows the dates under a root in the browser's time zone, where it differs from Moodle's: the row dates, dates
+ * inside sentences, and the day counts of "Due in" notes, so they agree with the dates shown (Pierre, 2026-10-09:
+ * "all times, calculations, in N days, all of it should look like the server was in china").
  *
  * @param {HTMLElement} root The dashboard, holding data-timezone (the zone Moodle drew dates in).
  */
@@ -83,8 +104,94 @@ export const localise = async(root) => {
     if (!local || !moodle || local === moodle) {
         return;
     }
+    const pending = new Pending('block_le_dashboard/localtime');
+    try {
+        await Promise.all([dates(root, local, moodle), intext(root, local, moodle), countdowns(root, local)]);
+    } finally {
+        pending.resolve();
+    }
+};
+
+/**
+ * Dates inside sentences (a Mitigate reason, a staff hint, "Updated ..."): local time, with Moodle's in their title.
+ *
+ * @param {HTMLElement} root
+ * @param {string} local The browser's zone.
+ * @param {string} moodle Moodle's zone.
+ */
+const intext = async(root, local, moodle) => {
     const lang = document.documentElement.lang || undefined;
-    const dates = [];
+    const found = [];
+    root.querySelectorAll('time[data-intext][datetime]:not([data-localised])').forEach(time => {
+        const date = new Date(time.getAttribute('datetime'));
+        try {
+            const ours = format(date, local, lang);
+            if (!isNaN(date.getTime()) && ours !== format(date, moodle, lang)) {
+                found.push({time, ours});
+            }
+        } catch (e) {
+            // A zone this browser doesn't know.
+        }
+    });
+    if (!found.length) {
+        return;
+    }
+    const titles = await getStrings(found.map(({time}) => ({
+        key: 'tz_date_moodle', component: 'block_le_dashboard', param: {zone: moodle, time: time.textContent.trim()},
+    })));
+    found.forEach(({time, ours}, i) => {
+        time.dataset.localised = '1';
+        time.title = titles[i];
+        time.textContent = ours;
+    });
+};
+
+/**
+ * "Due in 2 days", "Due tomorrow": from a day out the count is calendar days to the deadline's date, so it's
+ * recounted on the dates of the browser's zone. Under a day it's the time left, the same everywhere.
+ *
+ * @param {HTMLElement} root
+ * @param {string} local The browser's zone.
+ */
+const countdowns = async(root, local) => {
+    const found = [];
+    root.querySelectorAll('.ma-row-note[data-until][data-now]:not([data-localised])').forEach(note => {
+        const until = new Date(note.dataset.until);
+        const now = new Date(note.dataset.now);
+        if (isNaN(until.getTime()) || isNaN(now.getTime()) || until - now < DAY) {
+            return;
+        }
+        try {
+            found.push({note, days: Math.max(1, Math.round((day(until, local) - day(now, local)) / DAY))});
+        } catch (e) {
+            // A zone this browser doesn't know.
+        }
+    });
+    if (!found.length) {
+        return;
+    }
+    const texts = await getStrings(found.map(({note, days}) => days === 1
+        ? {key: `${note.dataset.note}_tomorrow`, component: 'block_le_dashboard'}
+        : {key: 'duration_days', component: 'block_le_dashboard', param: days}));
+    const sentences = await getStrings(found.map(({note, days}, i) => days === 1
+        ? {key: `${note.dataset.note}_tomorrow`, component: 'block_le_dashboard'}
+        : {key: note.dataset.note, component: 'block_le_dashboard', param: texts[i]}));
+    found.forEach(({note}, i) => {
+        note.dataset.localised = '1';
+        note.textContent = sentences[i];
+    });
+};
+
+/**
+ * The row dates: local time, each with a globe hint giving Moodle's.
+ *
+ * @param {HTMLElement} root
+ * @param {string} local The browser's zone.
+ * @param {string} moodle Moodle's zone.
+ */
+const dates = async(root, local, moodle) => {
+    const lang = document.documentElement.lang || undefined;
+    const found = [];
     root.querySelectorAll('[data-date] > time[datetime]:not([data-localised])').forEach(time => {
         const date = new Date(time.getAttribute('datetime'));
         if (isNaN(date.getTime())) {
@@ -99,17 +206,11 @@ export const localise = async(root) => {
             return;
         }
         if (ours !== theirs) {
-            dates.push({time, ours});
+            found.push({time, ours});
         }
     });
-    if (!dates.length) {
-        return;
-    }
-    const pending = new Pending('block_le_dashboard/localtime');
-    try {
-        await show(root, dates, local, moodle);
-    } finally {
-        pending.resolve();
+    if (found.length) {
+        await show(root, found, local, moodle);
     }
 };
 
