@@ -282,6 +282,12 @@ class assign extends base {
                     : (!empty($a->submissiondrafts) ? student_row::LOCK_FINALISED : null);
             }
         }
+        // A teacher can lock submissions before anything is handed in: the student can't submit (B1).
+        foreach ($rows as $userid => $row) {
+            if (!$row->submitted && !empty($flags[$userid]->locked)) {
+                $row->lockreason = student_row::LOCK_TEACHER;
+            }
+        }
         self::apply_gradebook_release($cm, $rows);
         // A resubmission after release is in marking again, whatever the gradebook still holds.
         foreach ($rows as $row) {

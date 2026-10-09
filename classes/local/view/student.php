@@ -357,6 +357,9 @@ class student extends base {
         if ($status === classifier::STATUS_SUBMITTED && $section !== classifier::PAST && $r->lockreason) {
             // Final before the deadline: say why instead of offering Submit (Pierre, 2026-10-09).
             $row['locked'] = $this->lock_control($row['id'], $r->lockreason);
+        } else if ($section !== classifier::PAST && classifier::teacher_locked($r)) {
+            // Locked before anything was handed in (B1).
+            $row['locked'] = $this->lock_control($row['id'], $r->lockreason, false);
         } else if (in_array($status, $open) && $section !== classifier::PAST) {
             $actions[] = format::action('submit', $row['url']);
         } else if ($status === classifier::STATUS_SUBMITTED && $section === classifier::UPCOMING) {
@@ -381,14 +384,16 @@ class student extends base {
      *
      * @param string $rowid
      * @param string $reason A student_row::LOCK_ constant.
+     * @param bool $submitted False for a teacher's lock before anything was handed in: "Can't submit".
      * @return array
      */
-    protected function lock_control(string $rowid, string $reason): array {
+    protected function lock_control(string $rowid, string $reason, bool $submitted = true): array {
         $reason = in_array($reason, self::LOCK_REASONS) ? $reason : student_row::LOCK_FINALISED;
         return [
             'id' => $rowid . '-locked',
             'icon' => format::ACTION_ICONS['locked'],
-            'text' => get_string('locked_' . $reason, 'block_le_dashboard'),
+            'label' => get_string($submitted ? 'action_locked' : 'action_lockednosubmit', 'block_le_dashboard'),
+            'text' => get_string('locked_' . $reason . ($submitted ? '' : 'nosubmit'), 'block_le_dashboard'),
             // Finalised and teacher-locked work share one box; quiz attempts have their own.
             'guidance' => guidance::html($reason === student_row::LOCK_ATTEMPTS ? 'attempts' : 'finalised'),
         ];

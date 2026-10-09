@@ -174,3 +174,25 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
     And I open the "Can't resubmit" control of "A1"
     Then the "Can't resubmit" popover of "A1" should open under its button
     And the "Can't resubmit" popover of "A1" should be fully on screen
+
+  # B1 (support map): a teacher can lock submissions before the student hands anything in. The row said nothing
+  # and offered Submit, which Moodle then refused.
+  @javascript
+  Scenario: A teacher lock before anything is handed in: Can't submit, with the reason
+    Given a summative "assign" "A1" in "M1" is due "in 3 days"
+    And "teacher1" locks submissions for "student1" on "A1"
+    And the My assessments index is up to date
+    When I log in as "student1" and view my dashboard
+    Then "A1" should appear in the "Upcoming" section
+    And "A1" should not have a "Submit" button
+    And "A1" should have a "Can't submit" button
+    And I open the "Can't resubmit" control of "A1"
+    And the "Can't resubmit" popover of "A1" should say "Your teacher has locked submissions for you, so you can't submit."
+
+  Scenario: Past the deadline, locked work that was never handed in goes to Past
+    Given a summative "assign" "A1" in "M1" was due "1 hour ago"
+    And "teacher1" locks submissions for "student1" on "A1"
+    And the My assessments index is up to date
+    When I log in as "student1" and view my dashboard
+    Then "A1" should appear in the "Past" section
+    And "A1" should not have a "Can't submit" button

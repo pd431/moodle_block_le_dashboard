@@ -529,7 +529,8 @@ class indexer {
                 $row->timesubmitted = null;
                 $row->reopened = false;
             }
-            if (!$row->submitted || $row->reopened) {
+            // Only a teacher's lock applies before anything is handed in (B1).
+            if (!$cmrow->submissions || (!$row->submitted && $row->lockreason !== student_row::LOCK_TEACHER)) {
                 $row->lockreason = null;
             }
         }

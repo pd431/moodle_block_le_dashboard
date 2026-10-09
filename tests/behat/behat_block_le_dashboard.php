@@ -2986,6 +2986,31 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A teacher locks or unlocks a student's submissions through the assignment, firing Moodle's events. Nothing
+     * is queued or run here, so the dashboard shows only what the block's observer did (B1, B4).
+     *
+     * @When /^"(?P<teacher>[^"]*)" (?P<action>locks|unlocks) submissions for "(?P<student>[^"]*)" on "(?P<name>[^"]*)"$/
+     * @param string $teacher
+     * @param string $action
+     * @param string $student
+     * @param string $name
+     */
+    public function the_teacher_locks_submissions(string $teacher, string $action, string $student, string $name): void {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $cm = $this->cm($name);
+        $saved = $USER;
+        \core\session\manager::set_user(core_user::get_user(self::userid($teacher)));
+        try {
+            $assign = new assign($cm->context, $cm, null);
+            $action === 'locks' ? $assign->lock_submission(self::userid($student))
+                : $assign->unlock_submission(self::userid($student));
+        } finally {
+            \core\session\manager::set_user($saved);
+        }
+    }
+
+    /**
      * Sets the resubmission contact, and its link.
      *
      * @Given /^the "Resubmission contact" setting is "(?P<text>[^"]*)"(?: with link "(?P<url>[^"]*)")?$/
