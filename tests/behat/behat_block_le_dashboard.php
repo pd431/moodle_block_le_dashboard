@@ -2986,6 +2986,31 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A teacher locks or unlocks a student's submissions through the assignment, firing Moodle's events. Nothing
+     * is queued or run here, so the dashboard shows only what the block's observer did (B1, B4).
+     *
+     * @When /^"(?P<teacher>[^"]*)" (?P<action>locks|unlocks) submissions for "(?P<student>[^"]*)" on "(?P<name>[^"]*)"$/
+     * @param string $teacher
+     * @param string $action
+     * @param string $student
+     * @param string $name
+     */
+    public function the_teacher_locks_submissions(string $teacher, string $action, string $student, string $name): void {
+        global $CFG, $USER;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $cm = $this->cm($name);
+        $saved = $USER;
+        \core\session\manager::set_user(core_user::get_user(self::userid($teacher)));
+        try {
+            $assign = new assign($cm->context, $cm, null);
+            $action === 'locks' ? $assign->lock_submission(self::userid($student))
+                : $assign->unlock_submission(self::userid($student));
+        } finally {
+            \core\session\manager::set_user($saved);
+        }
+    }
+
+    /**
      * Sets the resubmission contact, and its link.
      *
      * @Given /^the "Resubmission contact" setting is "(?P<text>[^"]*)"(?: with link "(?P<url>[^"]*)")?$/
@@ -3223,6 +3248,114 @@ class behat_block_le_dashboard extends behat_base {
         $shown = trim(preg_replace('/\s+/', ' ', $shown));
         if (str_contains($shown, $text) === (bool)$not) {
             throw new ExpectationException("The Can't resubmit popover of '$name' says '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * Opens every popover, tip and menu in the dashboard one at a time, and checks each one opens next to the
+     * control that opened it (within 16 px) and inside the window (Pierre, 2026-10-09: "check anchoring of all
+     * popover, tooltips and other things, for all breakpoints").
+     *
+     * @Then /^every popover in the dashboard should open next to its control and on screen$/
+     */
+    public function every_popover_opens_next_to_its_control(): void {
+        $controls = '.block_le_dashboard [data-action="tip"], .block_le_dashboard [data-region="ma-mitigate"] [data-toggle="dropdown"]';
+        $count = (int)$this->evaluate_script("return document.querySelectorAll('$controls').length");
+        $problems = [];
+        $checked = 0;
+        for ($i = 0; $i < $count; $i++) {
+            $shown = $this->evaluate_script("return (function() {
+                const c = document.querySelectorAll('$controls')[$i];
+                const r = c.getBoundingClientRect();
+                if (!r.width || !r.height) {
+                    return false;
+                }
+                c.scrollIntoView({block: 'center'});
+                c.click();
+                return true;
+            })()");
+            if (!$shown) {
+                continue;
+            }
+            $this->getSession()->wait(400);
+            $box = $this->evaluate_script("return (function() {
+                const c = document.querySelectorAll('$controls')[$i];
+                const pop = c.dataset.toggle === 'dropdown' ? c.parentNode.querySelector('.dropdown-menu')
+                    : document.getElementById(c.getAttribute('aria-controls'));
+                const b = c.getBoundingClientRect();
+                const p = pop.getBoundingClientRect();
+                const row = c.closest('[data-region=\"ma-row\"]');
+                const name = row ? (row.querySelector('.ma-row-name') || {}).textContent : '';
+                return {name: (name || '').trim(), what: c.dataset.hint || c.dataset.region || c.dataset.toggle,
+                    open: p.width > 0 && p.height > 0 && getComputedStyle(pop).visibility !== 'hidden',
+                    gapx: Math.max(0, p.left - b.right, b.left - p.right), gapy: Math.max(0, p.top - b.bottom, b.top - p.bottom),
+                    left: Math.round(p.left), right: Math.round(p.right), width: document.documentElement.clientWidth};
+            })()");
+            $checked++;
+            $where = "{$box['what']} of '{$box['name']}'";
+            if (!$box['open']) {
+                $problems[] = "$where didn't open";
+            } else if ($box['gapx'] > 16 || $box['gapy'] > 16) {
+                $problems[] = "$where opened {$box['gapx']} px across and {$box['gapy']} px down from its control";
+            } else if ($box['left'] < 0 || $box['right'] > $box['width']) {
+                $problems[] = "$where runs off screen ({$box['left']} to {$box['right']} of {$box['width']} px)";
+            }
+            $this->evaluate_script("return (function() {
+                const c = document.querySelectorAll('$controls')[$i];
+                if (c.getAttribute('aria-expanded') === 'true') {
+                    c.click();
+                }
+                return true;
+            })()");
+            $this->getSession()->wait(200);
+        }
+        if (!$checked) {
+            throw new ExpectationException('No popovers to check', $this->getSession());
+        }
+        if ($problems) {
+            throw new ExpectationException("Of $checked popovers:\n" . implode("\n", $problems), $this->getSession());
+        }
+    }
+
+    /**
+     * The "Can't resubmit" popover sits under its button and overlaps it sideways (beta22: it opened at the
+     * far left of the list).
+     *
+     * @Then /^the "Can't resubmit" popover of "(?P<name>[^"]*)" should open under its button$/
+     * @param string $name
+     */
+    public function the_lock_popover_opens_under_its_button(string $name): void {
+        $id = $this->lock_control($name)->getAttribute('aria-controls');
+        $box = $this->evaluate_script("return (function() {
+            const tip = document.getElementById('$id');
+            const b = document.querySelector('[aria-controls=\"$id\"]').getBoundingClientRect();
+            const t = tip.getBoundingClientRect();
+            return {open: !tip.hidden, under: t.top >= b.bottom - 1 && t.top <= b.bottom + 24,
+                beside: t.left <= b.right && t.right >= b.left, tip: [t.left, t.top, t.right], button: [b.left, b.bottom, b.right]};
+        })()");
+        if (!$box['open'] || !$box['under'] || !$box['beside']) {
+            throw new ExpectationException("The Can't resubmit popover of '$name' isn't under its button: "
+                . json_encode($box), $this->getSession());
+        }
+    }
+
+    /**
+     * The "Can't resubmit" popover is inside the window.
+     *
+     * @Then /^the "Can't resubmit" popover of "(?P<name>[^"]*)" should be fully on screen$/
+     * @param string $name
+     */
+    public function the_lock_popover_is_on_screen(string $name): void {
+        $id = $this->lock_control($name)->getAttribute('aria-controls');
+        $box = $this->evaluate_script("return (function() {
+            const t = document.getElementById('$id').getBoundingClientRect();
+            return {left: t.left, right: t.right, width: document.documentElement.clientWidth};
+        })()");
+        if ($box['left'] < 0 || $box['right'] > $box['width']) {
+            throw new ExpectationException(
+                "The Can't resubmit popover of '$name' runs off screen: " . json_encode($box),
+                $this->getSession()
+            );
         }
     }
 

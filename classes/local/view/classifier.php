@@ -125,6 +125,10 @@ class classifier {
             return [($due !== null && $due >= $now) ? self::UPCOMING : self::PAST, $done];
         }
         if (!self::submittable($row, $now)) {
+            // Locked by a teacher before the deadline: Upcoming, saying why there's no Submit (B1).
+            if (self::teacher_locked($row) && $due !== null && $due >= $now) {
+                return [self::UPCOMING, self::STATUS_PENDING];
+            }
             // Nothing can be handed in any more: Past, with Mitigate while its window is open.
             return [self::PAST, self::STATUS_NOTSUBMITTED];
         }
@@ -155,7 +159,21 @@ class classifier {
      * @return bool
      */
     public static function submittable(\stdClass $row, int $now): bool {
+        if (self::teacher_locked($row)) {
+            return false;
+        }
         return !empty($row->reopened) || $row->cutoff === null || (int)$row->cutoff >= $now;
+    }
+
+    /**
+     * Whether a teacher locked submissions for a student who hasn't handed the work in (B1).
+     *
+     * @param \stdClass $row
+     * @return bool
+     */
+    public static function teacher_locked(\stdClass $row): bool {
+        return ($row->lockreason ?? null) === \block_le_dashboard\local\index\student_row::LOCK_TEACHER
+            && empty($row->submitted);
     }
 
     /** Staff section: units of mine still to mark. */

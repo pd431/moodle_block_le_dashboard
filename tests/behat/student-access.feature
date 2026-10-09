@@ -294,6 +294,14 @@ Feature: Students see only assessments they can actually access
     Then "A1" should appear in the "Overdue" section
     And "A1" should show "You can still submit for 20 h"
 
+  # B9 (support map, beta22 re-run): without a cut-off Moodle keeps taking the work, so a countdown to the
+  # deadline plus the grace period told the student a time limit that doesn't exist.
+  Scenario: An overdue assignment without a cut-off has no countdown
+    Given a summative "assign" "A1" in "M1" was due "3 hours ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should appear in the "Overdue" section
+    And "A1" should not show "You can still submit"
+
   @javascript
   Scenario Outline: Upcoming deadlines within a week show how soon
     Given a summative "assign" "A1" in "M1" is due "<due>"

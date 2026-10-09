@@ -54,6 +54,9 @@ class assign extends base {
             '\mod_assign\event\submission_status_updated',
             '\mod_assign\event\submission_removed',
             '\mod_assign\event\submission_graded',
+            // A teacher's lock and unlock decide Submit or Can't submit (B4).
+            '\mod_assign\event\submission_locked',
+            '\mod_assign\event\submission_unlocked',
             '\mod_assign\event\extension_granted',
             '\mod_assign\event\marker_updated',
             '\mod_assign\event\workflow_state_updated',
@@ -280,6 +283,12 @@ class assign extends base {
             if ($rows[$userid]->submitted) {
                 $rows[$userid]->lockreason = !empty($flags[$userid]->locked) ? student_row::LOCK_TEACHER
                     : (!empty($a->submissiondrafts) ? student_row::LOCK_FINALISED : null);
+            }
+        }
+        // A teacher can lock submissions before anything is handed in: the student can't submit (B1).
+        foreach ($rows as $userid => $row) {
+            if (!$row->submitted && !empty($flags[$userid]->locked)) {
+                $row->lockreason = student_row::LOCK_TEACHER;
             }
         }
         self::apply_gradebook_release($cm, $rows);

@@ -528,7 +528,10 @@ class staff extends base {
                 $later[] = $cmid;
             }
         }
-        foreach ($this->upcoming($later) as $cmid => $cm) {
+        $upcoming = $this->upcoming($later);
+        // Upcoming covers every assessment in the staff courses, not only those with marking rows (R1, beta22 audit).
+        $names += format::course_names(array_diff(array_unique(array_column($upcoming, 'courseid')), array_keys($names)));
+        foreach ($upcoming as $cmid => $cm) {
             foreach (self::WINDOWS as $days) {
                 if ((int)$cm->due >= $this->now && (int)$cm->due <= $this->now + $days * DAYSECS) {
                     format::count($windowcounts[$days], $cm->assesstype);

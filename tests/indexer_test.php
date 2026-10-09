@@ -679,6 +679,24 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * The convenor's settings-check line is singular for one activity (beta22: "1 tagged activities need their").
+     */
+    public function test_setup_count_singular(): void {
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $convenor = $gen->create_and_enrol($course, 'moduleconvenor');
+        $cm = $gen->create_module('assign', ['course' => $course->id, 'duedate' => 0]);
+        \core_tag_tag::set_item_tags('core', 'course_modules', $cm->cmid, \context_module::instance($cm->cmid), ['summative']);
+        (new indexer())->index_cm($cm->cmid);
+
+        $hint = \block_le_dashboard\local\setupchecks::hint($convenor->id, null, [(int)$course->id]);
+        $this->assertSame('1 tagged activity needs its settings checked across your courses.', $hint['label']);
+        $year = (object)['id' => 0, 'label' => '2026/27'];
+        $hint = \block_le_dashboard\local\setupchecks::hint($convenor->id, $year, [(int)$course->id]);
+        $this->assertSame('1 tagged activity needs its settings checked across your 2026/27 courses.', $hint['label']);
+    }
+
+    /**
      * Settings a tagged assessment is missing, for the staff Check settings flag and the convenor's list.
      */
     public function test_setup_problems(): void {

@@ -115,3 +115,10 @@ Feature: Staff are told when a tagged assessment is missing a setting
     And the My assessments index is up to date
     When I log in as "convenor1" and view the "Module convenor view" for academic year "All years"
     Then I should not see "need their settings checked" in the "My assessments" block
+
+  @javascript
+  Scenario: One activity to check reads in the singular
+    Given a summative "assign" "A1" in "M1" with no due date exists
+    And the My assessments index is up to date
+    When I log in as "convenor1" and view the "Module convenor view" for academic year "All years"
+    Then I should see "1 tagged activity needs its settings checked across your courses." in the "My assessments" block
