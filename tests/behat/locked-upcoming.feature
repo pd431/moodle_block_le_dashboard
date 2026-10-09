@@ -151,3 +151,26 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
     When I log in as "student1" and view my dashboard
     Then "C1" should appear in the "Upcoming" section
     And "C1" should have a "Submit" button
+
+  # beta22: the popover opened at the far left of the list, because nothing between it and the block was
+  # positioned. It now opens under its button, right-aligned with the row's actions, and takes the row's
+  # width on a narrow block.
+  @javascript
+  Scenario: The Can't resubmit popover opens next to its button
+    Given a summative "assign" "A1" in "M1" with required Submit is due "in 3 days"
+    And "student1" has submitted "A1"
+    And the My assessments index is up to date
+    When I log in as "student1" and view my dashboard
+    And I open the "Can't resubmit" control of "A1"
+    Then the "Can't resubmit" popover of "A1" should open under its button
+
+  @javascript
+  Scenario: The Can't resubmit popover stays on screen on a phone
+    Given I change viewport size to "360x800"
+    And a summative "assign" "A1" in "M1" with required Submit is due "in 3 days"
+    And "student1" has submitted "A1"
+    And the My assessments index is up to date
+    When I log in as "student1" and view my dashboard
+    And I open the "Can't resubmit" control of "A1"
+    Then the "Can't resubmit" popover of "A1" should open under its button
+    And the "Can't resubmit" popover of "A1" should be fully on screen

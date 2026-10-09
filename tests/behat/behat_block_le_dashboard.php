@@ -3227,6 +3227,48 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The "Can't resubmit" popover sits under its button and overlaps it sideways (beta22: it opened at the
+     * far left of the list).
+     *
+     * @Then /^the "Can't resubmit" popover of "(?P<name>[^"]*)" should open under its button$/
+     * @param string $name
+     */
+    public function the_lock_popover_opens_under_its_button(string $name): void {
+        $id = $this->lock_control($name)->getAttribute('aria-controls');
+        $box = $this->evaluate_script("return (function() {
+            const tip = document.getElementById('$id');
+            const b = document.querySelector('[aria-controls=\"$id\"]').getBoundingClientRect();
+            const t = tip.getBoundingClientRect();
+            return {open: !tip.hidden, under: t.top >= b.bottom - 1 && t.top <= b.bottom + 24,
+                beside: t.left <= b.right && t.right >= b.left, tip: [t.left, t.top, t.right], button: [b.left, b.bottom, b.right]};
+        })()");
+        if (!$box['open'] || !$box['under'] || !$box['beside']) {
+            throw new ExpectationException("The Can't resubmit popover of '$name' isn't under its button: "
+                . json_encode($box), $this->getSession());
+        }
+    }
+
+    /**
+     * The "Can't resubmit" popover is inside the window.
+     *
+     * @Then /^the "Can't resubmit" popover of "(?P<name>[^"]*)" should be fully on screen$/
+     * @param string $name
+     */
+    public function the_lock_popover_is_on_screen(string $name): void {
+        $id = $this->lock_control($name)->getAttribute('aria-controls');
+        $box = $this->evaluate_script("return (function() {
+            const t = document.getElementById('$id').getBoundingClientRect();
+            return {left: t.left, right: t.right, width: document.documentElement.clientWidth};
+        })()");
+        if ($box['left'] < 0 || $box['right'] > $box['width']) {
+            throw new ExpectationException(
+                "The Can't resubmit popover of '$name' runs off screen: " . json_encode($box),
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
      * A link in the "Can't resubmit" explanation.
      *
      * @Then /^"(?P<text>[^"]*)" in the "Can't resubmit" popover of "(?P<name>[^"]*)" should link to "(?P<url>[^"]*)"$/

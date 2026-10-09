@@ -900,8 +900,11 @@ $ma-glyph-tones: ("attention");
         padding: 0.5rem 0.75rem;
     }
 
+    // Positioned so the Can't resubmit popover opens from the buttons, not
+    // from the far edge of the list (beta22).
     .ma-row-actions {
         display: flex;
+        position: relative;
         flex-wrap: wrap;
         justify-content: flex-end;
         gap: 0.25rem;
@@ -1218,6 +1221,23 @@ $ma-glyph-tones: ("attention");
         left: 0;
         width: auto;
         max-width: 24rem;
+    }
+
+    // Under its button, right-aligned with the row's actions, growing left.
+    .ma-locked-wrap .ma-tip--wide {
+        left: auto;
+        width: max-content;
+        // stylelint-disable-next-line csstree/validator
+        max-width: min(24rem, 90cqi);
+    }
+
+    // On a narrow block the actions run the width of the row: the popover takes it all.
+    // stylelint-disable-next-line csstree/validator
+    @container ma (width < 34rem) {
+        .ma-locked-wrap .ma-tip--wide {
+            left: 0;
+            width: auto;
+        }
     }
 }
 

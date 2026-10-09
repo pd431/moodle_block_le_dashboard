@@ -671,6 +671,7 @@
 }
 .block_le_dashboard_dashboard .ma-row-actions {
     display: flex;
+    position: relative;
     flex-wrap: wrap;
     justify-content: flex-end;
     gap: 0.25rem;
@@ -994,6 +995,20 @@
     left: 0;
     width: auto;
     max-width: 24rem;
+}
+.block_le_dashboard_dashboard .ma-locked-wrap .ma-tip--wide {
+    left: auto;
+    width: max-content;
+    /* stylelint-disable-next-line csstree/validator */
+    max-width: min(24rem, 90cqi);
+}
+
+/* stylelint-disable-next-line csstree/validator */
+@container ma (width < 34rem) {
+    .block_le_dashboard_dashboard .ma-locked-wrap .ma-tip--wide {
+        left: 0;
+        width: auto;
+    }
 }
 
 .ma-gap {
