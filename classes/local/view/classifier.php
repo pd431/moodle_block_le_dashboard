@@ -72,9 +72,9 @@ class classifier {
      * - Nothing to hand in online (attendance, in person, mark-only): Upcoming until the date, then Past,
      *   "Awaiting feedback" until the grade is out. Never Overdue.
      * - Work the student can no longer hand in (past the cut-off or a quiz's close, or every quiz
-     *   attempt used): Past at once, whatever the deadline. Mitigate shows there while its window is open.
-     * - Submitted: Upcoming until the deadline while it can still be changed, then Past (in marking, or
-     *   released). A final submission (locked, every quiz attempt used) is Past as "Submitted" at once.
+     *   attempt used with none finished): Past at once, whatever the deadline.
+     * - Submitted: Upcoming until the deadline, then Past (in marking, or released). A final submission
+     *   (finalised, locked by a teacher, every quiz attempt used) too (Pierre, 2026-10-09).
      * - A reopened attempt not yet resubmitted: Upcoming, with no pill (G13).
      * - No deadline (EC2): Undated until released ("Received" once handed in), then Past; a reopened
      *   attempt stays in Upcoming.
@@ -112,8 +112,9 @@ class classifier {
                 return [self::UNDATED, self::STATUS_RECEIVED];
             }
             if ($due >= $now) {
-                // Handed in early: Upcoming while it can still be changed, else Past (Pierre, 2026-10-06).
-                return [self::submittable($row, $now) ? self::UPCOMING : self::PAST, self::STATUS_SUBMITTED];
+                // Handed in early: Upcoming until the deadline, even when it can't be changed any more
+                // (Pierre, 2026-10-09, reversing 2026-10-06); the row then says why instead of offering Submit.
+                return [self::UPCOMING, self::STATUS_SUBMITTED];
             }
             return [self::PAST, self::STATUS_INMARKING];
         }

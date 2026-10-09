@@ -77,5 +77,20 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100801, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026100901) {
+        // Why a submission can't be changed, for the "Can't resubmit" control (Pierre, 2026-10-09). Locked work
+        // no longer leaves Upcoming early, and students an access restriction shuts out leave the marking
+        // counts: re-index everything.
+        $table = new xmldb_table('block_le_dashboard_stu');
+        $field = new xmldb_field('lockreason', XMLDB_TYPE_CHAR, '20', null, null, null, null, 'reopened');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        // Guidance and support text moves into rich-text boxes (Pierre, 2026-10-09).
+        \block_le_dashboard\local\guidance::migrate();
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026100901, 'le_dashboard', 'block');
+    }
+
     return true;
 }

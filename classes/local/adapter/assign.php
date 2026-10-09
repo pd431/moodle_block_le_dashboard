@@ -277,8 +277,10 @@ class assign extends base {
                 && (int)$grades[$userid]->attemptnumber === (int)$submission->attemptnumber;
             $rows[$userid]->reopened = $submission->status === 'reopened' || ($submission->status === 'draft' && $graded);
             // Final once submitted where students must click Submit, or when a teacher locked it.
-            $rows[$userid]->locked = $rows[$userid]->submitted
-                && (!empty($a->submissiondrafts) || !empty($flags[$userid]->locked));
+            if ($rows[$userid]->submitted) {
+                $rows[$userid]->lockreason = !empty($flags[$userid]->locked) ? student_row::LOCK_TEACHER
+                    : (!empty($a->submissiondrafts) ? student_row::LOCK_FINALISED : null);
+            }
         }
         self::apply_gradebook_release($cm, $rows);
         // A resubmission after release is in marking again, whatever the gradebook still holds.

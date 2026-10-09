@@ -681,6 +681,16 @@ $ma-glyph-tones: ("attention");
     margin: 0.25rem 0 0;
   }
 
+  .ma-untagged-guidance {
+    > :first-child {
+      margin-top: 0;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+  }
+
   .ma-untagged-list {
     padding-inline-start: 1rem;
     list-style: none;
@@ -970,14 +980,26 @@ $ma-glyph-tones: ("attention");
   }
 
   // Row text. A meta item ("Assignment · Summative") wraps as one unit.
-  .ma-row-meta > span {
+  .ma-row-meta > span,
+  .ma-row-meta > .ma-row-course {
     white-space: nowrap;
   }
 
   // Student rows: module full name, then the kind of activity, one per line.
-  .ma-row-meta--stacked > span {
+  .ma-row-meta--stacked > span,
+  .ma-row-meta--stacked > .ma-row-course {
     display: block;
     white-space: normal;
+  }
+
+  // Course and marker names link to the course and the marker's email
+  // (Pierre, 2026-10-09). They keep the text around them's colour, so the
+  // underline is what says they are links.
+  .ma-row-course,
+  a.ma-marker-name {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
   }
 
   .ma-row-info {
@@ -1118,6 +1140,21 @@ $ma-glyph-tones: ("attention");
     font-weight: 400;
     text-align: left;
     white-space: normal;
+  }
+
+  // Guidance from the settings: its own block under the factual line. The
+  // editor wraps text in <p> or <div>; the outer margins go, so one wrapped
+  // paragraph reads like plain text (Pierre, 2026-10-09).
+  .ma-tip-guidance {
+    margin-top: 0.35rem;
+
+    > :first-child {
+      margin-top: 0;
+    }
+
+    > :last-child {
+      margin-bottom: 0;
+    }
   }
 
   // Anchored to the row's text column instead of its button, so it can't run

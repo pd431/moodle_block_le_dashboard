@@ -416,7 +416,7 @@ class coursework extends base {
                 // A marked draft may never have been handed in by the student: no time, so never late.
                 $row->timesubmitted = (int)$s->timesubmitted ?: null;
                 // Finalised work can't be changed any more.
-                $row->locked = !empty($s->finalised);
+                $row->lockreason = !empty($s->finalised) ? student_row::LOCK_FINALISED : null;
                 // D4: released once the final grade is published, dated by publish time.
                 if (self::released($s)) {
                     $row->timereleased = (int)($s->firstpublished ?: $s->lastpublished);

@@ -166,7 +166,7 @@ class convenor extends base {
         if ($markerids) {
             [$usql, $uparams] = $DB->get_in_or_equal(array_keys($markerids), SQL_PARAMS_NAMED);
             $namefields = implode(', ', \core_user\fields::get_name_fields());
-            $people = $DB->get_records_select('user', "id $usql", $uparams, '', 'id, ' . $namefields);
+            $people = $DB->get_records_select('user', "id $usql", $uparams, '', 'id, email, deleted, ' . $namefields);
         }
 
         // Extensions still to come, for every student (G9).
@@ -268,7 +268,9 @@ class convenor extends base {
                 foreach ($bystage as $stage => $r) {
                     $markerbars[] = format::bar($stage, format::stage($stage), (int)$r->marked, (int)$r->ready);
                 }
-                $row['markers'][] = ['name' => $name, 'bars' => $markerbars];
+                // Each name links to the marker's email (Pierre, 2026-10-09).
+                $email = $person && empty($person->deleted) && validate_email($person->email) ? $person->email : null;
+                $row['markers'][] = ['name' => $name, 'bars' => $markerbars, 'mailto' => $email ? 'mailto:' . $email : null];
                 $row['search'] .= ' ' . \core_text::strtolower($name);
             }
             \core_collator::asort_array_of_arrays_by_key($row['markers'], 'name');
@@ -323,15 +325,7 @@ class convenor extends base {
      * @return array
      */
     protected function brief_hint(string $rowid): array {
-        $url = (string)get_config('block_le_dashboard', 'briefguidanceurl');
-        $link = null;
-        if ($url !== '') {
-            $link = get_string('briefhint_link', 'block_le_dashboard', \html_writer::link(
-                new \moodle_url($url),
-                get_string('briefhint_guidance', 'block_le_dashboard')
-            ));
-        }
-        return format::hint($rowid, 'brief', get_string('briefhint_text', 'block_le_dashboard'), $link);
+        return format::hint($rowid, 'brief', get_string('briefhint_text', 'block_le_dashboard'));
     }
 
     /**

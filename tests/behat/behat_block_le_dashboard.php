@@ -348,6 +348,12 @@ class behat_block_le_dashboard extends behat_base {
                     'markingallocation' => $allocation ? 1 : 0];
                 if (str_contains($opts, 'team submission')) {
                     $record += ['teamsubmission' => 1, 'requireallteammemberssubmit' => 0, 'preventsubmissionnotingroup' => 0];
+                    // Teams from one grouping, so a student's other groups (an extension group) aren't teams.
+                    if (preg_match('/team submission in grouping "([^"]*)"/', $opts, $m)) {
+                        $grouping = $DB->get_record('groupings', ['courseid' => $course->id, 'name' => $m[1]])
+                            ?: $gen->create_grouping(['courseid' => $course->id, 'name' => $m[1]]);
+                        $record['teamsubmissiongroupingid'] = $grouping->id;
+                    }
                 }
                 if (str_contains($opts, 'reopened attempts')) {
                     $record += ['attemptreopenmethod' => 'manual', 'maxattempts' => -1];
@@ -623,6 +629,64 @@ class behat_block_le_dashboard extends behat_base {
         $cm = $this->cm($name);
         $groupid = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $group], MUST_EXIST);
         self::restrict($cm, [\availability_group\condition::get_json((int)$groupid)]);
+    }
+
+    /**
+     * Restricts an activity to one group's members who aren't in another, as Exeter's formal mitigation
+     * does when it moves a student to an extension copy (Pierre, 2026-10-09).
+     *
+     * @Given /^"(?P<name>[^"]*)" is restricted to group "(?P<group>[^"]*)" and not group "(?P<other>[^"]*)"$/
+     * @param string $name
+     * @param string $group
+     * @param string $other
+     */
+    public function is_restricted_to_group_not(string $name, string $group, string $other): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $in = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $group], MUST_EXIST);
+        $out = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $other], MUST_EXIST);
+        $not = \core_availability\tree::get_nested_json([\availability_group\condition::get_json((int)$out)], '!|');
+        self::restrict($cm, [\availability_group\condition::get_json((int)$in), $not]);
+    }
+
+    /**
+     * Adds a student to a group, or takes them out, the usual way (the group events fire).
+     *
+     * @When /^"(?P<user>[^"]*)" is (?P<how>added to|removed from) group "(?P<group>[^"]*)"$/
+     * @param string $user
+     * @param string $how
+     * @param string $group
+     */
+    public function is_added_to_group(string $user, string $how, string $group): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/group/lib.php');
+        $groupid = $DB->get_field('groups', 'id', ['name' => $group], MUST_EXIST);
+        if ($how === 'added to') {
+            groups_add_member($groupid, self::userid($user));
+        } else {
+            groups_remove_member($groupid, self::userid($user));
+        }
+    }
+
+    /**
+     * Makes two students a team of a team assignment whose teams come from a grouping.
+     *
+     * @Given /^"(?P<u1>[^"]*)" and "(?P<u2>[^"]*)" are team "(?P<group>[^"]*)" of "(?P<name>[^"]*)"$/
+     * @param string $u1
+     * @param string $u2
+     * @param string $group
+     * @param string $name
+     */
+    public function are_team_of(string $u1, string $u2, string $group, string $name): void {
+        global $DB;
+        $cm = $this->cm($name);
+        $groupingid = $DB->get_field('assign', 'teamsubmissiongroupingid', ['id' => $cm->instance], MUST_EXIST);
+        $gen = testing_util::get_data_generator();
+        $g = $gen->create_group(['courseid' => $cm->course, 'name' => $group]);
+        $gen->create_grouping_group(['groupingid' => $groupingid, 'groupid' => $g->id]);
+        foreach ([$u1, $u2] as $user) {
+            $gen->create_group_member(['groupid' => $g->id, 'userid' => self::userid($user)]);
+        }
     }
 
     /**
@@ -2010,6 +2074,8 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_guidance_link_is(string $url): void {
         set_config('briefguidanceurl', $url, 'block_le_dashboard');
+        // The old setting, carried into its guidance box as the upgrade does.
+        \block_le_dashboard\local\guidance::migrate();
     }
 
     /**
@@ -2043,6 +2109,8 @@ class behat_block_le_dashboard extends behat_base {
     public function the_feedback_contact_is(string $text, string $url): void {
         set_config('feedbackcontact', $text, 'block_le_dashboard');
         set_config('feedbackcontacturl', $url, 'block_le_dashboard');
+        // The old setting, carried into its guidance box as the upgrade does.
+        \block_le_dashboard\local\guidance::migrate();
     }
 
     /**
@@ -2211,6 +2279,8 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_late_penalty_link_is(string $url): void {
         set_config('latenoteurl', $url, 'block_le_dashboard');
+        // The old setting, carried into its guidance box as the upgrade does.
+        \block_le_dashboard\local\guidance::migrate();
     }
 
     /**
@@ -2754,15 +2824,28 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * The freshness line.
+     * The freshness line, or not.
      *
-     * @Then /^I should see "Updated" with the time (?:the index was last updated|"now")$/
+     * @Then /^I should (?P<not>not )?see "Updated" with the time (?:the index was last updated|"now")$/
+     * @param string $not
      */
-    public function i_should_see_updated(): void {
+    public function i_should_see_updated(string $not = ''): void {
         $node = $this->find('css', self::BLOCK . ' .ma-freshness-text');
-        if (!preg_match('/^Updated (just now|\d+ min ago)$/', trim($node->getText()))) {
+        $recent = (bool)preg_match('/^Updated (just now|\d+ min ago)$/', trim($node->getText()));
+        if ($recent === (bool)$not) {
             throw new ExpectationException("Freshness says '{$node->getText()}'", $this->getSession());
         }
+    }
+
+    /**
+     * Ages every assessment's last full index, as if the nightly reconcile last ran then.
+     *
+     * @Given /^the My assessments index was last updated "(?P<when>[^"]*)"$/
+     * @param string $when
+     */
+    public function the_index_was_last_updated(string $when): void {
+        global $DB;
+        $DB->set_field('block_le_dashboard_cm', 'timeindexed', self::time($when));
     }
 
     /**
@@ -2869,6 +2952,301 @@ class behat_block_le_dashboard extends behat_base {
         require_once($CFG->dirroot . '/mod/assign/locallib.php');
         $cm = $this->cm($name);
         (new assign($cm->context, $cm, null))->revert_to_draft(self::userid($student));
+    }
+
+    /**
+     * A teacher locks a student's assignment submission (Prevent submission changes).
+     *
+     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is locked by a teacher$/
+     * @param string $student
+     * @param string $name
+     */
+    public function the_submission_is_locked(string $student, string $name): void {
+        global $CFG;
+        require_once($CFG->dirroot . '/mod/assign/locallib.php');
+        $cm = $this->cm($name);
+        $assign = new assign($cm->context, $cm, null);
+        $flags = $assign->get_user_flags(self::userid($student), true);
+        $flags->locked = 1;
+        $assign->update_user_flags($flags);
+        self::queue($cm);
+    }
+
+    /**
+     * Sets the resubmission contact, and its link.
+     *
+     * @Given /^the "Resubmission contact" setting is "(?P<text>[^"]*)"(?: with link "(?P<url>[^"]*)")?$/
+     * @param string $text
+     * @param string $url
+     */
+    public function the_resubmission_contact_is(string $text, string $url = ''): void {
+        set_config('resubmitcontact', $text, 'block_le_dashboard');
+        set_config('resubmitcontacturl', $url, 'block_le_dashboard');
+    }
+
+    /**
+     * Sets a guidance box. Quotes inside the HTML are written \" in the step.
+     *
+     * @Given /^the "(?P<name>guidance_[a-z]+)" setting is "(?P<html>.*)"$/
+     * @param string $name
+     * @param string $html
+     */
+    public function the_guidance_setting_is(string $name, string $html): void {
+        set_config($name, str_replace('\\"', '"', $html), 'block_le_dashboard');
+    }
+
+    /**
+     * Empties a guidance box.
+     *
+     * @Given /^the "(?P<name>guidance_[a-z]+)" setting is empty$/
+     * @param string $name
+     */
+    public function the_guidance_setting_is_empty(string $name): void {
+        set_config($name, '', 'block_le_dashboard');
+    }
+
+    /**
+     * A popover's guidance block, or null.
+     *
+     * @param string $key
+     * @param string $name
+     * @return \Behat\Mink\Element\NodeElement|null
+     */
+    protected function guidance_block(string $key, string $name): ?\Behat\Mink\Element\NodeElement {
+        $tip = $this->find('css', '#' . $this->flag($key, $name)->getAttribute('aria-controls'));
+        return $tip->find('css', '.ma-tip-guidance');
+    }
+
+    /**
+     * A popover with no guidance under its factual line.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should contain only its factual line$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_popover_has_no_guidance(string $key, string $name): void {
+        if ($this->guidance_block($key, $name)) {
+            throw new ExpectationException("The $key popover of '$name' has guidance", $this->getSession());
+        }
+    }
+
+    /**
+     * The guidance a popover shows, read from the page (it needn't be open).
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should (?P<not>not )?show the guidance "(?P<text>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $not
+     * @param string $text
+     */
+    public function the_popover_shows_guidance(string $key, string $name, string $not, string $text): void {
+        $block = $this->guidance_block($key, $name);
+        $shown = $block ? trim(preg_replace('/\s+/', ' ', html_entity_decode(strip_tags($block->getHtml()), ENT_QUOTES))) : '';
+        if (str_contains($shown, $text) === (bool)$not) {
+            throw new ExpectationException("The $key popover of '$name' has guidance '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * A link in a popover's guidance.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should link "(?P<text>[^"]*)" to "(?P<url>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $text
+     * @param string $url
+     */
+    public function the_popover_guidance_links(string $key, string $name, string $text, string $url): void {
+        $block = $this->guidance_block($key, $name);
+        foreach ($block ? $block->findAll('css', 'a') : [] as $link) {
+            if (trim(html_entity_decode(strip_tags($link->getHtml()), ENT_QUOTES)) === $text && $link->getAttribute('href') === $url) {
+                return;
+            }
+        }
+        throw new ExpectationException("No '$text' link to $url in the $key popover of '$name'", $this->getSession());
+    }
+
+    /**
+     * Nothing from a guidance box ran or was kept as a script.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should hold no script$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_popover_holds_no_script(string $key, string $name): void {
+        $block = $this->guidance_block($key, $name);
+        if ($block && stripos($block->getHtml(), '<script') !== false) {
+            throw new ExpectationException("The $key popover of '$name' holds a script", $this->getSession());
+        }
+    }
+
+    /**
+     * The guidance's first and last blocks have no outer margins, and it sits under the factual line.
+     *
+     * @Then /^the guidance in the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" should be its own block with no outer margins$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_guidance_has_no_outer_margins(string $key, string $name): void {
+        $id = $this->flag($key, $name)->getAttribute('aria-controls');
+        $js = "(function () {
+            var g = document.getElementById(" . json_encode($id) . ").querySelector('.ma-tip-guidance');
+            if (!g || getComputedStyle(g).display !== 'block') { return 'not a block'; }
+            var a = getComputedStyle(g.firstElementChild), b = getComputedStyle(g.lastElementChild);
+            return a.marginTop + ' ' + b.marginBottom;
+        })()";
+        $result = $this->evaluate_script($js);
+        if ($result !== '0px 0px') {
+            throw new ExpectationException("The guidance of '$name' has margins or isn't a block: $result", $this->getSession());
+        }
+    }
+
+    /**
+     * The settings page lists an HTML editor for each guidance box.
+     *
+     * @Then /^I should see an HTML editor for each guidance setting$/
+     */
+    public function i_should_see_guidance_editors(): void {
+        foreach (\block_le_dashboard\local\guidance::KEYS as $key) {
+            $this->find('css', 'textarea[name="s_block_le_dashboard_guidance_' . $key . '"]');
+        }
+    }
+
+    /**
+     * A row's name links to its activity.
+     *
+     * @Then /^the name of "(?P<name>[^"]*)" should link to its activity$/
+     * @param string $name
+     */
+    public function the_name_links_to_its_activity(string $name): void {
+        $link = $this->row($name)->find('css', 'a.ma-row-name');
+        if (!$link || $link->getAttribute('href') !== $this->cm($name)->url->out(false)) {
+            throw new ExpectationException("The name of '$name' doesn't link to its activity", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's course links to the course page.
+     *
+     * @Then /^the course of "(?P<name>[^"]*)" should link to the course page of "(?P<course>[^"]*)"$/
+     * @param string $name
+     * @param string $shortname
+     */
+    public function the_course_links_to_its_page(string $name, string $shortname): void {
+        $url = (new moodle_url('/course/view.php', ['id' => self::course($shortname)->id]))->out(false);
+        $link = $this->row($name)->find('css', 'a.ma-row-course');
+        if (!$link || $link->getAttribute('href') !== $url) {
+            throw new ExpectationException("The course of '$name' doesn't link to $url", $this->getSession());
+        }
+    }
+
+    /**
+     * A marker's name in a row's marking detail links somewhere (their email).
+     *
+     * @Then /^the marker "(?P<person>[^"]*)" of "(?P<name>[^"]*)" should link to "(?P<url>[^"]*)"$/
+     * @param string $person
+     * @param string $name
+     * @param string $url
+     */
+    public function the_marker_links_to(string $person, string $name, string $url): void {
+        foreach ($this->row($name)->findAll('css', 'a.ma-marker-name') as $link) {
+            if (trim(html_entity_decode($link->getHtml(), ENT_QUOTES)) === $person && $link->getAttribute('href') === $url) {
+                return;
+            }
+        }
+        throw new ExpectationException("'$person' on '$name' doesn't link to $url", $this->getSession());
+    }
+
+    /**
+     * A course in the untagged activities list links to its page.
+     *
+     * @Then /^the course "(?P<fullname>[^"]*)" in the untagged activities list should link to the course page of "(?P<course>[^"]*)"$/
+     * @param string $fullname
+     * @param string $shortname
+     */
+    public function the_untagged_course_links(string $fullname, string $shortname): void {
+        $url = (new moodle_url('/course/view.php', ['id' => self::course($shortname)->id]))->out(false);
+        foreach ($this->untagged_list()->findAll('css', '.ma-untagged-course > summary a') as $link) {
+            if (trim(html_entity_decode($link->getHtml(), ENT_QUOTES)) === $fullname && $link->getAttribute('href') === $url) {
+                return;
+            }
+        }
+        throw new ExpectationException("'$fullname' in the untagged list doesn't link to $url", $this->getSession());
+    }
+
+    /**
+     * The "Can't resubmit" control of a row.
+     *
+     * @param string $name
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function lock_control(string $name): \Behat\Mink\Element\NodeElement {
+        return $this->row($name)->find('css', '[data-hint="locked"]')
+            ?? throw new ExpectationException("'$name' has no Can't resubmit control", $this->getSession());
+    }
+
+    /**
+     * Opens the "Can't resubmit" control.
+     *
+     * @When /^I open the "Can't resubmit" control of "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_open_the_lock_control(string $name): void {
+        $this->lock_control($name)->click();
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * What the "Can't resubmit" explanation says. Without a browser it is read from the page.
+     *
+     * @Then /^the "Can't resubmit" popover of "(?P<name>[^"]*)" should (?P<not>not )?say "(?P<text>[^"]*)"$/
+     * @param string $name
+     * @param string $not
+     * @param string $text
+     */
+    public function the_lock_popover_should_say(string $name, string $not, string $text): void {
+        $tip = $this->find('css', '#' . $this->lock_control($name)->getAttribute('aria-controls'));
+        $shown = $this->running_javascript() ? $tip->getText() : html_entity_decode(strip_tags($tip->getHtml()), ENT_QUOTES);
+        $shown = trim(preg_replace('/\s+/', ' ', $shown));
+        if (str_contains($shown, $text) === (bool)$not) {
+            throw new ExpectationException("The Can't resubmit popover of '$name' says '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * A link in the "Can't resubmit" explanation.
+     *
+     * @Then /^"(?P<text>[^"]*)" in the "Can't resubmit" popover of "(?P<name>[^"]*)" should link to "(?P<url>[^"]*)"$/
+     * @param string $text
+     * @param string $name
+     * @param string $url
+     */
+    public function the_lock_popover_should_link(string $text, string $name, string $url): void {
+        $tip = $this->find('css', '#' . $this->lock_control($name)->getAttribute('aria-controls'));
+        foreach ($tip->findAll('css', 'a') as $link) {
+            if (trim(html_entity_decode(strip_tags($link->getHtml()), ENT_QUOTES)) === $text && $link->getAttribute('href') === $url) {
+                return;
+            }
+        }
+        throw new ExpectationException("No '$text' link to $url in the popover of '$name'", $this->getSession());
+    }
+
+    /**
+     * The control is a button screen readers hear the explanation from.
+     *
+     * @Then /^the "Can't resubmit" control of "(?P<name>[^"]*)" should be a button described by its explanation$/
+     * @param string $name
+     */
+    public function the_lock_control_is_described(string $name): void {
+        $control = $this->lock_control($name);
+        $describedby = (string)$control->getAttribute('aria-describedby');
+        $tip = $this->find('css', '#' . $control->getAttribute('aria-controls'));
+        if ($control->getTagName() !== 'button' || $describedby === '' || !$tip->find('css', '#' . $describedby)) {
+            throw new ExpectationException(
+                "The Can't resubmit control of '$name' isn't described by its explanation",
+                $this->getSession()
+            );
+        }
     }
 
     /**
@@ -3126,7 +3504,7 @@ class behat_block_le_dashboard extends behat_base {
     /**
      * The link in an open popover is the next stop for Tab.
      *
-     * @Then /^the late policy link in the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" can be reached with the tab key$/
+     * @Then /^the (?:late policy|guidance) link in the "(?P<key>[a-z]+)" popover of "(?P<name>[^"]*)" can be reached with the tab key$/
      * @param string $key
      * @param string $name
      */
@@ -3648,6 +4026,8 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_tagging_guidance_link_is(string $url): void {
         set_config('untaggedguidanceurl', $url, 'block_le_dashboard');
+        // The old setting, carried into its guidance box as the upgrade does.
+        \block_le_dashboard\local\guidance::migrate();
     }
 
     /**

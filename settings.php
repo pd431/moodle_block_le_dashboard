@@ -63,13 +63,6 @@ if ($ADMIN->fulltree) {
         $setting->set_updatedcallback($reindex);
         $settings->add($setting);
     }
-    $settings->add(new admin_setting_configtext(
-        'block_le_dashboard/untaggedguidanceurl',
-        new lang_string('untaggedguidanceurl', 'block_le_dashboard'),
-        new lang_string('untaggedguidanceurl_desc', 'block_le_dashboard'),
-        '',
-        PARAM_URL
-    ));
 
     $settings->add(new admin_setting_heading(
         'block_le_dashboard/rolesheading',
@@ -112,13 +105,6 @@ if ($ADMIN->fulltree) {
             PARAM_INT
         ));
     }
-    $settings->add(new admin_setting_configtext(
-        'block_le_dashboard/briefguidanceurl',
-        new lang_string('briefguidanceurl', 'block_le_dashboard'),
-        new lang_string('briefguidanceurl_desc', 'block_le_dashboard'),
-        '',
-        PARAM_URL
-    ));
     foreach (\block_le_dashboard\local\config::NUMBERS as $name => $default) {
         $settings->add(new admin_setting_configtext(
             'block_le_dashboard/' . $name,
@@ -128,34 +114,21 @@ if ($ADMIN->fulltree) {
             PARAM_INT
         ));
     }
-    $settings->add(new admin_setting_configtext(
-        'block_le_dashboard/feedbackcontact',
-        new lang_string('feedbackcontact', 'block_le_dashboard'),
-        new lang_string('feedbackcontact_desc', 'block_le_dashboard'),
-        get_string('feedbackcontact_default', 'block_le_dashboard'),
-        PARAM_TEXT
+
+    // Guidance and support (Pierre, 2026-10-09): the text each popover shows under its factual line.
+    $settings->add(new admin_setting_heading(
+        'block_le_dashboard/guidanceheading',
+        new lang_string('guidanceheading', 'block_le_dashboard'),
+        new lang_string('guidanceheading_desc', 'block_le_dashboard')
     ));
-    $settings->add(new admin_setting_configtext(
-        'block_le_dashboard/feedbackcontacturl',
-        new lang_string('feedbackcontacturl', 'block_le_dashboard'),
-        new lang_string('feedbackcontacturl_desc', 'block_le_dashboard'),
-        '',
-        PARAM_URL
-    ));
-    $settings->add(new admin_setting_configtext(
-        'block_le_dashboard/latenote',
-        new lang_string('latenote', 'block_le_dashboard'),
-        new lang_string('latenote_desc', 'block_le_dashboard'),
-        get_string('latenote_default', 'block_le_dashboard'),
-        PARAM_TEXT
-    ));
-    $settings->add(new admin_setting_configtext(
-        'block_le_dashboard/latenoteurl',
-        new lang_string('latenoteurl', 'block_le_dashboard'),
-        new lang_string('latenoteurl_desc', 'block_le_dashboard'),
-        '',
-        PARAM_URL
-    ));
+    foreach (\block_le_dashboard\local\guidance::KEYS as $key) {
+        $settings->add(new admin_setting_confightmleditor(
+            'block_le_dashboard/guidance_' . $key,
+            new lang_string('guidance_' . $key, 'block_le_dashboard'),
+            new lang_string('guidance_' . $key . '_desc', 'block_le_dashboard'),
+            \block_le_dashboard\local\guidance::default($key)
+        ));
+    }
 
     $settings->add(new admin_setting_heading(
         'block_le_dashboard/selfcertheading',

@@ -160,10 +160,10 @@ class untagged {
             $total += count($activities);
             $context = \context_course::instance($courseid);
             $courses[] = [
-                'label' => get_string('untagged_course', 'block_le_dashboard', [
-                    'course' => format_string($modinfo->get_course()->fullname, true, ['context' => $context, 'escape' => false]),
-                    'count' => count($activities),
-                ]),
+                // The course name links to the course (Pierre, 2026-10-09); the rest of the heading opens the list.
+                'course' => format_string($modinfo->get_course()->fullname, true, ['context' => $context, 'escape' => false]),
+                'courseurl' => (new \moodle_url('/course/view.php', ['id' => $courseid]))->out(false),
+                'count' => count($activities),
                 'activities' => $activities,
             ];
         }
@@ -174,10 +174,9 @@ class untagged {
             ? get_string('untagged_year', 'block_le_dashboard', ['count' => $total,
                 'year' => format_string($year->label, true, ['escape' => false])])
             : get_string('untagged_all', 'block_le_dashboard', $total);
-        $url = trim((string)get_config('block_le_dashboard', 'untaggedguidanceurl'));
         return [
             'label' => $label,
-            'guidanceurl' => $url !== '' ? $url : null,
+            'guidance' => guidance::html('untagged'),
             'courses' => $courses,
         ];
     }

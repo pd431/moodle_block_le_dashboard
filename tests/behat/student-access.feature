@@ -155,10 +155,12 @@ Feature: Students see only assessments they can actually access
     Then "A1" should show "Feedback expected"
     And "A1" should have a feedback contact hint
     When I click on the feedback contact hint of "A1"
-    Then I should see "Feedback should arrive soon. If it doesn't, contact your module convenor." in the "My assessments" block
+    Then I should see "Feedback should arrive soon." in the "My assessments" block
+    And I should see "If it doesn't, contact your module convenor." in the "My assessments" block
     And I should see "your module convenor" linking to "https://example.com/contact"
 
-  # D9: the contact defaults to "your module convenor"; an admin who clears it gets no hint.
+  # D9: the contact defaults to "your module convenor". Since beta20 (guidance-settings.feature) an admin who
+  # empties the box keeps the hint's factual line, with no guidance under it.
   @javascript
   Scenario: The feedback contact defaults to the module convenor
     Given a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
@@ -167,13 +169,13 @@ Feature: Students see only assessments they can actually access
     And I click on the feedback contact hint of "A1"
     Then I should see "If it doesn't, contact your module convenor." in the "My assessments" block
 
-  Scenario: With the feedback contact cleared, a passed feedback date has no hint
-    Given the My assessments feedback contact is "" linking to ""
+  Scenario: With the feedback guidance emptied, the hint keeps its factual line only
+    Given the "guidance_feedbacklate" setting is empty
     And a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
     And "student1" submitted "A1" "11 days ago"
     When I log in as "student1" and view my dashboard
     Then "A1" should show "Feedback expected"
-    And "A1" should not have a feedback contact hint
+    And the "feedbackcontact" popover of "A1" should contain only its factual line
 
   Scenario: A feedback date still to come has no hint
     Given a summative "assign" "A1" in "M1" with a marking deadline "in 5 days" was due "3 days ago"

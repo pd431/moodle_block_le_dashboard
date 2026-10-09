@@ -62,7 +62,7 @@
     <div class="ma-row-info">
         <a class="ma-row-name" href="{{url}}">{{name}}</a>
         <div class="ma-row-meta{{#stacked}} ma-row-meta--stacked{{/stacked}}">
-            <span class="ma-row-course">{{course}}</span>
+            <a class="ma-row-course" href="{{courseurl}}">{{course}}</a>
             <span class="ma-row-type">{{typeline}}</span>
             {{#hasflags}}
             <span class="ma-flags">{{#hiddenhint}}{{> block_le_dashboard/hint }}{{/hiddenhint}}{{#hints}}{{> block_le_dashboard/hint }}{{/hints}}</span>
@@ -86,6 +86,13 @@
     </div>
     <div class="ma-row-actions">
         {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{label}}<span class="accesshide">: {{name}}</span></a>{{/actions}}
+        {{#locked}}
+        <span class="ma-tip-wrap ma-tip-wrap--row ma-locked-wrap">
+            <button type="button" class="btn btn-sm ma-btn ma-btn--locked" data-action="tip" data-hint="locked"
+                    aria-expanded="false" aria-controls="{{id}}" aria-describedby="{{id}}-text"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_locked, block_le_dashboard{{/str}}<span class="accesshide">: {{name}}</span></button>
+            <div class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden><div id="{{id}}-text">{{text}}{{#guidance}}<div class="ma-tip-guidance">{{{guidance}}}</div>{{/guidance}}</div></div>
+        </span>
+        {{/locked}}
         {{#mitigation}}
         <div class="dropdown ma-mitigate" data-region="ma-mitigate">
             <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
@@ -106,7 +113,7 @@
     <ul class="list-unstyled collapse ma-markers" id="{{markersid}}" data-region="ma-markers">
         {{#markers}}
         <li class="ma-marker{{#all}} ma-marker--all{{/all}}">
-            <span class="ma-marker-name">{{name}}</span>
+            {{#mailto}}<a class="ma-marker-name" href="{{mailto}}">{{name}}</a>{{/mailto}}{{^mailto}}<span class="ma-marker-name">{{name}}</span>{{/mailto}}
             <div class="ma-marker-bars">{{#bars}}{{> block_le_dashboard/progress }}{{/bars}}</div>
         </li>
         {{/markers}}

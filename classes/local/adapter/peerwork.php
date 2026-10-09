@@ -18,6 +18,7 @@ namespace block_le_dashboard\local\adapter;
 
 use block_le_dashboard\local\index\cm_row;
 use block_le_dashboard\local\index\marking_row;
+use block_le_dashboard\local\index\student_row;
 
 /**
  * Adapter for mod_peerwork (written against mod_peerwork 4.5.0, version 2025032200).
@@ -113,8 +114,8 @@ class peerwork extends base {
                 $s = $submissions[$groupid];
                 $rows[$userid]->submitted = true;
                 $rows[$userid]->timesubmitted = (int)($s->timecreated ?: $s->timemodified);
-                // Peerwork locks a submission once made when it is set to lock editing.
-                $rows[$userid]->locked = !empty($s->locked);
+                // Peerwork locks a submission once made when the teacher sets it to lock editing.
+                $rows[$userid]->lockreason = !empty($s->locked) ? student_row::LOCK_TEACHER : null;
             }
         }
         self::apply_gradebook_release($cm, $rows);

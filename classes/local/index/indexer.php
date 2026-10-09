@@ -297,6 +297,7 @@ class indexer {
                 'individual' => $row->individual ? 1 : 0,
                 'mitigation' => $row->mitigation,
                 'reopened' => $row->reopened ? 1 : 0,
+                'lockreason' => $row->lockreason,
                 'allocatedto' => $allocated ? ',' . implode(',', $allocated) . ',' : null,
                 'canaccess' => $canaccess ? 1 : 0,
                 'active' => isset($active[$userid]) ? 1 : 0,
@@ -309,10 +310,18 @@ class indexer {
         }
         $mark = [];
         $seen = [];
-        $groupdues = $this->group_dues($markrows, $dues, $cmrow->due);
+        [$groupdues, $shutout] = $this->group_dues($markrows, $dues, $cmrow->due, $students);
+        // Work of a student an access restriction now shuts out (moved to an extension copy) no longer
+        // counts here; a group's counts while any member can access it. Nothing in the activity changes,
+        // so lifting the restriction brings it back at the next index (Pierre, 2026-10-09).
+        $isout = fn($unit) => $unit->unittype === marking_row::UNIT_GROUP ? isset($shutout[$unit->unitid])
+            : array_key_exists($unit->unitid, $students) && !$students[$unit->unitid];
         foreach (array_keys($markrows) as $i) {
             $row = $markrows[$i];
             unset($markrows[$i]);
+            if ($isout($row)) {
+                continue;
+            }
             $key = $row->unittype . ':' . $row->unitid . ':' . $row->stage;
             if (isset($seen[$key])) {
                 continue;
@@ -344,7 +353,7 @@ class indexer {
 
         foreach ($this->kept_marking_rows($cmid, array_keys($markfailed), $only, $groupids) as $old) {
             $key = $old->unittype . ':' . $old->unitid . ':' . $old->stage;
-            if (!isset($seen[$key])) {
+            if (!isset($seen[$key]) && !$isout($old)) {
                 $seen[$key] = true;
                 $mark[] = $old;
             }
@@ -505,8 +514,9 @@ class indexer {
     }
 
     /**
-     * Where students hand nothing in online, there is no submission state to show; a final submission
-     * closes the work for that student.
+     * Where students hand nothing in online, there is no submission state to show. A lock counts only on
+     * work handed in and not reopened: the row then stays in Upcoming until the deadline with a "Can't
+     * resubmit" control (Pierre, 2026-10-09, reversing the 2026-10-06 rule that moved it to Past at once).
      *
      * @param cm_row $cmrow
      * @param student_row[] $rows Changed in place.
@@ -518,12 +528,9 @@ class indexer {
                 $row->submitted = null;
                 $row->timesubmitted = null;
                 $row->reopened = false;
-            } else if ($row->locked && $row->submitted && !$row->reopened && $row->timesubmitted) {
-                // A final submission can't be changed: nothing more can be handed in from then on, so the
-                // shared submittability rule moves it to Past.
-                // Closed from the moment it was handed in: a cut-off is inclusive, so one second before.
-                $closed = (int)$row->timesubmitted - 1;
-                $row->cutoff = $row->cutoff === null ? $closed : min($row->cutoff, $closed);
+            }
+            if (!$row->submitted || $row->reopened) {
+                $row->lockreason = null;
             }
         }
         return $rows;
@@ -681,14 +688,16 @@ class indexer {
 
     /**
      * Each group unit's deadline: the latest effective deadline among its indexed members,
-     * so a group with one extended member is not ready before that member's deadline.
+     * so a group with one extended member is not ready before that member's deadline. Also the
+     * groups an access restriction shuts out: every indexed member is shut out.
      *
      * @param marking_row[] $markrows
      * @param array $dues userid => effective deadline
      * @param int|null $default The activity's deadline, for groups with no indexed member.
-     * @return array groupid => deadline
+     * @param bool[] $students userid => whether they can access the activity
+     * @return array [groupid => deadline, groupid => true for each group shut out]
      */
-    protected function group_dues(array $markrows, array $dues, ?int $default): array {
+    protected function group_dues(array $markrows, array $dues, ?int $default, array $students = []): array {
         global $DB;
         $groupids = [];
         foreach ($markrows as $row) {
@@ -697,18 +706,22 @@ class indexer {
             }
         }
         if (!$groupids) {
-            return [];
+            return [[], []];
         }
         $out = [];
+        $access = [];
         [$insql, $params] = $DB->get_in_or_equal(array_keys($groupids), SQL_PARAMS_NAMED);
         $rs = $DB->get_recordset_select('groups_members', "groupid $insql", $params, '', 'id, groupid, userid');
         foreach ($rs as $m) {
             if (array_key_exists((int)$m->userid, $dues) && $dues[(int)$m->userid] !== null) {
                 $out[(int)$m->groupid] = max($out[(int)$m->groupid] ?? 0, (int)$dues[(int)$m->userid]);
             }
+            if (array_key_exists((int)$m->userid, $students)) {
+                $access[(int)$m->groupid] = ($access[(int)$m->groupid] ?? false) || $students[(int)$m->userid];
+            }
         }
         $rs->close();
-        return $out + array_fill_keys(array_keys($groupids), $default);
+        return [$out + array_fill_keys(array_keys($groupids), $default), array_filter($access, fn($can) => !$can)];
     }
 
     /** File areas that hold an activity's brief, besides its intro. */

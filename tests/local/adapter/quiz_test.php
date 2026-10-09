@@ -150,6 +150,8 @@ final class quiz_test extends \advanced_testcase {
         $rows = $adapter->student_rows($cm, $cmrow, [$s1->id, $s2->id, $s3->id, $s4->id]);
         $this->assertSame($finished - 1, $rows[$s1->id]->cutoff, 'every attempt used, closed when the last ended');
         $this->assertSame($close, $rows[$s1->id]->due, 'the deadline stays');
+        $this->assertSame('attempts', $rows[$s1->id]->lockreason, "shown as Can't resubmit");
+        $this->assertNull($rows[$s2->id]->lockreason);
         $this->assertSame($close, $rows[$s2->id]->cutoff, 'an override allows another');
         $this->assertSame($close, $rows[$s3->id]->cutoff, 'an attempt still open');
         $this->assertSame($close, $rows[$s4->id]->cutoff, 'nothing tried yet');

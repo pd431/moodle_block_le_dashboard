@@ -2,7 +2,7 @@
 Feature: Mitigate works as it did in rc6
   In order that students reach block_rhb's mitigation routes exactly as they did before the remake
   As a student
-  I need the Mitigate menu to show block_rhb's own links on work I can still hand in
+  I need the Mitigate menu to show block_rhb's own links on summative work until a day after my deadline
 
   # Pierre, 2026-10-07 16:01: "seems like beta17's buttons don't show up on our test site. Maybe go simpler
   # and pull back the behaviour from rc6." rc6 (coursework_handler, quiz_handler, content.mustache):
@@ -10,12 +10,12 @@ Feature: Mitigate works as it did in rc6
   #   The menu shows that HTML as it is, then the request form HTML as it is.
   # - Everything else (rc6: quiz): self-certification is never offered. Mitigate only when the request form
   #   HTML holds a real link, and the menu adds "No self-certified extension is allowed".
-  # - Offered on Overdue rows, and on Upcoming rows the student hasn't submitted and has no feedback on.
   # - A link block_rhb offers for deleting a self-certification reads "Delete mitigation"; it is followed in
   #   the background and the page reloads.
-  # Kept from later decisions: summative only (D8, 2026-10-04), and Past rows keep Mitigate for the hours set
-  # in "Mitigate stays open after the deadline" when nothing was handed in (submittability rule, 2026-10-06).
-  # Dropped: our own labels for block_rhb's links (2026-10-06) and the "opens before the deadline" window.
+  # When it shows (Pierre, 2026-10-09, locked-upcoming scope, replacing rc6's "not handed in, no feedback"):
+  # on every summative row (D8) from the start until the hours set in "Mitigate stays open after the
+  # deadline" (24 by default) after the student's own deadline, extensions included. Handed in or not, locked
+  # or not, released or not, in Upcoming, Overdue or Past. Work with no deadline keeps it.
   # Without block_rhb, a Behat stand-in gives the request form and, for coursework, self-certification.
 
   Background:
@@ -37,7 +37,7 @@ Feature: Mitigate works as it did in rc6
     Then I should see "Request mitigating circumstances" linking to the site home
     And I should see "No self-certified extension is allowed" in the "My assessments" block
 
-  Scenario Outline: Mitigate follows the section and what the student has done
+  Scenario Outline: Mitigate shows until 24 hours after the student's own deadline, whatever was handed in
     Given a summative "assign" "A1" in "M1"<opts> <is> due "<due>"
     And <step>
     When I log in as "student1" and view my dashboard
@@ -45,14 +45,38 @@ Feature: Mitigate works as it did in rc6
     And "A1" should <show> "Mitigate"
 
     Examples:
-      | opts                         | is  | due          | step                          | section  | show     |
-      |                              | is  | in 100 days  | nothing happens               | Upcoming | show     |
-      |                              | is  | in 3 days    | nothing happens               | Upcoming | show     |
-      |                              | is  | in 3 days    | "student1" has submitted "A1" | Upcoming | not show |
-      |                              | was | 3 days ago   | nothing happens               | Overdue  | show     |
-      | with a cut-off "20 hours ago" | was | 20 hours ago | nothing happens               | Past     | show     |
-      | with a cut-off "2 days ago"   | was | 2 days ago   | nothing happens               | Past     | not show |
-      | with a cut-off "20 hours ago" | was | 20 hours ago | "student1" has submitted "A1" | Past     | not show |
+      | opts                          | is  | due          | step                                     | section  | show     |
+      |                               | is  | in 100 days  | nothing happens                          | Upcoming | show     |
+      |                               | is  | in 2 days    | nothing happens                          | Upcoming | show     |
+      | with required Submit          | is  | in 2 days    | "student1" has submitted "A1"            | Upcoming | show     |
+      |                               | was | 23 hours ago | nothing happens                          | Overdue  | show     |
+      |                               | was | 3 days ago   | nothing happens                          | Overdue  | not show |
+      | with a cut-off "20 hours ago" | was | 23 hours ago | nothing happens                          | Past     | show     |
+      | with required Submit          | was | 23 hours ago | "student1" submitted "A1" "2 days ago"   | Past     | show     |
+      | with required Submit          | was | 25 hours ago | "student1" submitted "A1" "2 days ago"   | Past     | not show |
+      | with a cut-off "25 hours ago" | was | 25 hours ago | nothing happens                          | Past     | not show |
+
+  Scenario: An extension moves the Mitigate window with the student's deadline
+    Given a summative "assign" "A1" in "M1" with required Submit was due "2 days ago"
+    And "student1" has an extension on "A1" to "12 hours ago"
+    And "student1" submitted "A1" "3 days ago"
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Mitigate"
+
+  Scenario: Released feedback doesn't end Mitigate
+    Given the following "users" exist:
+      | username | firstname | lastname |
+      | teacher1 | Tim       | Teacher  |
+    And the following "course enrolments" exist:
+      | user     | course | role           |
+      | teacher1 | M1     | editingteacher |
+    And a summative "assign" "A1" in "M1" was due "12 hours ago"
+    And "student1" submitted "A1" "2 days ago"
+    And "teacher1" grades "student1" on "A1" with "60"
+    And the grade of "student1" for "A1" is released
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show the status "Feedback released"
+    And "A1" should show "Mitigate"
 
   Scenario: A quiz offers the request form only
     Given a summative "quiz" "Q1" in "M1" is due "in 3 days"

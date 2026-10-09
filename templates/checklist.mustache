@@ -22,17 +22,17 @@
     (data-region) and icon (Font Awesome name).
 
     Example context (json):
-    {"label": "You have 2 compatible but untagged activities across your courses.", "guidanceurl": null,
-     "courses": [{"label": "Module 1 (2)", "activities": [{"name": "Essay", "url": "#", "hidden": true,
+    {"label": "You have 2 compatible but untagged activities across your courses.", "guidance": null,
+     "courses": [{"course": "Module 1", "courseurl": "#", "count": 2, "activities": [{"name": "Essay", "url": "#", "hidden": true,
      "problems": "No due date"}]}]}
 }}
 <details class="ma-untagged" data-region="{{$region}}ma-untagged{{/region}}">
     <summary class="ma-untagged-summary"><i class="fa-solid {{$icon}}fa-tag{{/icon}} ma-icon" aria-hidden="true"></i>{{label}}</summary>
     <div class="ma-untagged-body">
-        {{#guidanceurl}}<p class="ma-untagged-guidance"><a href="{{guidanceurl}}">{{#str}}untagged_guidance, block_le_dashboard{{/str}}</a></p>{{/guidanceurl}}
+        {{#guidance}}<div class="ma-untagged-guidance">{{{guidance}}}</div>{{/guidance}}
         {{#courses}}
         <details class="ma-untagged-course">
-            <summary class="ma-untagged-summary">{{label}}</summary>
+            <summary class="ma-untagged-summary"><a href="{{courseurl}}">{{course}}</a> ({{count}})</summary>
             <ul class="ma-untagged-list">
                 {{#activities}}
                 <li><a href="{{url}}">{{name}}</a>{{#problems}}<span class="ma-untagged-problems">{{.}}</span>{{/problems}}{{#hidden}}<span class="ma-untagged-hidden"><i class="fa-solid fa-eye-slash ma-icon" aria-hidden="true"></i>{{#str}}hint_hidden, block_le_dashboard{{/str}}</span>{{/hidden}}</li>

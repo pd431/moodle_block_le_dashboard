@@ -17,6 +17,7 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
+use block_le_dashboard\local\guidance;
 use block_le_dashboard\local\index\student_row;
 use block_le_dashboard\local\mitigation;
 use block_le_dashboard\local\output\format;
@@ -49,6 +50,9 @@ class student extends base {
 
     /** Assessment types offered Mitigate: summative only (D8, Pierre 2026-10-04). */
     const MITIGATION_TYPES = ['summative'];
+
+    /** Reasons the "Can't resubmit" control can give. */
+    const LOCK_REASONS = [student_row::LOCK_FINALISED, student_row::LOCK_TEACHER, student_row::LOCK_ATTEMPTS];
 
     /** A pending assessment is due soon within this many days (rc6). */
     const DUESOON_DAYS = 7;
@@ -88,7 +92,7 @@ class student extends base {
         $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue,
                                                 c.hiddenfromstudents, c.nosubmission, c.norelease, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
-                                                s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.enrolstart
+                                                s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.lockreason, s.enrolstart
                                            FROM {block_le_dashboard_stu} s
                                            JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0
@@ -181,6 +185,12 @@ class student extends base {
             $summary[] = $box;
         }
 
+        // A student's Refresh rewrites only their own rows and leaves each assessment's index time alone,
+        // so the line also counts this view's last Refresh that finished (Pierre's screenshot, 2026-10-09).
+        if ($oldest !== null) {
+            $last = json_decode((string)get_user_preferences('block_le_dashboard_lastrefresh', '', $this->userid), true);
+            $oldest = max($oldest, is_array($last) ? (int)($last[scope::STUDENT] ?? 0) : 0);
+        }
         return $this->context($summary, array_filter([
             $this->section(classifier::OVERDUE, $sections[classifier::OVERDUE]),
             $this->section(classifier::UPCOMING, $sections[classifier::UPCOMING]),
@@ -330,16 +340,20 @@ class student extends base {
         }
 
         $actions = [];
-        if (
-            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_NOTSUBMITTED, classifier::STATUS_REOPENED])
-                && $section !== classifier::PAST
-        ) {
+        $open = [classifier::STATUS_PENDING, classifier::STATUS_NOTSUBMITTED, classifier::STATUS_REOPENED];
+        if ($status === classifier::STATUS_SUBMITTED && $section !== classifier::PAST && $r->lockreason) {
+            // Final before the deadline: say why instead of offering Submit (Pierre, 2026-10-09).
+            $row['locked'] = $this->lock_control($row['id'], $r->lockreason);
+        } else if (in_array($status, $open) && $section !== classifier::PAST) {
+            $actions[] = format::action('submit', $row['url']);
+        } else if ($status === classifier::STATUS_SUBMITTED && $section === classifier::UPCOMING) {
+            // Handed in and still open to change: Submit takes the student back to it.
             $actions[] = format::action('submit', $row['url']);
         } else {
             $actions[] = format::view_action($row['url']);
         }
         $row['actions'] = $actions;
-        if ($menu = $this->mitigation_menu($r, $section)) {
+        if ($menu = $this->mitigation_menu($r)) {
             $row['mitigation'] = [
                 'id' => $row['id'] . '-mitigate',
                 'icon' => format::ACTION_ICONS['mitigate'],
@@ -351,27 +365,44 @@ class student extends base {
     }
 
     /**
-     * Mitigate, as rc6 offered it (Pierre, 2026-10-07): on summative work (D8) the student hasn't handed in
-     * and has no feedback on, in Upcoming and Overdue, and in Past until the hours set after their deadline
-     * (submittability rule, 2026-10-06). Shown only when block_rhb gives a real link (mitigation::links()).
+     * The "Can't resubmit" control: why the work can't be changed, and who can help.
+     *
+     * @param string $rowid
+     * @param string $reason A student_row::LOCK_ constant.
+     * @return array
+     */
+    protected function lock_control(string $rowid, string $reason): array {
+        $reason = in_array($reason, self::LOCK_REASONS) ? $reason : student_row::LOCK_FINALISED;
+        return [
+            'id' => $rowid . '-locked',
+            'icon' => format::ACTION_ICONS['locked'],
+            'text' => get_string('locked_' . $reason, 'block_le_dashboard'),
+            // Finalised and teacher-locked work share one box; quiz attempts have their own.
+            'guidance' => guidance::html($reason === student_row::LOCK_ATTEMPTS ? 'attempts' : 'finalised'),
+        ];
+    }
+
+    /**
+     * Mitigate (Pierre, 2026-10-09): on every summative row (D8) where block_rhb gives a real link
+     * (mitigation::links()), from the start until the hours set after the student's own deadline, whatever
+     * was handed in or released. Work with no deadline keeps it.
      *
      * @param \stdClass $r
-     * @param string $section
      * @return array|null mitigation::links()
      */
-    protected function mitigation_menu(\stdClass $r, string $section): ?array {
-        if (!in_array($r->assesstype, self::MITIGATION_TYPES) || !empty($r->submitted) || !empty($r->timereleased)) {
+    protected function mitigation_menu(\stdClass $r): ?array {
+        if (!in_array($r->assesstype, self::MITIGATION_TYPES)) {
             return null;
         }
-        if ($section === classifier::PAST && !config::mitigation_open($r->due ? (int)$r->due : null, $this->now)) {
+        if ($r->due && !config::mitigation_open((int)$r->due, $this->now)) {
             return null;
         }
         return mitigation::links($r->modname, (int)$r->instance);
     }
 
     /**
-     * The late clock: "Submitted 2 h late." On summative work with a late penalties note, the title adds
-     * "Late penalties may apply." and the popover holds the note and the policy link, when one is set.
+     * The late clock: "Submitted 2 h late." On summative work with late penalties guidance, the title adds
+     * "Late penalties may apply." and the popover shows the guidance under it.
      *
      * @param string $rowid
      * @param \stdClass $r
@@ -379,40 +410,21 @@ class student extends base {
      */
     protected function late_hint(string $rowid, \stdClass $r): array {
         $late = format::duration((int)$r->timesubmitted - (int)$r->due);
-        $text = '';
-        $link = null;
-        if ($r->assesstype === 'summative') {
-            $text = get_config('block_le_dashboard', 'latenote');
-            // Unset until an admin saves the new setting: use its default.
-            $text = trim($text === false ? get_string('latenote_default', 'block_le_dashboard') : $text);
-            $url = trim((string)get_config('block_le_dashboard', 'latenoteurl'));
-            $link = $url === '' ? null : get_string('hint_latepenalty_link', 'block_le_dashboard', \html_writer::link(
-                new \moodle_url($url),
-                get_string('hint_latepenalty_linktext', 'block_le_dashboard')
-            ));
-        }
-        $title = get_string($text !== '' ? 'hint_late_penalties' : 'hint_late', 'block_le_dashboard', $late);
-        return format::hint($rowid, 'late', $text === '' ? '' : format_string($text, true, ['escape' => false]), $link, $title);
+        $guidance = $r->assesstype === 'summative' ? guidance::html('latepenalty') : null;
+        $title = get_string($guidance !== null ? 'hint_late_penalties' : 'hint_late', 'block_le_dashboard', $late);
+        $hint = format::hint($rowid, 'late', '', null, $title);
+        $hint['guidance'] = $guidance;
+        return $hint;
     }
 
     /**
-     * The hint on work in marking whose feedback date has passed: feedback should arrive
-     * soon, and who to contact if it doesn't. The contact text and link are settings; with
-     * the contact cleared, there is no hint, as it would point nowhere (D9).
+     * The hint on work in marking whose feedback date has passed: feedback should arrive soon, with
+     * the guidance on who to contact if it doesn't.
      *
      * @param string $rowid
-     * @return array|null
+     * @return array
      */
-    protected function feedback_hint(string $rowid): ?array {
-        $text = get_config('block_le_dashboard', 'feedbackcontact');
-        // Unset until an admin saves the new setting: use its default.
-        $text = trim($text === false ? get_string('feedbackcontact_default', 'block_le_dashboard') : $text);
-        if ($text === '') {
-            return null;
-        }
-        $url = trim((string)get_config('block_le_dashboard', 'feedbackcontacturl'));
-        $who = $url !== '' ? \html_writer::link(new \moodle_url($url), format_string($text)) : format_string($text);
-        $contact = get_string('hint_feedbackcontact_contact', 'block_le_dashboard', $who);
-        return format::hint($rowid, 'feedbackcontact', get_string('hint_feedbackcontact_text', 'block_le_dashboard'), $contact);
+    protected function feedback_hint(string $rowid): array {
+        return format::hint($rowid, 'feedbackcontact', get_string('hint_feedbackcontact_text', 'block_le_dashboard'));
     }
 }

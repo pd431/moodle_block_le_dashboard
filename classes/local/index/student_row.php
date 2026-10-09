@@ -33,6 +33,15 @@ final class student_row {
     /** A self-certified extension was applied. */
     const MITIGATION_SELFCERT = 'selfcert';
 
+    /** Final: coursework finalised, or an assignment submitted where students must click Submit. */
+    const LOCK_FINALISED = 'finalised';
+
+    /** A teacher locked the submission. */
+    const LOCK_TEACHER = 'teacher';
+
+    /** Every quiz attempt allowed is used. */
+    const LOCK_ATTEMPTS = 'attempts';
+
     /**
      * Constructor.
      *
@@ -47,8 +56,9 @@ final class student_row {
      * @param string|null $mitigation MITIGATION_EXTENSION or MITIGATION_SELFCERT when one applies.
      * @param bool $reopened Whether a new attempt is open and not yet submitted.
      * @param int[] $allocatedto Markers allocated to the student, on activities with allocation.
-     * @param bool $locked Whether the student's submission is final and can't be changed: the indexer ends
-     *                     their cut-off when they submitted, so the work leaves Upcoming (Pierre, 2026-10-06).
+     * @param string|null $lockreason Why the student's submission is final and can't be changed (a LOCK_
+     *                     constant), or null. The row stays in Upcoming with a "Can't resubmit" control
+     *                     saying why (Pierre, 2026-10-09).
      */
     public function __construct(
         /** @var int The student. */
@@ -73,8 +83,8 @@ final class student_row {
         public bool $reopened = false,
         /** @var int[] Allocated markers. */
         public array $allocatedto = [],
-        /** @var bool The submission is final and can't be changed. */
-        public bool $locked = false,
+        /** @var string|null Why the submission can't be changed, or null. */
+        public ?string $lockreason = null,
     ) {
     }
 }

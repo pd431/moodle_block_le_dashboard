@@ -14,9 +14,10 @@ Feature: Fixes from the LMS support map audit (F1 to F9)
   # - F2 (and A2), Pierre 2026-10-06 22:06: Upcoming and Overdue hold only work the student can still hand
   #   in, technically and by policy. One rule in the classifier: past the student's own cut-off, the
   #   work goes to Past. The adapters fold every limit into that cut-off: an assignment's cut-off, a
-  #   quiz's close, overrides and extensions, and a quiz's last allowed attempt. Past rows show Mitigate
+  #   quiz's close, overrides and extensions, and a quiz's last allowed attempt (work handed in stays in Upcoming
+  #   until its deadline since 2026-10-09). Past rows show Mitigate
   #   while its window is open. Assign, coursework and peerwork stay in Overdue while late work is
-  #   accepted. A quiz has no late window, so it goes to Past at its close, or when its attempts run out.
+  #   accepted. A quiz has no late window, so it goes to Past at its close.
   # - F3: the convenor's In progress follows My marking. Once the deadline has passed, an assessment with
   #   nothing ready to mark goes to Past when any of these holds:
   #   * it is a generic type;
@@ -100,14 +101,16 @@ Feature: Fixes from the LMS support map audit (F1 to F9)
     Then "Q1" should appear in the "Past" section
     And "Q1" should not show "Mitigate"
 
-  Scenario: A quiz whose attempts are used up goes to Past before it closes
+  # Reversed by Pierre, 2026-10-09 (locked-upcoming.feature): it stays in Upcoming until the quiz closes.
+  Scenario: A quiz whose attempts are used up stays in Upcoming, without Submit
     Given a summative "quiz" "Q1" in "M1" with 1 attempt allowed is due "next week"
     And "student1" has finished 1 attempts at "Q1"
     And the My assessments index is up to date
     When I log in as "student1" and view my dashboard
-    Then "Q1" should appear in the "Past" section
+    Then "Q1" should appear in the "Upcoming" section
     And "Q1" should show the status "Submitted"
     And "Q1" should not have a "Submit" button
+    And "Q1" should have a "Can't resubmit" button
 
   Scenario: A quiz with attempts left stays in Upcoming
     Given a summative "quiz" "Q1" in "M1" with 2 attempts allowed is due "next week"

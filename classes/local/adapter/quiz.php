@@ -370,6 +370,8 @@ class quiz extends base {
                 continue;
             }
             $row = $rows[$userid];
+            // Shown in Upcoming as "Can't resubmit" once an attempt was finished (Pierre, 2026-10-09).
+            $row->lockreason = student_row::LOCK_ATTEMPTS;
             // Closed from the moment the last attempt ended: a cut-off is inclusive, so one second before, or
             // the student's view in that same second still offers the quiz (MariaDB lane, beta18 and beta19).
             $end = (int)$u->lastend - 1;

@@ -728,25 +728,102 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
-     * A final submission is closed from the second it was handed in, so it is Past at once.
+     * A final submission keeps its cut-off and records why it can't change, so it stays in Upcoming
+     * as Submitted until the deadline (Pierre, 2026-10-09); a teacher's lock says so instead.
      */
-    public function test_final_submission_is_past_at_once(): void {
+    public function test_final_submission_stays_upcoming(): void {
         global $DB;
         $gen = $this->getDataGenerator();
         $course = $gen->create_course();
         $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $s3 = $gen->create_and_enrol($course, 'student');
         $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + WEEKSECS,
             'submissiondrafts' => 1, 'assignsubmission_onlinetext_enabled' => 1]);
         \core_tag_tag::set_item_tags('core', 'course_modules', $a->cmid, \context_module::instance($a->cmid), ['summative']);
         $now = time();
-        $DB->insert_record('assign_submission', ['assignment' => $a->id, 'userid' => $s1->id, 'status' => 'submitted',
-            'latest' => 1, 'attemptnumber' => 0, 'timecreated' => $now, 'timemodified' => $now, 'groupid' => 0]);
+        foreach ([$s1->id => 'submitted', $s2->id => 'submitted', $s3->id => 'draft'] as $userid => $status) {
+            $DB->insert_record('assign_submission', ['assignment' => $a->id, 'userid' => $userid, 'status' => $status,
+                'latest' => 1, 'attemptnumber' => 0, 'timecreated' => $now, 'timemodified' => $now, 'groupid' => 0]);
+        }
+        $DB->insert_record('assign_user_flags', ['assignment' => $a->id, 'userid' => $s2->id, 'locked' => 1,
+            'mailed' => 0, 'extensionduedate' => 0, 'workflowstate' => '', 'allocatedmarker' => 0]);
         (new indexer())->index_cm($a->cmid);
-        $row = $DB->get_record(indexer::STU, ['cmid' => $a->cmid, 'userid' => $s1->id]);
-        $this->assertLessThan($now, (int)$row->cutoff);
-        [$section, $status] = \block_le_dashboard\local\view\classifier::student($row, $now, 7);
-        $this->assertSame(\block_le_dashboard\local\view\classifier::PAST, $section);
+        $rows = $DB->get_records(indexer::STU, ['cmid' => $a->cmid], '', 'userid, due, cutoff, submitted, timereleased,
+            reopened, enrolstart, lockreason');
+        $this->assertNull($rows[$s1->id]->cutoff, 'the cut-off is not ended early any more');
+        $this->assertSame('finalised', $rows[$s1->id]->lockreason);
+        $this->assertSame('teacher', $rows[$s2->id]->lockreason);
+        $this->assertNull($rows[$s3->id]->lockreason, 'a draft is not final');
+        [$section, $status] = \block_le_dashboard\local\view\classifier::student($rows[$s1->id], $now, 7);
+        $this->assertSame(\block_le_dashboard\local\view\classifier::UPCOMING, $section);
         $this->assertSame(\block_le_dashboard\local\view\classifier::STATUS_SUBMITTED, $status);
+    }
+
+    /**
+     * Pierre, 2026-10-09: the marking units of students an access restriction shuts out leave the index (moved
+     * to an extension copy); a team's unit stays while any member can access; lifting the restriction brings
+     * them back.
+     */
+    public function test_shut_out_students_leave_the_marking(): void {
+        global $CFG, $DB;
+        require_once($CFG->dirroot . '/group/lib.php');
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $s3 = $gen->create_and_enrol($course, 'student');
+        $ext = $gen->create_group(['courseid' => $course->id, 'name' => 'Extension']);
+        $not = \core_availability\tree::get_nested_json([\availability_group\condition::get_json($ext->id)], '!|');
+        $availability = json_encode(\core_availability\tree::get_root_json([$not]));
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() - DAYSECS, 'submissiondrafts' => 0,
+            'assignsubmission_onlinetext_enabled' => 1, 'availability' => $availability]);
+        foreach ([$s1, $s2, $s3] as $s) {
+            $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $s->id, 'cmid' => $a->cmid,
+                'onlinetext' => 'Mine']);
+        }
+        $this->ma->tag($a->cmid);
+        $units = fn() => $DB->get_fieldset_select('block_le_dashboard_mark', 'unitid', 'cmid = ?', [$a->cmid]);
+        $this->assertEqualsCanonicalizing([$s1->id, $s2->id, $s3->id], $units());
+
+        $gen->create_group_member(['groupid' => $ext->id, 'userid' => $s2->id]);
+        (new indexer())->index_cm($a->cmid);
+        $this->assertEqualsCanonicalizing([$s1->id, $s3->id], $units());
+        $this->assertEquals(1, $DB->count_records(indexer::STU, ['cmid' => $a->cmid, 'userid' => $s2->id,
+            'canaccess' => 0]), 'the student row stays, as before');
+        // One student's re-index (their own Refresh) leaves them out too.
+        (new indexer())->index_users($a->cmid, [$s2->id]);
+        $this->assertEqualsCanonicalizing([$s1->id, $s3->id], $units());
+
+        groups_remove_member($ext->id, $s2->id);
+        (new indexer())->index_cm($a->cmid);
+        $this->assertEqualsCanonicalizing([$s1->id, $s2->id, $s3->id], $units());
+
+        // A team counts while one member can access it, and goes once none can.
+        $teams = $gen->create_grouping(['courseid' => $course->id]);
+        $team = $gen->create_group(['courseid' => $course->id]);
+        $gen->create_grouping_group(['groupingid' => $teams->id, 'groupid' => $team->id]);
+        $gen->create_group_member(['groupid' => $team->id, 'userid' => $s1->id]);
+        $gen->create_group_member(['groupid' => $team->id, 'userid' => $s2->id]);
+        $t = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() - DAYSECS, 'submissiondrafts' => 0,
+            'assignsubmission_onlinetext_enabled' => 1, 'availability' => $availability, 'teamsubmission' => 1,
+            'requireallteammemberssubmit' => 0, 'teamsubmissiongroupingid' => $teams->id]);
+        $this->setUser($s1);
+        $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $s1->id, 'cmid' => $t->cmid,
+            'onlinetext' => 'Ours']);
+        $this->setAdminUser();
+        $gen->create_group_member(['groupid' => $ext->id, 'userid' => $s2->id]);
+        $this->ma->tag($t->cmid);
+        $teamunits = fn() => $DB->get_fieldset_select(
+            'block_le_dashboard_mark',
+            'unitid',
+            'cmid = ? AND unittype = ?',
+            [$t->cmid, 'group']
+        );
+        $this->assertContains((string)$team->id, array_map('strval', $teamunits()));
+        $gen->create_group_member(['groupid' => $ext->id, 'userid' => $s1->id]);
+        (new indexer())->index_cm($t->cmid);
+        $this->assertNotContains((string)$team->id, array_map('strval', $teamunits()));
     }
 
     /**

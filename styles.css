@@ -390,6 +390,12 @@
 .block_le_dashboard_dashboard .ma-untagged-list {
   margin: 0.25rem 0 0;
 }
+.block_le_dashboard_dashboard .ma-untagged-guidance > :first-child {
+  margin-top: 0;
+}
+.block_le_dashboard_dashboard .ma-untagged-guidance > :last-child {
+  margin-bottom: 0;
+}
 .block_le_dashboard_dashboard .ma-untagged-list {
   padding-inline-start: 1rem;
   list-style: none;
@@ -687,12 +693,20 @@
   --ma-solid: var(--ma-attention-solid);
   --ma-glyph: var(--ma-attention-glyph);
 }
-.block_le_dashboard_dashboard .ma-row-meta > span {
+.block_le_dashboard_dashboard .ma-row-meta > span,
+.block_le_dashboard_dashboard .ma-row-meta > .ma-row-course {
   white-space: nowrap;
 }
-.block_le_dashboard_dashboard .ma-row-meta--stacked > span {
+.block_le_dashboard_dashboard .ma-row-meta--stacked > span,
+.block_le_dashboard_dashboard .ma-row-meta--stacked > .ma-row-course {
   display: block;
   white-space: normal;
+}
+.block_le_dashboard_dashboard .ma-row-course,
+.block_le_dashboard_dashboard a.ma-marker-name {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 .block_le_dashboard_dashboard .ma-row-info {
   position: relative;
@@ -850,6 +864,15 @@
   font-weight: 400;
   text-align: left;
   white-space: normal;
+}
+.block_le_dashboard_dashboard .ma-tip-guidance {
+  margin-top: 0.35rem;
+}
+.block_le_dashboard_dashboard .ma-tip-guidance > :first-child {
+  margin-top: 0;
+}
+.block_le_dashboard_dashboard .ma-tip-guidance > :last-child {
+  margin-bottom: 0;
 }
 .block_le_dashboard_dashboard .ma-tip-wrap--row {
   position: static;

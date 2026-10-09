@@ -16,6 +16,8 @@
 
 namespace block_le_dashboard\local\output;
 
+use block_le_dashboard\local\guidance;
+
 /**
  * Small formatting helpers shared by the three views.
  *
@@ -40,6 +42,7 @@ class format {
         'submit' => 'fa-upload',
         'view' => 'fa-eye',
         'mitigate' => 'fa-hand-holding-heart',
+        'locked' => 'fa-lock',
     ];
 
     /**
@@ -187,8 +190,21 @@ class format {
             'count' => $count,
             'text' => $text,
             'link' => $link,
+            'guidance' => isset(self::HINT_GUIDANCE[$key]) ? guidance::html(self::HINT_GUIDANCE[$key]) : null,
         ];
     }
+
+    /** The guidance box each hint shows under its factual line (Pierre, 2026-10-09). */
+    const HINT_GUIDANCE = [
+        'late' => 'latepenalty',
+        'feedbackcontact' => 'feedbacklate',
+        'nosubmission' => 'nosubmission',
+        'brief' => 'brief',
+        'setup' => 'setup',
+        'unallocated' => 'unallocated',
+        'plagiarism' => 'plagiarism',
+        'loaderror' => 'loaderror',
+    ];
 
     /** Each hint's icon (the Flag icons mockup). */
     const HINT_ICONS = [
@@ -284,9 +300,11 @@ class format {
         $hint = self::hint(
             $rowid,
             'nosubmission',
-            get_string($staff ? 'hint_nosubmission_staff' : 'hint_nosubmission_text', 'block_le_dashboard')
+            $staff ? get_string('hint_nosubmission_staff', 'block_le_dashboard') : ''
         );
         $hint['glyph'] = !$staff;
+        // The guidance is for students.
+        $hint['guidance'] = $staff ? null : $hint['guidance'];
         return $hint;
     }
 
@@ -413,6 +431,7 @@ class format {
             'name' => $name,
             'url' => (new \moodle_url('/mod/' . $cm->modname . '/view.php', ['id' => $cm->cmid]))->out(false),
             'course' => format_string($courseshortname, true, $options),
+            'courseurl' => (new \moodle_url('/course/view.php', ['id' => $cm->courseid]))->out(false),
             'modname' => $cm->modname,
             'modlabel' => $modname,
             'faicon' => self::ICONS[$cm->modname] ?? self::ICON_FALLBACK,

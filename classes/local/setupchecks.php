@@ -92,10 +92,9 @@ class setupchecks {
             $total += count($activities);
             $context = \context_course::instance($courseid);
             $courses[] = [
-                'label' => get_string('untagged_course', 'block_le_dashboard', [
-                    'course' => format_string($modinfo->get_course()->fullname, true, ['context' => $context, 'escape' => false]),
-                    'count' => count($activities),
-                ]),
+                'course' => format_string($modinfo->get_course()->fullname, true, ['context' => $context, 'escape' => false]),
+                'courseurl' => (new \moodle_url('/course/view.php', ['id' => $courseid]))->out(false),
+                'count' => count($activities),
                 'activities' => $activities,
             ];
         }

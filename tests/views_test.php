@@ -310,6 +310,31 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * Pierre's screenshot, 2026-10-09: a student's Refresh moves their "Updated" line on without
+     * making the assessment look fully indexed to staff.
+     */
+    public function test_student_refresh_freshness(): void {
+        global $DB;
+        $DB->set_field('block_le_dashboard_cm', 'timeindexed', time() - 2 * DAYSECS);
+        $before = $DB->get_records_menu('block_le_dashboard_cm', null, 'cmid', 'cmid, timeindexed');
+        $justnow = get_string('updatedjustnow', 'block_le_dashboard');
+        $student = $this->u['s1']->id;
+        $this->assertNotEquals($justnow, (new student($student))->export()['freshness']['text']);
+
+        $this->setUser($student);
+        \block_le_dashboard\external\refresh::execute('student');
+        $this->assertEquals($justnow, (new student($student))->export()['freshness']['text']);
+        $this->assertEquals($before, $DB->get_records_menu('block_le_dashboard_cm', null, 'cmid', 'cmid, timeindexed'));
+        $this->assertNotEquals($justnow, (new convenor($this->u['convenor']->id))->export()['freshness']['text']);
+
+        // Another view's Refresh, or a preference in an old shape, doesn't count.
+        set_user_preference('block_le_dashboard_lastrefresh', json_encode(['staff' => time()]), $student);
+        $this->assertNotEquals($justnow, (new student($student))->export()['freshness']['text']);
+        set_user_preference('block_le_dashboard_lastrefresh', (string)time(), $student);
+        $this->assertNotEquals($justnow, (new student($student))->export()['freshness']['text']);
+    }
+
+    /**
      * PR7: "Refreshing" stops showing after ten minutes, so the button comes back.
      */
     public function test_refreshing_expires(): void {
@@ -405,7 +430,7 @@ final class views_test extends \advanced_testcase {
             $export['untagged']['label']
         );
         $this->assertSame(['Untagged essay'], array_column($export['untagged']['courses'][0]['activities'], 'name'));
-        $this->assertNull($export['untagged']['guidanceurl']);
+        $this->assertNull($export['untagged']['guidance'], 'no guidance by default');
         $this->assertArrayNotHasKey('untagged', (new staff($this->u['marker']->id))->export());
 
         // Tagged, it drops out once the cached list is forgotten (Refresh).
