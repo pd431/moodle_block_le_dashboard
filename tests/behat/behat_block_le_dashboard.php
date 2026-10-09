@@ -2104,7 +2104,7 @@ class behat_block_le_dashboard extends behat_base {
     /**
      * What the block_rhb stand-in offers (tests/fixtures/rhb_stub.php).
      *
-     * @Given /^block_rhb offers "(?P<what>a link|a delete link|a message only|nothing|no link)" for (?P<which>self-certification|the request form)$/
+     * @Given /^block_rhb offers "(?P<what>a link|a delete link|a message only|nothing|no link|an unreadable link)" for (?P<which>self-certification|the request form)$/
      * @param string $what
      * @param string $which
      */
@@ -4271,5 +4271,231 @@ class behat_block_le_dashboard extends behat_base {
             return $icon !== null;
         });
         return $icon ?? throw new ExpectationException("'$name' has no time zone icon", $this->getSession());
+    }
+
+    /**
+     * The self-certification limit block_rhb sets.
+     *
+     * @Given /^block_rhb allows (?P<n>\d+) self-certified extensions$/
+     * @param int $n
+     */
+    public function block_rhb_allows(int $n): void {
+        set_config('selfcertmax', $n, 'block_rhb');
+    }
+
+    /**
+     * Self-certified extensions a student has used, on other courseworks (mod_coursework's table).
+     *
+     * @Given /^"(?P<user>[^"]*)" has used (?P<n>\d+) self-certified extensions?$/
+     * @param string $username
+     * @param int $n
+     */
+    public function has_used_self_certified_extensions(string $username, int $n): void {
+        global $DB;
+        $columns = $DB->get_columns('coursework_mitigations');
+        for ($i = 0; $i < $n; $i++) {
+            $record = ['courseworkid' => 0, 'allocatableid' => self::userid($username), 'allocatabletype' => 'user',
+                'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
+                'timecreated' => time(), 'timemodified' => time()];
+            $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
+        }
+    }
+
+    /**
+     * The items of a row's Mitigate menu, in order: live (a link), greyed (with its reason starting with the
+     * note) or html (block_rhb's own), with a live item's count as its note.
+     *
+     * @Then /^the Mitigate menu of "(?P<name>[^"]*)" should list:$/
+     * @param string $name
+     * @param TableNode $table item, state, note
+     */
+    public function the_mitigate_menu_should_list(string $name, TableNode $table): void {
+        $menu = $this->mitigate_menu($name);
+        $items = $menu->findAll('css', '.ma-mitigate-item');
+        $rows = $table->getHash();
+        if (count($items) !== count($rows)) {
+            throw new ExpectationException("The Mitigate menu of '$name' has " . count($items) . ' items: ' .
+                $menu->getText(), $this->getSession());
+        }
+        foreach ($rows as $i => $row) {
+            $item = $items[$i];
+            $note = trim($row['note']);
+            $left = $item->find('css', '.ma-mitigate-left');
+            $label = trim(preg_replace('/\s+/', ' ', $item->getText()));
+            if ($left) {
+                $label = trim(substr($label, 0, -strlen(trim($left->getText()))));
+            }
+            if ($row['state'] === 'greyed') {
+                $reason = $menu->find('css', '#' . $item->getAttribute('aria-describedby'));
+                $ok = $item->getAttribute('aria-disabled') === 'true' && $label === $row['item']
+                    && $reason && str_starts_with(trim($reason->getText()), $note);
+            } else {
+                $ok = $item->getAttribute('aria-disabled') !== 'true' && $label === $row['item']
+                    && ($note === '' ? !$left : $left && trim($left->getText()) === $note);
+            }
+            if (!$ok) {
+                throw new ExpectationException("Item " . ($i + 1) . " of the Mitigate menu of '$name' is '" .
+                    $item->getText() . "': " . $menu->getText(), $this->getSession());
+            }
+        }
+    }
+
+    /**
+     * Where the live self-certification item goes: block_rhb's address (the stand-in's has selfcert=1).
+     *
+     * @Then /^"Self-certify an extension" in the Mitigate menu of "(?P<name>[^"]*)" should go to block_rhb's self-certification address$/
+     * @param string $name
+     */
+    public function self_certify_should_go_to_rhb(string $name): void {
+        $link = $this->mitigate_menu($name)->find('css', 'a.ma-mitigate-item');
+        if (!$link || !str_contains((string)$link->getAttribute('href'), 'selfcert=1')) {
+            throw new ExpectationException(
+                "Self-certify in '$name' goes to " . ($link ? $link->getAttribute('href') : 'nothing'),
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * block_rhb's own HTML in the menu, for an address it can't share.
+     *
+     * @Then /^the Mitigate menu of "(?P<name>[^"]*)" should show block_rhb's self-certification HTML$/
+     * @param string $name
+     */
+    public function the_mitigate_menu_should_show_rhb_html(string $name): void {
+        $item = $this->mitigate_menu($name)->find('css', 'div.ma-mitigate-item');
+        if (!$item || trim($item->getText()) !== 'Self-certify') {
+            throw new ExpectationException("The Mitigate menu of '$name' doesn't show block_rhb's HTML", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's Mitigate menu.
+     *
+     * @param string $name
+     * @param bool $open Whether it must be open.
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function mitigate_menu(string $name, bool $open = true): \Behat\Mink\Element\NodeElement {
+        $menu = $this->row($name)->find('css', '[data-region="ma-mitigate"] .dropdown-menu')
+            ?? throw new ExpectationException("'$name' has no Mitigate menu", $this->getSession());
+        if ($open && !self::within(fn() => $menu->isVisible())) {
+            throw new ExpectationException("The Mitigate menu of '$name' is not open", $this->getSession());
+        }
+        return $menu;
+    }
+
+    /**
+     * Delete mitigation's look: its own item, the destructive colour and a bin.
+     *
+     * @Then /^"Delete mitigation" in the Mitigate menu of "(?P<name>[^"]*)" should be a destructive item with a bin icon$/
+     * @param string $name
+     */
+    public function delete_mitigation_should_be_destructive(string $name): void {
+        $item = $this->mitigate_menu($name)->find('css', '[data-action="mitigate-delete"]');
+        $red = $item ? $this->evaluate_script('return getComputedStyle(document.evaluate(' . json_encode($item->getXpath()) .
+            ', document, null, 9, null).singleNodeValue).color') : '';
+        if (
+            !$item || trim($item->getText()) !== 'Delete mitigation' || !$item->find('css', 'i.fa-trash-can')
+                || !preg_match('/^rgba?\((\d+), (\d+), (\d+)/', (string)$red, $m) || !($m[1] > 150 && $m[2] < 100 && $m[3] < 100)
+        ) {
+            throw new ExpectationException("Delete mitigation in '$name' is not a red item with a bin ($red)", $this->getSession());
+        }
+    }
+
+    /**
+     * Clicks an item of a row's Mitigate menu.
+     *
+     * @When /^I click on "(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)"$/
+     * @param string $text
+     * @param string $name
+     */
+    public function i_click_in_the_mitigate_menu(string $text, string $name): void {
+        $this->mitigate_item($name, $text)->click();
+    }
+
+    /**
+     * An item of a row's open Mitigate menu.
+     *
+     * @Then /^"(?P<text>[^"]*)" should be in the Mitigate menu of "(?P<name>[^"]*)"$/
+     * @param string $text
+     * @param string $name
+     */
+    public function should_be_in_the_mitigate_menu(string $text, string $name): void {
+        $this->mitigate_item($name, $text);
+    }
+
+    /**
+     * The menu stays open.
+     *
+     * @Then /^the Mitigate menu of "(?P<name>[^"]*)" should still be open$/
+     * @param string $name
+     */
+    public function the_mitigate_menu_should_still_be_open(string $name): void {
+        usleep(300000);
+        $this->mitigate_menu($name);
+    }
+
+    /**
+     * Whether the block_rhb stand-in's delete link was followed (tests/fixtures/rhb_delete.php).
+     *
+     * @Then /^block_rhb's delete link should (?P<not>not )?have been followed$/
+     * @param string $not
+     */
+    public function rhb_delete_followed(string $not = ''): void {
+        global $DB;
+        $followed = fn() => (bool)$DB->get_field(
+            'config_plugins',
+            'value',
+            ['plugin' => 'block_le_dashboard', 'name' => 'behatrhbdeleted']
+        );
+        if ($not) {
+            usleep(500000);
+            $ok = !$followed();
+        } else {
+            $ok = self::within($followed);
+        }
+        if (!$ok) {
+            throw new ExpectationException("block_rhb's delete link was " . ($not ? '' : 'not ') . 'followed', $this->getSession());
+        }
+    }
+
+    /**
+     * An item of a row's open Mitigate menu, by its text.
+     *
+     * @param string $name
+     * @param string $text
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function mitigate_item(string $name, string $text): \Behat\Mink\Element\NodeElement {
+        $menu = $this->mitigate_menu($name);
+        $found = null;
+        self::within(function () use ($menu, $text, &$found) {
+            foreach ($menu->findAll('css', '.ma-mitigate-item') as $item) {
+                if (trim(preg_replace('/\s+/', ' ', $item->getText())) === $text) {
+                    $found = $item;
+                    return true;
+                }
+            }
+            return false;
+        });
+        return $found ?? throw new ExpectationException(
+            "No '$text' in the Mitigate menu of '$name': " . $menu->getText(),
+            $this->getSession()
+        );
+    }
+
+    /**
+     * Has the block_rhb stand-in treat an activity as a coursework, so self-certification applies to it on sites
+     * without mod_coursework (the row stays what it is otherwise).
+     *
+     * @Given /^the block_rhb stand-in treats "(?P<name>[^"]*)" as a coursework$/
+     * @param string $name
+     */
+    public function the_rhb_stand_in_treats_as_coursework(string $name): void {
+        $cm = $this->cm($name);
+        $list = array_filter(explode(',', (string)get_config('block_le_dashboard', 'behatcoursework')));
+        $list[] = $cm->modname . ':' . $cm->instance;
+        set_config('behatcoursework', implode(',', $list), 'block_le_dashboard');
     }
 }

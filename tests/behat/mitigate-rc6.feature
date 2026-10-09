@@ -1,9 +1,10 @@
 @block @block_le_dashboard @block_rhb @javascript
-Feature: Mitigate works as it did in rc6
+Feature: When Mitigate shows
   In order that students reach block_rhb's mitigation routes exactly as they did before the remake
   As a student
   I need the Mitigate menu to show block_rhb's own links on summative work until a day after my deadline
 
+  # beta22: what the menu holds is mitigate-menu-explains.feature (option A); this feature keeps when it shows.
   # Pierre, 2026-10-07 16:01: "seems like beta17's buttons don't show up on our test site. Maybe go simpler
   # and pull back the behaviour from rc6." rc6 (coursework_handler, quiz_handler, content.mustache):
   # - Coursework: Mitigate only when block_rhb's self-certification HTML holds a real link (an <a> with href).
@@ -30,12 +31,14 @@ Feature: Mitigate works as it did in rc6
       | student1 | M1     | student |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
-  Scenario: The menu shows block_rhb's request link as it is, with the note that self-certification isn't allowed
+  Scenario: An assignment's menu holds formal mitigation only, under our label
     Given a summative "assign" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard
-    And I click on "Mitigate" "button" in the "My assessments" "block"
-    Then I should see "Request mitigating circumstances" linking to the site home
-    And I should see "No self-certified extension is allowed" in the "My assessments" block
+    And I press "Mitigate" in the "A1" row
+    Then the Mitigate menu of "A1" should list:
+      | item                      | state | note |
+      | Request formal mitigation | live  |      |
+    And I should see "Request formal mitigation" linking to the site home
 
   Scenario Outline: Mitigate shows until 24 hours after the student's own deadline, whatever was handed in
     Given a summative "assign" "A1" in "M1"<opts> <is> due "<due>"
@@ -78,13 +81,6 @@ Feature: Mitigate works as it did in rc6
     Then "A1" should show the status "Feedback released"
     And "A1" should show "Mitigate"
 
-  Scenario: A quiz offers the request form only
-    Given a summative "quiz" "Q1" in "M1" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    And I click on "Mitigate" "button" in the "My assessments" "block"
-    Then I should see "Request mitigating circumstances" in the "My assessments" block
-    And I should see "No self-certified extension is allowed" in the "My assessments" block
-
   Scenario: Formative work never offers Mitigate
     Given a formative "assign" "F1" in "M1" is due "in 3 days"
     When I log in as "student1" and view my dashboard
@@ -95,34 +91,3 @@ Feature: Mitigate works as it did in rc6
     And a summative "assign" "A1" in "M1" is due "in 3 days"
     When I log in as "student1" and view my dashboard
     Then "A1" should not show "Mitigate"
-
-  @mod_coursework
-  Scenario Outline: Coursework shows Mitigate only when self-certification is a real link
-    Given block_rhb offers "<selfcert>" for self-certification
-    And a summative "coursework" "C1" in "M1" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    Then "C1" should <show> "Mitigate"
-
-    Examples:
-      | selfcert       | show     |
-      | a link         | show     |
-      | a message only | not show |
-      | nothing        | not show |
-
-  @mod_coursework
-  Scenario: Coursework shows block_rhb's self-certification and request links as they are
-    Given block_rhb offers "a link" for self-certification
-    And a summative "coursework" "C1" in "M1" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    And I click on "Mitigate" "button" in the "My assessments" "block"
-    Then I should see "Self-certify" in the "My assessments" block
-    And I should see "Request mitigating circumstances" in the "My assessments" block
-    And I should not see "No self-certified extension is allowed" in the "My assessments" block
-
-  @mod_coursework
-  Scenario: A link for deleting a self-certification reads "Delete mitigation"
-    Given block_rhb offers "a delete link" for self-certification
-    And a summative "coursework" "C1" in "M1" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    And I click on "Mitigate" "button" in the "My assessments" "block"
-    Then I should see "Delete mitigation" in the "My assessments" block

@@ -420,6 +420,27 @@
 .block_le_dashboard_dashboard .ma-mitigate-note {
     font-size: 0.8203rem;
 }
+.block_le_dashboard_dashboard .ma-mitigate-left {
+    display: block;
+    font-size: 0.8203rem;
+}
+.block_le_dashboard_dashboard .ma-mitigate-item--delete {
+    color: var(--bs-danger, var(--danger, #ca3120));
+}
+.block_le_dashboard_dashboard .ma-mitigate-item--delete:hover,
+.block_le_dashboard_dashboard .ma-mitigate-item--delete:focus {
+    background-color: var(--bs-danger, var(--danger, #ca3120));
+    color: #fff;
+}
+.block_le_dashboard_dashboard .ma-mitigate-item--greyed {
+    color: var(--ma-text-muted);
+    cursor: default;
+}
+.block_le_dashboard_dashboard .ma-mitigate-item--greyed:hover,
+.block_le_dashboard_dashboard .ma-mitigate-item--greyed:active {
+    background-color: transparent;
+    color: var(--ma-text-muted);
+}
 .block_le_dashboard_dashboard .ma-status-wrap {
     display: inline-flex;
     align-items: center;
