@@ -39,6 +39,10 @@ class mitigation {
         if (!file_exists($lib) && defined('BEHAT_SITE_RUNNING') && get_config('block_le_dashboard', 'behatrhbstub')) {
             // Scenarios tagged @block_rhb on a site without it.
             $lib = $CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/rhb_stub.php';
+            if (!class_exists('\mod_coursework\models\coursework')) {
+                // Activities the scenario has the stand-in treat as coursework, on sites without mod_coursework.
+                require_once($CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/coursework_stub.php');
+            }
         }
         if (!file_exists($lib)) {
             return false;
@@ -47,24 +51,29 @@ class mitigation {
         return true;
     }
 
+    /** Menu item kinds; each is also the mitigate_<kind> label. */
+    const KIND_SELFCERT = 'selfcert';
+    /** The request form: formal mitigation (Pierre, 2026-10-09). */
+    const KIND_REQUEST = 'request';
+
     /**
-     * The Mitigate menu of one row, as rc6 built it (Pierre, 2026-10-07: "pull back the behaviour from rc6"):
-     * block_rhb's own HTML, shown as it is.
-     * - Coursework: only when its self-certification HTML holds a real link; the request form follows it.
-     * - Anything else: never self-certification; only when the request form HTML holds a real link, with
-     *   the note that self-certification isn't allowed.
-     * A link for deleting a self-certification reads "Delete mitigation" (rc6 did this in its JavaScript).
+     * The Mitigate menu of one row (option A of the Mitigate options, Pierre 2026-10-09): block_rhb's links
+     * under our labels, and for coursework "Self-certify an extension" always listed, with how many are left
+     * or, greyed, why it can't be used. Only coursework takes self-certified extensions.
      *
      * @param string $modname
      * @param int $instanceid
-     * @return array|null items (HTML) and noselfcert, or null for no Mitigate
+     * @param array|null $count self-certifications used and max (selfcert()), or null when unknown.
+     * @param string|null $here The student's new deadline when they self-certified on this one, else null.
+     * @return array|null the menu (see menu()), or null for no Mitigate
      */
-    public static function links(string $modname, int $instanceid): ?array {
+    public static function links(string $modname, int $instanceid, ?array $count = null, ?string $here = null): ?array {
         if (!self::available()) {
             return null;
         }
         $selfcert = '';
-        if ($modname === 'coursework') {
+        $takesselfcert = $modname === 'coursework' || self::stub_coursework($modname, $instanceid);
+        if ($takesselfcert) {
             if (!function_exists('block_rhb_get_self_certification_link') || !class_exists('\mod_coursework\models\coursework')) {
                 return null;
             }
@@ -74,9 +83,6 @@ class mitigation {
                 $selfcert = $coursework ? (string)block_rhb_get_self_certification_link($coursework) : '';
             } catch (\Throwable $e) {
                 debugging('block_rhb self-certification link failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
-            }
-            if (!self::has_link($selfcert)) {
-                return null;
             }
         }
         if (self::$srm === false) {
@@ -90,11 +96,110 @@ class mitigation {
                 }
             }
         }
-        if ($modname !== 'coursework' && !self::has_link(self::$srm)) {
+        return self::menu($takesselfcert, $selfcert, self::$srm, $count, $here);
+    }
+
+    /**
+     * Whether a Behat scenario has the block_rhb stand-in treat this activity as a coursework (on sites without
+     * mod_coursework, "the block_rhb stand-in treats ... as a coursework").
+     *
+     * @param string $modname
+     * @param int $instanceid
+     * @return bool
+     */
+    protected static function stub_coursework(string $modname, int $instanceid): bool {
+        if (!defined('BEHAT_SITE_RUNNING') || !get_config('block_le_dashboard', 'behatrhbstub')) {
+            return false;
+        }
+        return in_array("$modname:$instanceid", explode(',', (string)get_config('block_le_dashboard', 'behatcoursework')));
+    }
+
+    /**
+     * Builds the Mitigate menu from block_rhb's answers.
+     * - Self-certification (coursework only): a link is live, with "N of M left" when the block's count has some
+     *   left; block_rhb decides, so a link stays live whatever the count says. A delete link means it was used
+     *   here: the item is greyed and "Delete mitigation" follows it. No link: greyed, with the reason.
+     * - Formal mitigation: block_rhb's request form link.
+     * There is no menu without at least one live link.
+     *
+     * @param bool $takesselfcert Whether the activity takes self-certified extensions (coursework).
+     * @param string $selfcert block_rhb's self-certification HTML.
+     * @param string $srm block_rhb's request form HTML.
+     * @param array|null $count used and max (max null: no limit), or null when unknown.
+     * @param string|null $here The new deadline when the student self-certified on this one.
+     * @return array|null items (each url and label, delete too for Delete mitigation, html, or greyed with a reason),
+     *     or null for no Mitigate
+     */
+    public static function menu(bool $takesselfcert, string $selfcert, string $srm, ?array $count, ?string $here): ?array {
+        $request = self::item(self::KIND_REQUEST, $srm);
+        $items = [];
+        $live = (bool)$request;
+        if ($takesselfcert) {
+            $delete = self::has_link($selfcert) && self::delete_label($selfcert) !== $selfcert;
+            $item = $delete ? null : self::item(self::KIND_SELFCERT, $selfcert);
+            if ($item) {
+                $left = $count && $count['max'] !== null ? $count['max'] - $count['used'] : null;
+                if (isset($item['url']) && $left !== null && $left > 0) {
+                    $item['note'] = get_string('mitigate_left', 'block_le_dashboard', ['left' => $left, 'max' => $count['max']]);
+                }
+                $live = true;
+            } else {
+                if ($delete || $here !== null) {
+                    $reason = $here !== null ? get_string('mitigate_reason_here', 'block_le_dashboard', $here)
+                        : get_string('mitigate_reason_herenodate', 'block_le_dashboard');
+                } else {
+                    $reason = $count && $count['max'] !== null && $count['used'] >= $count['max']
+                        ? get_string('mitigate_reason_used', 'block_le_dashboard', $count['max'])
+                        : get_string('mitigate_reason_unavailable', 'block_le_dashboard');
+                    if ($request) {
+                        $reason .= ' ' . get_string('mitigate_stillrequest', 'block_le_dashboard');
+                    }
+                }
+                $item = [
+                    'greyed' => true,
+                    'live' => false,
+                    'label' => get_string('mitigate_' . self::KIND_SELFCERT, 'block_le_dashboard'),
+                    'reason' => $reason,
+                ];
+            }
+            $items[] = $item;
+            if ($delete) {
+                // Its own red item with a bin, confirmed by a second click in place (Pierre, 2026-10-09).
+                $item = self::item('delete', $selfcert);
+                $items[] = isset($item['url']) ? ['delete' => true, 'live' => false] + $item
+                    : ['html' => self::delete_label($selfcert)];
+                $live = true;
+            }
+        }
+        if ($request) {
+            $items[] = $request;
+        }
+        return $live ? ['items' => $items] : null;
+    }
+
+    /**
+     * One menu item from block_rhb's HTML: its address with our label, the HTML itself when the address
+     * can't be read, or null when there is no link at all (a message such as "limit reached").
+     *
+     * @param string $kind
+     * @param string $html
+     * @return array|null
+     */
+    public static function item(string $kind, string $html): ?array {
+        if (!self::has_link($html)) {
             return null;
         }
-        $items = array_values(array_filter([self::delete_label($selfcert), self::delete_label(self::$srm)], 'strlen'));
-        return ['items' => $items, 'noselfcert' => $selfcert === ''];
+        if (!preg_match('/<a\b[^>]*\bhref\s*=\s*("([^"]*)"|\'([^\']*)\'|([^\s>]+))/i', $html, $m)) {
+            return ['html' => $html];
+        }
+        $href = html_entity_decode(($m[2] ?? '') . ($m[3] ?? '') . ($m[4] ?? ''), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $url = clean_param($href, PARAM_LOCALURL) ?: clean_param($href, PARAM_URL);
+        if ($url === '' || $url === '#') {
+            return ['html' => $html];
+        }
+        // Flagged, as a row's own url would otherwise show through the template's sections.
+        return ['live' => true, 'url' => $url, 'label' => get_string('mitigate_' . $kind, 'block_le_dashboard'),
+            'note' => null];
     }
 
     /**

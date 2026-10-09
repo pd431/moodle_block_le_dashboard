@@ -48,11 +48,17 @@ if (!function_exists('block_rhb_get_self_certification_link')) {
     function block_rhb_get_self_certification_link($coursework): string {
         switch (get_config('block_le_dashboard', 'behatrhbselfcert') ?: 'a link') {
             case 'a delete link':
-                return html_writer::link(new moodle_url('/', ['deleteselfcert' => 1]), 'Remove self-certification');
+                // Its address says delete, as block_rhb's does; following it is recorded (rhb_delete.php).
+                return html_writer::link(
+                    new moodle_url('/blocks/le_dashboard/tests/fixtures/rhb_delete.php'),
+                    'Remove self-certification'
+                );
             case 'a message only':
                 return html_writer::span('You have used all your self-certifications');
             case 'nothing':
                 return '';
+            case 'an unreadable link':
+                return html_writer::link('javascript:void(0)', 'Self-certify');
             default:
                 return html_writer::link(new moodle_url('/', ['selfcert' => 1]), 'Self-certify');
         }

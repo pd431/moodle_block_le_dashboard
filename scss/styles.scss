@@ -631,7 +631,7 @@ $ma-glyph-tones: ("attention");
         max-width: min(22rem, 100cqi);
     }
 
-    // Block_rhb's own HTML, as rc6 showed it, and rc6's note under it.
+    // Block_rhb's own HTML, when its address can't be read, and the reasons.
     .ma-mitigate-item,
     .ma-mitigate-note {
         white-space: normal;
@@ -639,6 +639,39 @@ $ma-glyph-tones: ("attention");
 
     .ma-mitigate-note {
         font-size: $ma-font-small;
+    }
+
+    // How many self-certified extensions are left, under the item (option A,
+    // Pierre 2026-10-09).
+    .ma-mitigate-left {
+        display: block;
+        font-size: $ma-font-small;
+    }
+
+    // Delete mitigation: Moodle's look for a destructive menu action, red with
+    // a bin (the red marks the action, never the student). Hover and focus
+    // fill it red with white text, as Boost's danger buttons do.
+    .ma-mitigate-item--delete {
+        color: var(--bs-danger, var(--danger, #ca3120));
+
+        &:hover,
+        &:focus {
+            background-color: var(--bs-danger, var(--danger, #ca3120));
+            color: #fff;
+        }
+    }
+
+    // Self-certification the student can't use: greyed but focusable
+    // (aria-disabled), with its reason under it. Never red.
+    .ma-mitigate-item--greyed {
+        color: var(--ma-text-muted);
+        cursor: default;
+
+        &:hover,
+        &:active {
+            background-color: transparent;
+            color: var(--ma-text-muted);
+        }
     }
 
     .ma-status-wrap {

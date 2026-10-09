@@ -30,6 +30,7 @@ import Ajax from 'core/ajax';
 import Notification from 'core/notification';
 import {getString} from 'core/str';
 import {setUserPreference} from 'core_user/repository';
+import {localise} from './localtime';
 
 /** Milliseconds the pointer rests on a tip trigger before its tip opens, as a tooltip does. */
 const HOVER_DELAY = 500;
@@ -39,6 +40,7 @@ const HOVER_GRACE = 200;
 
 const SELECTORS = {
     view: '[data-region="ma-view"]',
+    mitigate: '[data-region="ma-mitigate"]',
     viewRoot: '[data-region="ma-view-root"]',
     loading: '[data-region="ma-loading"]',
     status: '[data-region="ma-status"]',
@@ -69,6 +71,14 @@ class Dashboard {
         this.seq = 0;
         this.refreshing = false;
         root.addEventListener('click', e => this.click(e));
+        // Opening a Mitigate menu again puts an unconfirmed Delete mitigation back. Captured, because Bootstrap
+        // stops the toggle's click once its dropdown has opened.
+        root.addEventListener('click', e => {
+            const toggle = e.target.closest && e.target.closest('[data-action="mitigate"]');
+            if (toggle) {
+                this.disarm(toggle.closest(SELECTORS.mitigate));
+            }
+        }, true);
         root.addEventListener('input', e => this.input(e));
         root.addEventListener('change', e => this.change(e));
         root.addEventListener('focusin', e => this.focusin(e));
@@ -90,6 +100,22 @@ class Dashboard {
             }
         });
         this.apply();
+        localise(root).catch(Notification.exception);
+    }
+
+    /**
+     * Puts unconfirmed Delete mitigation items back to their label.
+     *
+     * @param {HTMLElement|null} where
+     */
+    disarm(where) {
+        (where || this.root).querySelectorAll('[data-action="mitigate-delete"][data-armed]').forEach(item => {
+            const label = item.querySelector('[data-region="ma-delete-label"]');
+            if (label && item.dataset.label) {
+                label.textContent = item.dataset.label;
+            }
+            delete item.dataset.armed;
+        });
     }
 
     /**
@@ -155,8 +181,21 @@ class Dashboard {
             target.setAttribute('aria-pressed', show ? 'true' : 'false');
             setUserPreference('block_le_dashboard_showgrades', show ? 1 : 0).catch(Notification.exception);
         } else if (action === 'mitigate-delete') {
-            // As rc6: block_rhb's delete link is followed in the background, then the page reloads.
             e.preventDefault();
+            const label = target.querySelector('[data-region="ma-delete-label"]');
+            if (label && !target.dataset.armed) {
+                // The first click asks for a second, in the same place; the menu stays open (Pierre, 2026-10-09).
+                e.stopPropagation();
+                target.dataset.armed = '1';
+                target.dataset.label = label.textContent;
+                getString('mitigate_deleteconfirm', 'block_le_dashboard').then(text => {
+                    label.textContent = text;
+                    this.root.querySelector(SELECTORS.status).textContent = text;
+                    return text;
+                }).catch(Notification.exception);
+                return;
+            }
+            // As rc6: block_rhb's delete link is followed in the background, then the page reloads.
             const href = target.getAttribute('href');
             if (href) {
                 fetch(href, {method: 'GET', credentials: 'same-origin'})
@@ -408,6 +447,7 @@ class Dashboard {
                 return;
             }
             container.innerHTML = response.html;
+            localise(this.root).catch(Notification.exception);
             this.root.dataset.view = view;
             let label = '';
             this.root.querySelectorAll('[data-action="switch-view"]').forEach(tab => {

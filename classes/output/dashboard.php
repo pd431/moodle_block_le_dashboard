@@ -56,6 +56,8 @@ class dashboard implements \renderable, \templatable {
             'hastabs' => count($tabs) > 1,
             'tabs' => $tabs,
             'activeview' => $active,
+            // The zone Moodle draws dates in; localtime.js shows them in the browser's when that differs.
+            'timezone' => \core_date::get_user_timezone(),
             'view' => $view,
         ];
     }

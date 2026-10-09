@@ -43,7 +43,11 @@
         "hasflags": false,
         "status": {"key": "pending", "label": "Not submitted yet"},
         "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00"}],
-        "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}]
+        "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}],
+        "mitigation": {"id": "ma-row-12-mitigate", "icon": "fa-hand-holding-heart", "items": [
+            {"greyed": true, "label": "Self-certify an extension",
+             "reason": "You have used all 3 of your self-certified extensions. You can still request formal mitigation."},
+            {"live": true, "url": "https://example.com/blocks/rhb/srm.php", "label": "Request formal mitigation"}]}
     }
 }}
 <div class="ma-row-icon ma-tip-wrap">
@@ -95,11 +99,17 @@
     {{/locked}}
     {{#mitigation}}
     <div class="dropdown ma-mitigate" data-region="ma-mitigate">
-        <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
+        <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}" data-action="mitigate"
                 data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_mitigate, block_le_dashboard{{/str}}</button>
         <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
-            {{#items}}<div class="dropdown-item-text ma-mitigate-item">{{{.}}}</div>{{/items}}
-            {{#noselfcert}}<div class="dropdown-item-text ma-mitigate-note">{{#str}}mitigate_noselfcert, block_le_dashboard{{/str}}</div>{{/noselfcert}}
+            {{#items}}
+            {{#live}}<a class="dropdown-item ma-mitigate-item" href="{{url}}">{{label}}{{#note}}<span class="ma-mitigate-left">{{note}}</span>{{/note}}</a>{{/live}}
+            {{#delete}}<a class="dropdown-item ma-mitigate-item ma-mitigate-item--delete" href="{{url}}" data-action="mitigate-delete"><i class="fa-solid fa-trash-can ma-icon" aria-hidden="true"></i><span data-region="ma-delete-label">{{label}}</span></a>{{/delete}}
+            {{#html}}<div class="dropdown-item-text ma-mitigate-item">{{{html}}}</div>{{/html}}
+            {{#greyed}}<button type="button" class="dropdown-item ma-mitigate-item ma-mitigate-item--greyed" aria-disabled="true"
+                    aria-describedby="{{id}}-reason">{{label}}</button>
+            <div class="dropdown-item-text ma-mitigate-note" id="{{id}}-reason">{{reason}}</div>{{/greyed}}
+            {{/items}}
         </div>
     </div>
     {{/mitigation}}

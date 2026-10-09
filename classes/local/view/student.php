@@ -51,6 +51,12 @@ class student extends base {
     /** Assessment types offered Mitigate: summative only (D8, Pierre 2026-10-04). */
     const MITIGATION_TYPES = ['summative'];
 
+    /** @var array|null Self-certified extensions used and allowed, once loaded. */
+    protected $selfcertcount = null;
+
+    /** @var bool Whether $selfcertcount is loaded. */
+    protected $selfcertloaded = false;
+
     /** Reasons the "Can't resubmit" control can give. */
     const LOCK_REASONS = [student_row::LOCK_FINALISED, student_row::LOCK_TEACHER, student_row::LOCK_ATTEMPTS];
 
@@ -168,19 +174,25 @@ class student extends base {
             $this->box('upcoming', $counts['upcoming']),
             $this->box('submitted', $counts['submitted']),
         ];
-        if ($selfcert = mitigation::selfcert($this->userid)) {
+        if ($selfcert = $this->selfcert()) {
             if ($selfcert['max'] === null) {
                 // No limit: the count is the value, with a note under it.
                 $box = $this->box('selfcert', ['both' => $selfcert['used']] + format::zero_counts());
                 $box['subnote'] = get_string('selfcertnolimit', 'block_le_dashboard');
             } else {
+                // Counting down, as the Mitigate menu does (Pierre, 2026-10-09).
+                $left = max(0, $selfcert['max'] - $selfcert['used']);
                 $box = $this->box(
                     'selfcert',
                     format::zero_counts(),
                     null,
                     null,
-                    get_string('selfcertused', 'block_le_dashboard', ['used' => $selfcert['used'], 'max' => $selfcert['max']])
+                    $left ? get_string('selfcertleft', 'block_le_dashboard', ['left' => $left, 'max' => $selfcert['max']])
+                        : get_string('selfcertallused', 'block_le_dashboard', $selfcert['max'])
                 );
+                if (!$left) {
+                    $box['subnote'] = get_string('mitigate_stillrequest', 'block_le_dashboard');
+                }
             }
             $summary[] = $box;
         }
@@ -358,7 +370,6 @@ class student extends base {
                 'id' => $row['id'] . '-mitigate',
                 'icon' => format::ACTION_ICONS['mitigate'],
                 'items' => $menu['items'],
-                'noselfcert' => $menu['noselfcert'],
             ];
         }
         return $row;
@@ -397,7 +408,22 @@ class student extends base {
         if ($r->due && !config::mitigation_open((int)$r->due, $this->now)) {
             return null;
         }
-        return mitigation::links($r->modname, (int)$r->instance);
+        // The new deadline, when the student self-certified on this one.
+        $here = $r->mitigation === student_row::MITIGATION_SELFCERT && $r->due ? format::datetime((int)$r->due) : null;
+        return mitigation::links($r->modname, (int)$r->instance, $this->selfcert(), $here);
+    }
+
+    /**
+     * Self-certified extensions used and allowed (mitigation::selfcert()), once per view.
+     *
+     * @return array|null
+     */
+    protected function selfcert(): ?array {
+        if (!$this->selfcertloaded) {
+            $this->selfcertcount = mitigation::selfcert($this->userid);
+            $this->selfcertloaded = true;
+        }
+        return $this->selfcertcount;
     }
 
     /**
