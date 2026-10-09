@@ -1,0 +1,50 @@
+# Tags each build on main as v<release>, e.g. v5.0.0-beta21, from version.php.
+# Never moves an existing tag. Run it by hand with a commit SHA to backfill an older build.
+name: Tag build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Commit to tag (defaults to the tip of main)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Create the tag for this build
+        run: |
+          sha=$(git rev-parse HEAD)
+          release=$(sed -nE "s/^\\\$plugin->release *= *'([^ ']+).*/\1/p" version.php)
+          version=$(sed -nE 's/^\$plugin->version *= *([0-9]+).*/\1/p' version.php)
+          if [ -z "$release" ] || [ -z "$version" ]; then
+            echo "::error::Couldn't read release or version from version.php"
+            exit 1
+          fi
+          tag="v$release"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            existing=$(git rev-parse "$tag^{commit}")
+            if [ "$existing" != "$sha" ]; then
+              echo "::warning::$tag already points at $existing; leaving it where it is"
+            else
+              echo "$tag already on this commit"
+            fi
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a "$tag" -m "$tag, version $version" "$sha"
+          git push origin "refs/tags/$tag"
+          echo "Created $tag on $sha"
