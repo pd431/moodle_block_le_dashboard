@@ -196,3 +196,14 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Past" section
     And "A1" should not have a "Can't submit" button
+
+  # B4 (support map): unlocking fired events the block didn't observe, so the row kept "Can't resubmit".
+  Scenario: Unlocking a submission shows at once
+    Given a summative "assign" "A1" in "M1" is due "in 3 days"
+    And "student1" has submitted "A1"
+    And "teacher1" locks submissions for "student1" on "A1"
+    And the My assessments index is up to date
+    When "teacher1" unlocks submissions for "student1" on "A1"
+    And I log in as "student1" and view my dashboard
+    Then "A1" should not have a "Can't resubmit" button
+    And "A1" should have a "Submit" button

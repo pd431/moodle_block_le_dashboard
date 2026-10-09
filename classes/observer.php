@@ -42,6 +42,9 @@ class observer {
         return (bool)(get_config('block_le_dashboard', 'certaintags') || get_config('block_le_dashboard', 'formativetags'));
     }
 
+    /** Staff events whose student's rows are updated at once, like a student's own action (B4). */
+    const FOR_RELATED_USER = ['\\mod_assign\\event\\submission_locked', '\\mod_assign\\event\\submission_unlocked'];
+
     /**
      * An activity plugin's own event: re-index that activity.
      *
@@ -54,11 +57,13 @@ class observer {
         }
         $cmid = (int)$event->contextinstanceid;
         // A student's own action (a submission, say) shows on their dashboard at once (F4): their
-        // rows now, everyone else's in the queued task.
-        if ($event->userid && $DB->record_exists('block_le_dashboard_stu', ['cmid' => $cmid, 'userid' => $event->userid])) {
+        // rows now, everyone else's in the queued task. So does a teacher's lock or unlock, for the
+        // student it's about (B4).
+        $userid = in_array('\\' . get_class($event), self::FOR_RELATED_USER) ? $event->relateduserid : $event->userid;
+        if ($userid && $DB->record_exists('block_le_dashboard_stu', ['cmid' => $cmid, 'userid' => $userid])) {
             try {
                 // A short wait: the student's request mustn't hang behind a slow re-index (A6).
-                (new indexer())->index_users($cmid, [(int)$event->userid], indexer::INLINE_LOCK_WAIT);
+                (new indexer())->index_users($cmid, [(int)$userid], indexer::INLINE_LOCK_WAIT);
             } catch (\Throwable $e) {
                 debugging('block_le_dashboard: updating the student\'s own rows failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
             }

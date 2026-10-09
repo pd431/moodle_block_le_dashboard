@@ -54,6 +54,9 @@ class assign extends base {
             '\mod_assign\event\submission_status_updated',
             '\mod_assign\event\submission_removed',
             '\mod_assign\event\submission_graded',
+            // A teacher's lock and unlock decide Submit or Can't submit (B4).
+            '\mod_assign\event\submission_locked',
+            '\mod_assign\event\submission_unlocked',
             '\mod_assign\event\extension_granted',
             '\mod_assign\event\marker_updated',
             '\mod_assign\event\workflow_state_updated',
