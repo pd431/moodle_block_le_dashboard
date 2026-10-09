@@ -145,6 +145,23 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * Staff Upcoming rows name their course even in a course with no marking rows yet (R1, beta22 audit: the
+     * course link was empty).
+     */
+    public function test_staff_upcoming_names_course(): void {
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course(['shortname' => 'M2']);
+        $gen->enrol_user($this->u['marker']->id, $course->id, 'teacher');
+        $gen->enrol_user($this->u['s1']->id, $course->id, 'student');
+        $cm = $gen->get_plugin_generator('mod_assign')->create_instance(['course' => $course->id, 'name' => 'Essay 2',
+            'duedate' => time() + 10 * DAYSECS, 'assignsubmission_onlinetext_enabled' => 1]);
+        $gen->get_plugin_generator('block_le_dashboard')->tag($cm->cmid, 'summative');
+
+        $row = self::rows((new staff($this->u['marker']->id))->export(), 'upcoming')['Essay 2'];
+        $this->assertSame('M2', $row['course']);
+    }
+
+    /**
      * G9: work counts at each student's own deadline, and extensions still to come are flagged
      * for the students whose marking is mine, and for the convenor.
      */
