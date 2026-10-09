@@ -2,7 +2,9 @@
 # Moodle 4.5 and 5.2, PostgreSQL and MariaDB (production is MySQL-family), PHP at both ends.
 name: Moodle plugin CI
 
-on: [push, pull_request]
+# workflow_dispatch: GitHub doesn't start workflows for pushes made with the app's token, so CI can be
+# started by hand from the Actions tab.
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   test:
