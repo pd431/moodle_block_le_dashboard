@@ -1028,10 +1028,66 @@ class indexer {
      * @param int $delay Seconds to hold it back.
      */
     protected static function queue(array $data, int $delay = 0): void {
+        $runat = time() + $delay;
+        if (self::$pending === null && !CLI_SCRIPT) {
+            self::defer_queue();
+        }
+        if (self::$pending !== null) {
+            $key = json_encode($data);
+            self::$pending[$key] = min(self::$pending[$key] ?? $runat, $runat);
+            return;
+        }
+        self::queue_now($data, $runat);
+    }
+
+    /**
+     * Re-indexes asked for, by task data, and the earliest each should run: kept until the end of the
+     * request, or null when they are queued as they come.
+     *
+     * @var int[]|null
+     */
+    protected static ?array $pending = null;
+
+    /**
+     * From now on, collects re-indexes and queues each once, at the end of the request (P6). A web request
+     * does this by itself: grading 3,000 students in one go then makes one queue check, not 3,000. Its
+     * tasks can't be started by cron before the request has made all its changes either. A command line
+     * process (cron) queues as it goes, as it may run for hours.
+     */
+    public static function defer_queue(): void {
+        if (self::$pending === null) {
+            self::$pending = [];
+            if (!self::$flushatend) {
+                self::$flushatend = true;
+                \core_shutdown_manager::register_function([self::class, 'flush_queue']);
+            }
+        }
+    }
+
+    /** @var bool Whether the end of the request flushes the queue. */
+    protected static bool $flushatend = false;
+
+    /**
+     * Queues what was collected, and goes back to queueing as re-indexes are asked for.
+     */
+    public static function flush_queue(): void {
+        $pending = self::$pending ?? [];
+        self::$pending = null;
+        foreach ($pending as $key => $runat) {
+            self::queue_now(json_decode($key, true), $runat);
+        }
+    }
+
+    /**
+     * Queues one re-index now: see queue().
+     *
+     * @param array $data Task custom data.
+     * @param int $runat The earliest it should run.
+     */
+    protected static function queue_now(array $data, int $runat): void {
         global $DB;
         $task = new \block_le_dashboard\task\reindex();
         $task->set_custom_data($data);
-        $runat = time() + $delay;
         $waiting = $DB->get_record_select(
             'task_adhoc',
             'classname = :classname AND timestarted IS NULL AND ' . $DB->sql_compare_text('customdata', 255) . ' = ' .
@@ -1041,7 +1097,7 @@ class indexer {
             IGNORE_MULTIPLE
         );
         if (!$waiting) {
-            if ($delay) {
+            if ($runat > time()) {
                 $task->set_next_run_time($runat);
             }
             \core\task\manager::queue_adhoc_task($task);

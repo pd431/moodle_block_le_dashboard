@@ -339,6 +339,31 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * P6: within a web request, re-indexes are collected and each queued once at the end, as early as asked.
+     */
+    public function test_queue_deferred_to_end_of_request(): void {
+        global $DB;
+        $params = ['classname' => '\\block_le_dashboard\\task\\reindex'];
+        indexer::defer_queue();
+        $queries = $DB->perf_get_queries();
+        for ($i = 0; $i < 50; $i++) {
+            indexer::queue_cm(42, indexer::COALESCE);
+        }
+        indexer::queue_cm(42);
+        indexer::queue_course(7);
+        $this->assertSame($queries, $DB->perf_get_queries(), 'no queue checks while grading');
+        $this->assertSame(0, $DB->count_records('task_adhoc', $params));
+        indexer::flush_queue();
+        $this->assertSame(2, $DB->count_records('task_adhoc', $params));
+        $cm = $DB->get_record_select('task_adhoc', 'classname = :classname AND ' .
+            $DB->sql_compare_text('customdata') . ' = :data', $params + ['data' => json_encode(['cmid' => 42])]);
+        $this->assertLessThanOrEqual(time(), (int)$cm->nextruntime, 'the earliest asked for wins');
+        // Back to queueing as it comes.
+        indexer::queue_cm(43);
+        $this->assertSame(3, $DB->count_records('task_adhoc', $params));
+    }
+
+    /**
      * Deadline rush: a student's submission updates their own row at once and holds back everyone else's re-index.
      */
     public function test_submission_holds_back_reindex(): void {
