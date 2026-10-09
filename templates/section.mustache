@@ -43,7 +43,12 @@
         </button>
     </div>
     <ul class="list-group list-group-flush ma-rows" id="ma-{{view}}-{{key}}-list" aria-labelledby="ma-{{view}}-{{key}}-title">
-        {{#rows}}{{> block_le_dashboard/row }}{{/rows}}
+        {{#rows}}
+        <li class="list-group-item ma-row" id="{{id}}" data-region="ma-row" data-cmid="{{cmid}}" data-assesstype="{{assesstype}}"{{#tomark}} data-tomark="{{tomark}}"{{/tomark}}
+            data-search="{{search}}"{{#overflow}} data-overflow="1" hidden{{/overflow}}>
+            {{> block_le_dashboard/row }}
+        </li>
+        {{/rows}}
     </ul>
     <div class="card-footer ma-section-footer" data-region="ma-more" {{^hasmore}}hidden{{/hasmore}}>
         <button type="button" class="btn btn-link btn-sm ma-more" data-action="show-more" aria-expanded="false">

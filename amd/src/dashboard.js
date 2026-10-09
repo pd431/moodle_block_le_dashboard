@@ -188,6 +188,7 @@ class Dashboard {
      *
      * @param {HTMLElement} trigger
      * @param {boolean} open
+     * @param {string} how What opened it: click (or keyboard focus) or hover
      */
     setTip(trigger, open, how = 'click') {
         const tip = this.tipFor(trigger);

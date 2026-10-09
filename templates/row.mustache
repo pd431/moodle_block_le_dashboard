@@ -17,7 +17,9 @@
 {{!
     @template block_le_dashboard/row
 
-    One assessment row, the same partial in every view. The parts a view doesn't send are left out.
+    The inside of one assessment row, the same partial in every view. The parts a view doesn't send are
+    left out. The row's own list item is in block_le_dashboard/section, so this template renders valid
+    HTML on its own.
 
     Example context (json):
     {
@@ -44,79 +46,76 @@
         "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}]
     }
 }}
-<li class="list-group-item ma-row" id="{{id}}" data-region="ma-row" data-cmid="{{cmid}}" data-assesstype="{{assesstype}}"{{#tomark}} data-tomark="{{tomark}}"{{/tomark}}
-    data-search="{{search}}"{{#overflow}} data-overflow="1" hidden{{/overflow}}>
-    <div class="ma-row-icon ma-tip-wrap">
-        <button type="button" class="ma-row-iconbtn" data-action="tip" data-region="ma-row-icon" aria-expanded="false" aria-controls="{{id}}-tip"
-                aria-label="{{tip}}">
-            <i class="fa-solid {{faicon}} ma-row-faicon" aria-hidden="true"></i>
-            {{#hasmodifiers}}
-            <span class="ma-row-modifiers" aria-hidden="true">
-                {{#mitigationoverlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/mitigationoverlay}}
-                {{#overlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/overlay}}
-            </span>
-            {{/hasmodifiers}}
-        </button>
-        <div class="ma-tip" id="{{id}}-tip" data-region="ma-tip" hidden>{{tip}}</div>
-    </div>
-    <div class="ma-row-info">
-        <a class="ma-row-name" href="{{url}}">{{name}}</a>
-        <div class="ma-row-meta{{#stacked}} ma-row-meta--stacked{{/stacked}}">
-            <a class="ma-row-course" href="{{courseurl}}">{{course}}</a>
-            <span class="ma-row-type">{{typeline}}</span>
-            {{#hasflags}}
-            <span class="ma-flags">{{#hiddenhint}}{{> block_le_dashboard/hint }}{{/hiddenhint}}{{#hints}}{{> block_le_dashboard/hint }}{{/hints}}</span>
-            {{/hasflags}}
-        </div>
-    </div>
-    <div class="ma-row-dates">
-        {{#dates}}
-        <div class="ma-row-date ma-row-date--{{key}}" data-date="{{key}}">
-            {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}
-        </div>
-        {{/dates}}
-        {{#notes}}<div class="ma-row-note">{{.}}</div>{{/notes}}
-        {{#alert}}<div class="ma-row-alert" data-region="ma-alert">{{alert}}</div>{{/alert}}
-    </div>
-    <div class="ma-row-status">
-        {{#status}}<span class="ma-status-wrap"><span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{#statushint}}{{> block_le_dashboard/hint }}{{/statushint}}</span>{{/status}}
-        {{#grade}}<span class="ma-grade" data-region="ma-grade">{{#str}}grade, block_le_dashboard{{/str}} <strong>{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</span>{{/grade}}
-        {{#grading}}<span class="badge ma-pill ma-pill--{{key}}" data-grading="{{key}}">{{text}}</span>{{/grading}}
-        {{#bars}}{{> block_le_dashboard/progress }}{{/bars}}
-    </div>
-    <div class="ma-row-actions">
-        {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{label}}<span class="accesshide">: {{name}}</span></a>{{/actions}}
-        {{#locked}}
-        <span class="ma-tip-wrap ma-tip-wrap--row ma-locked-wrap">
-            <button type="button" class="btn btn-sm ma-btn ma-btn--locked" data-action="tip" data-hint="locked"
-                    aria-expanded="false" aria-controls="{{id}}" aria-describedby="{{id}}-text"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_locked, block_le_dashboard{{/str}}<span class="accesshide">: {{name}}</span></button>
-            <div class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden><div id="{{id}}-text">{{text}}{{#guidance}}<div class="ma-tip-guidance">{{{guidance}}}</div>{{/guidance}}</div></div>
+<div class="ma-row-icon ma-tip-wrap">
+    <button type="button" class="ma-row-iconbtn" data-action="tip" data-region="ma-row-icon" aria-expanded="false" aria-controls="{{id}}-tip"
+            aria-label="{{tip}}">
+        <i class="fa-solid {{faicon}} ma-row-faicon" aria-hidden="true"></i>
+        {{#hasmodifiers}}
+        <span class="ma-row-modifiers" aria-hidden="true">
+            {{#mitigationoverlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/mitigationoverlay}}
+            {{#overlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/overlay}}
         </span>
-        {{/locked}}
-        {{#mitigation}}
-        <div class="dropdown ma-mitigate" data-region="ma-mitigate">
-            <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
-                    data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_mitigate, block_le_dashboard{{/str}}</button>
-            <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
-                {{#items}}<div class="dropdown-item-text ma-mitigate-item">{{{.}}}</div>{{/items}}
-                {{#noselfcert}}<div class="dropdown-item-text ma-mitigate-note">{{#str}}mitigate_noselfcert, block_le_dashboard{{/str}}</div>{{/noselfcert}}
-            </div>
-        </div>
-        {{/mitigation}}
-        {{#hasmarkers}}
-        <button type="button" class="btn btn-sm ma-btn ma-btn--markers" data-toggle="collapse" data-bs-toggle="collapse"
-                data-target="#{{markersid}}" data-bs-target="#{{markersid}}"
-                aria-expanded="false" aria-controls="{{markersid}}">{{#marking}}{{#str}}action_marking, block_le_dashboard{{/str}}{{/marking}}{{^marking}}{{#str}}action_markers, block_le_dashboard{{/str}}{{/marking}}</button>
-        {{/hasmarkers}}
+        {{/hasmodifiers}}
+    </button>
+    <div class="ma-tip" id="{{id}}-tip" data-region="ma-tip" hidden>{{tip}}</div>
+</div>
+<div class="ma-row-info">
+    <a class="ma-row-name" href="{{url}}">{{name}}</a>
+    <div class="ma-row-meta{{#stacked}} ma-row-meta--stacked{{/stacked}}">
+        <a class="ma-row-course" href="{{courseurl}}">{{course}}</a>
+        <span class="ma-row-type">{{typeline}}</span>
+        {{#hasflags}}
+        <div class="ma-flags">{{#hiddenhint}}{{> block_le_dashboard/hint }}{{/hiddenhint}}{{#hints}}{{> block_le_dashboard/hint }}{{/hints}}</div>
+        {{/hasflags}}
     </div>
+</div>
+<div class="ma-row-dates">
+    {{#dates}}
+    <div class="ma-row-date ma-row-date--{{key}}" data-date="{{key}}">
+        {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}
+    </div>
+    {{/dates}}
+    {{#notes}}<div class="ma-row-note">{{.}}</div>{{/notes}}
+    {{#alert}}<div class="ma-row-alert" data-region="ma-alert">{{alert}}</div>{{/alert}}
+</div>
+<div class="ma-row-status">
+    {{#status}}<div class="ma-status-wrap"><span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{#statushint}}{{> block_le_dashboard/hint }}{{/statushint}}</div>{{/status}}
+    {{#grade}}<div class="ma-grade" data-region="ma-grade">{{#str}}grade, block_le_dashboard{{/str}} <strong>{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</div>{{/grade}}
+    {{#grading}}<span class="badge ma-pill ma-pill--{{key}}" data-grading="{{key}}">{{text}}</span>{{/grading}}
+    {{#bars}}{{> block_le_dashboard/progress }}{{/bars}}
+</div>
+<div class="ma-row-actions">
+    {{#actions}}<a class="btn btn-sm ma-btn ma-btn--{{key}}" href="{{url}}"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{label}}<span class="accesshide">: {{name}}</span></a>{{/actions}}
+    {{#locked}}
+    <div class="ma-tip-wrap ma-tip-wrap--row ma-locked-wrap">
+        <button type="button" class="btn btn-sm ma-btn ma-btn--locked" data-action="tip" data-hint="locked"
+                aria-expanded="false" aria-controls="{{id}}" aria-describedby="{{id}}-text"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_locked, block_le_dashboard{{/str}}<span class="accesshide">: {{name}}</span></button>
+        <div class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden><div id="{{id}}-text">{{text}}{{#guidance}}<div class="ma-tip-guidance">{{{guidance}}}</div>{{/guidance}}</div></div>
+    </div>
+    {{/locked}}
+    {{#mitigation}}
+    <div class="dropdown ma-mitigate" data-region="ma-mitigate">
+        <button type="button" class="btn btn-sm ma-btn ma-btn--mitigate dropdown-toggle" id="{{id}}"
+                data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_mitigate, block_le_dashboard{{/str}}</button>
+        <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
+            {{#items}}<div class="dropdown-item-text ma-mitigate-item">{{{.}}}</div>{{/items}}
+            {{#noselfcert}}<div class="dropdown-item-text ma-mitigate-note">{{#str}}mitigate_noselfcert, block_le_dashboard{{/str}}</div>{{/noselfcert}}
+        </div>
+    </div>
+    {{/mitigation}}
     {{#hasmarkers}}
-    <ul class="list-unstyled collapse ma-markers" id="{{markersid}}" data-region="ma-markers">
-        {{#markers}}
-        <li class="ma-marker{{#all}} ma-marker--all{{/all}}">
-            {{#mailto}}<a class="ma-marker-name" href="{{mailto}}">{{name}}</a>{{/mailto}}{{^mailto}}<span class="ma-marker-name">{{name}}</span>{{/mailto}}
-            <div class="ma-marker-bars">{{#bars}}{{> block_le_dashboard/progress }}{{/bars}}</div>
-        </li>
-        {{/markers}}
-    </ul>
+    <button type="button" class="btn btn-sm ma-btn ma-btn--markers" data-toggle="collapse" data-bs-toggle="collapse"
+            data-target="#{{markersid}}" data-bs-target="#{{markersid}}"
+            aria-expanded="false" aria-controls="{{markersid}}">{{#marking}}{{#str}}action_marking, block_le_dashboard{{/str}}{{/marking}}{{^marking}}{{#str}}action_markers, block_le_dashboard{{/str}}{{/marking}}</button>
     {{/hasmarkers}}
-</li>
+</div>
+{{#hasmarkers}}
+<ul class="list-unstyled collapse ma-markers" id="{{markersid}}" data-region="ma-markers">
+    {{#markers}}
+    <li class="ma-marker{{#all}} ma-marker--all{{/all}}">
+        {{#mailto}}<a class="ma-marker-name" href="{{mailto}}">{{name}}</a>{{/mailto}}{{^mailto}}<span class="ma-marker-name">{{name}}</span>{{/mailto}}
+        <div class="ma-marker-bars">{{#bars}}{{> block_le_dashboard/progress }}{{/bars}}</div>
+    </li>
+    {{/markers}}
+</ul>
+{{/hasmarkers}}

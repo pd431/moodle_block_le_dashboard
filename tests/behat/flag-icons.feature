@@ -79,8 +79,8 @@ Feature: Hints and flags are single icons that explain themselves on demand
     And "A1" is hidden from students
     And the My assessments index is up to date
     When I log in as "teacher1" and view the "My marking"
-    And I hover over the "hidden" flag of "A1" for "200" milliseconds
-    Then the "hidden" popover of "A1" should not be visible
+    And I pass the pointer over the "hidden" flag of "A1" for "200" milliseconds
+    Then no tooltip should have opened
 
   @javascript
   Scenario: Clicking a flag keeps it open until Escape, and opens only one at a time

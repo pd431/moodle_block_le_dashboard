@@ -74,8 +74,8 @@ Feature: Activity icons say what the activity is and what applies to me
   Scenario: A brief pass over the icon does not open the tooltip
     Given a summative "assign" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
-    And I hover over the activity icon of "A1" for "200" milliseconds
-    Then the activity icon tooltip of "A1" should not be visible
+    And I pass the pointer over the activity icon of "A1" for "200" milliseconds
+    Then no tooltip should have opened
 
   @javascript
   Scenario: Clicking elsewhere closes the tooltip

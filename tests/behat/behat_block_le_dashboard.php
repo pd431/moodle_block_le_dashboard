@@ -967,7 +967,7 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Submits a peerwork for a group.
+     * Submits a peerwork or a team assignment for a group.
      *
      * @Given /^"(?P<user>[^"]*)" has submitted "(?P<name>[^"]*)" for "(?P<group>[^"]*)"$/
      * @param string $username
@@ -978,6 +978,18 @@ class behat_block_le_dashboard extends behat_base {
         global $DB;
         $cm = $this->cm($name);
         $groupid = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $group], MUST_EXIST);
+        if ($cm->modname === 'assign') {
+            // A team assignment submits for the member's group (CI caught this step using peerwork's generator).
+            $this->submit($cm, self::userid($username));
+            if (
+                !$DB->record_exists('assign_submission', ['assignment' => $cm->instance, 'groupid' => $groupid,
+                    'status' => 'submitted'])
+            ) {
+                throw new coding_exception("'$username' did not submit '$name' for '$group'");
+            }
+            self::queue($cm);
+            return;
+        }
         testing_util::get_data_generator()->get_plugin_generator('mod_peerwork')->create_submission([
             'peerworkid' => $cm->instance, 'groupid' => $groupid, 'userid' => self::userid($username),
             'timecreated' => time(), 'timemodified' => time()]);
@@ -1332,6 +1344,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $markerid
      * @param string $stage
      * @param bool $final
+     * @param float $mark
      */
     protected function feedback(cm_info $cm, int $userid, int $markerid, string $stage, bool $final, float $mark = 60): void {
         global $CFG;
@@ -3351,6 +3364,69 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Passes the pointer over a hint icon and away again.
+     *
+     * @When /^I pass the pointer over the "(?P<key>[a-z]+)" (?:flag|icon) of "(?P<name>[^"]*)" for "(?P<ms>\d+)" milliseconds$/
+     * @param string $key
+     * @param string $name
+     * @param int $ms
+     */
+    public function i_pass_over_the_flag(string $key, string $name, int $ms): void {
+        $this->pass_over(fn() => $this->flag($key, $name), $ms);
+    }
+
+    /**
+     * Passes the pointer over a row's activity icon and away again.
+     *
+     * @When /^I pass the pointer over the activity icon of "(?P<name>[^"]*)" for "(?P<ms>\d+)" milliseconds$/
+     * @param string $name
+     * @param int $ms
+     */
+    public function i_pass_over_the_activity_icon(string $name, int $ms): void {
+        $this->pass_over(fn() => $this->activity_icon($name), $ms);
+    }
+
+    /**
+     * Checks that no tip opened during the last pass of the pointer.
+     *
+     * @Then /^no tooltip should have opened$/
+     */
+    public function no_tooltip_should_have_opened(): void {
+        if ($this->evaluate_script('return window.maTipOpened')) {
+            throw new ExpectationException('A tooltip opened during the pass', $this->getSession());
+        }
+    }
+
+    /**
+     * Rests the pointer on an element, then moves it to the navigation bar, as one W3C action sequence so the
+     * browser times the pause itself; then waits past the hover delay (500ms). Separate WebDriver calls took over
+     * 450ms on a loaded runner and opened the tip (beta21). "No tooltip should have opened" checks the pass.
+     *
+     * @param callable $element Finds the element.
+     * @param int $ms
+     */
+    protected function pass_over(callable $element, int $ms): void {
+        $driver = $this->getSession()->getDriver();
+        $webdriver = $driver->getWebDriver();
+        $origin = function (\Behat\Mink\Element\NodeElement $node) use ($webdriver): array {
+            $id = $webdriver->findElement(\Facebook\WebDriver\WebDriverBy::xpath($node->getXpath()))->getID();
+            return ['element-6066-11e4-a52e-4f735466cecf' => $id];
+        };
+        // Records any tip opening during the pass, since the pointer leaving closes it again.
+        $this->execute_script('window.maTipOpened = false; new MutationObserver(ms => {
+            window.maTipOpened = window.maTipOpened || ms.some(m => m.target.getAttribute("aria-expanded") === "true");
+        }).observe(document.body, {subtree: true, attributes: true, attributeFilter: ["aria-expanded"]});');
+        $move = fn($node) => ['type' => 'pointerMove', 'duration' => 0, 'origin' => $origin($node), 'x' => 0, 'y' => 0];
+        $webdriver->execute(\Facebook\WebDriver\Remote\DriverCommand::ACTIONS, ['actions' => [[
+            'type' => 'pointer',
+            'id' => 'ma-pass',
+            'parameters' => ['pointerType' => 'mouse'],
+            'actions' => [$move($element()), ['type' => 'pause', 'duration' => $ms], $move($this->find('css', 'nav.navbar'))],
+        ]]]);
+        usleep(700000);
+    }
+
+    /**
      * Moves the pointer off a row, to the page's navigation bar.
      *
      * @When /^I move the pointer away from "(?P<name>[^"]*)"$/
@@ -3477,7 +3553,7 @@ class behat_block_le_dashboard extends behat_base {
         if ($grade) {
             $where = $row->find('css', '[data-region="ma-grade"]');
         } else if ($pill !== '') {
-            $where = $row->find('xpath', ".//span[contains(@class, 'ma-status-wrap')][span[contains(@class, 'ma-pill')]" .
+            $where = $row->find('xpath', ".//div[contains(@class, 'ma-status-wrap')][span[contains(@class, 'ma-pill')]" .
                 "[normalize-space(.) = " . behat_context_helper::escape($pill) . "]]");
         } else {
             $where = $row->find('xpath', ".//div[contains(@class, 'ma-row-date')][span[contains(@class, 'ma-row-date-label')]" .

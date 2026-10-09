@@ -26,10 +26,10 @@
      "glyph": false, "title": "3 unallocated", "count": 3, "text": "Includes 3 submissions not yet allocated to a marker.", "link": null,
      "guidance": "<p>Unallocated work falls to the module convenor until it is allocated.</p>"}
 }}
-<span class="ma-tip-wrap ma-tip-wrap--row ma-flag-wrap">
+<div class="ma-tip-wrap ma-tip-wrap--row ma-flag-wrap">
     <button type="button" class="ma-flag ma-flag--{{tone}}{{#glyph}} ma-flag--glyph{{/glyph}}" data-action="tip"
             data-hint="{{key}}" aria-expanded="false" aria-controls="{{id}}" aria-label="{{title}}">
         <i class="fa-solid {{icon}}" aria-hidden="true"></i>{{#count}}<span class="ma-flag-count" aria-hidden="true">{{count}}</span>{{/count}}
     </button>
     <div class="ma-tip ma-tip--wide" id="{{id}}" data-region="ma-tip" hidden><strong class="ma-tip-title">{{title}}</strong>{{text}}{{#link}} {{{link}}}{{/link}}{{#guidance}}<div class="ma-tip-guidance">{{{guidance}}}</div>{{/guidance}}</div>
-</span>
+</div>
