@@ -86,7 +86,7 @@ class refresh extends external_api {
                 }
             }
             $status = 'done';
-        } else if (count($cmids) <= config::inline_refresh_limit()) {
+        } else if (count($cmids) <= config::inline_refresh_limit() && self::rows($cmids) <= config::inline_refresh_rows()) {
             try {
                 (new indexer())->index_cms($cmids);
             } catch (\Throwable $e) {
@@ -116,6 +116,21 @@ class refresh extends external_api {
             'status' => $status,
             'html' => $output->render_from_template('block_le_dashboard/view', $object->export()),
         ];
+    }
+
+    /**
+     * How many student rows re-indexing these assessments rewrites, as last indexed.
+     *
+     * @param int[] $cmids
+     * @return int
+     */
+    protected static function rows(array $cmids): int {
+        global $DB;
+        if (!$cmids) {
+            return 0;
+        }
+        [$insql, $params] = $DB->get_in_or_equal($cmids);
+        return $DB->count_records_select('block_le_dashboard_stu', "cmid $insql", $params);
     }
 
     /**
