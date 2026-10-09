@@ -103,9 +103,9 @@ class setupchecks {
         }
         return [
             'label' => $year
-                ? get_string('setupchecks_year', 'block_le_dashboard', ['count' => $total,
+                ? get_string('setupchecks_year' . ($total === 1 ? '_one' : ''), 'block_le_dashboard', ['count' => $total,
                     'year' => format_string($year->label, true, ['escape' => false])])
-                : get_string('setupchecks_all', 'block_le_dashboard', $total),
+                : get_string('setupchecks_all' . ($total === 1 ? '_one' : ''), 'block_le_dashboard', $total),
             'courses' => $courses,
         ];
     }
