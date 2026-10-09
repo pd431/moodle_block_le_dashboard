@@ -22,13 +22,15 @@
     Example context (json):
     {
         "uniqid": "ma-dashboard1",
+        "timezone": "Europe/London",
         "hastabs": true,
         "tabs": [{"key": "student", "label": "Student", "active": true}, {"key": "staff", "label": "Marking", "active": false}],
         "activeview": "student",
         "view": {"key": "student", "uniqid": "ma1", "sections": [], "summary": [], "freshness": {"text": "Updated just now"} }
     }
 }}
-<div id="{{uniqid}}" class="block_le_dashboard_dashboard" data-region="ma-dashboard" data-view="{{activeview}}">
+<div id="{{uniqid}}" class="block_le_dashboard_dashboard" data-region="ma-dashboard" data-view="{{activeview}}"
+     data-timezone="{{timezone}}">
     {{#hastabs}}
     <ul class="nav nav-tabs ma-tabs">
         {{#tabs}}

@@ -30,6 +30,7 @@ import Ajax from 'core/ajax';
 import Notification from 'core/notification';
 import {getString} from 'core/str';
 import {setUserPreference} from 'core_user/repository';
+import {localise} from './localtime';
 
 /** Milliseconds the pointer rests on a tip trigger before its tip opens, as a tooltip does. */
 const HOVER_DELAY = 500;
@@ -90,6 +91,7 @@ class Dashboard {
             }
         });
         this.apply();
+        localise(root).catch(Notification.exception);
     }
 
     /**
@@ -408,6 +410,7 @@ class Dashboard {
                 return;
             }
             container.innerHTML = response.html;
+            localise(this.root).catch(Notification.exception);
             this.root.dataset.view = view;
             let label = '';
             this.root.querySelectorAll('[data-action="switch-view"]').forEach(tab => {

@@ -4116,4 +4116,160 @@ class behat_block_le_dashboard extends behat_base {
         global $CFG;
         $this->i_should_see_linking_to($text, $CFG->wwwroot . '/');
     }
+
+    /**
+     * Creates and tags an assessment due at a clock time in a time zone.
+     *
+     * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)" is due "(?P<due>[^"]*)" in "(?P<zone>[^"]*)"$/
+     * @param string $tag
+     * @param string $modname
+     * @param string $name
+     * @param string $course
+     * @param string $due A date and time, such as "14 October 2026 13:30".
+     * @param string $zone
+     */
+    public function an_assessment_is_due_in_zone(
+        string $tag,
+        string $modname,
+        string $name,
+        string $course,
+        string $due,
+        string $zone
+    ): void {
+        $time = (new \DateTime($due, new \DateTimeZone($zone)))->getTimestamp();
+        $this->create_assessment($tag, $modname, $name, $course, '', $time);
+    }
+
+    /**
+     * Sets a user's Moodle time zone.
+     *
+     * @Given /^the user "(?P<user>[^"]*)" has the time zone "(?P<zone>[^"]*)"$/
+     * @param string $username
+     * @param string $zone
+     */
+    public function the_user_has_the_time_zone(string $username, string $zone): void {
+        global $DB;
+        $DB->set_field('user', 'timezone', $zone, ['id' => self::userid($username)]);
+    }
+
+    /**
+     * Makes the browser's time zone another, for the rest of the scenario (Chrome DevTools).
+     *
+     * @Given /^my browser's time zone is "(?P<zone>[^"]*)"$/
+     * @param string $zone
+     */
+    public function my_browsers_time_zone_is(string $zone): void {
+        $session = $this->getSession();
+        if (!$session->isStarted()) {
+            $session->start();
+        }
+        $devtools = new \Facebook\WebDriver\Chrome\ChromeDevToolsDriver($session->getDriver()->getWebDriver());
+        $devtools->execute('Emulation.setTimezoneOverride', ['timezoneId' => $zone]);
+    }
+
+    /**
+     * The time a row's labelled date shows.
+     *
+     * @Then /^the "(?P<label>[^"]*)" date of "(?P<name>[^"]*)" should read "(?P<text>[^"]*)"$/
+     * @param string $label
+     * @param string $name
+     * @param string $text
+     */
+    public function the_date_should_read(string $label, string $name, string $text): void {
+        $time = $this->dated($label, $name)->find('css', 'time');
+        if (!self::within(fn() => trim($time->getText()) === $text)) {
+            throw new ExpectationException("'$name' $label reads '{$time->getText()}'", $this->getSession());
+        }
+    }
+
+    /**
+     * A row with no time zone globe.
+     *
+     * @Then /^"(?P<name>[^"]*)" should not have a time zone icon$/
+     * @param string $name
+     */
+    public function should_not_have_a_time_zone_icon(string $name): void {
+        if ($this->row($name)->find('css', '[data-hint="timezone"]')) {
+            throw new ExpectationException("'$name' has a time zone icon", $this->getSession());
+        }
+    }
+
+    /**
+     * Which globe a row's first time zone hint shows.
+     *
+     * @Then /^the time zone icon of "(?P<name>[^"]*)" should be "(?P<icon>[a-z-]+)"$/
+     * @param string $name
+     * @param string $icon Font Awesome name without "fa-".
+     */
+    public function the_time_zone_icon_should_be(string $name, string $icon): void {
+        $glyph = $this->time_zone_icon($name)->find('css', 'i');
+        if (!$glyph || !$glyph->hasClass('fa-' . $icon)) {
+            throw new ExpectationException(
+                "'$name' shows " . ($glyph ? $glyph->getAttribute('class') : 'no glyph'),
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * Opens a row's time zone hint.
+     *
+     * @When /^I click on the time zone icon of (?:the "(?P<label>[^"]*)" date of )?"(?P<name>[^"]*)"$/
+     * @param string $label Optional: the date the hint sits beside.
+     * @param string $name
+     */
+    public function i_click_on_the_time_zone_icon(string $label, string $name): void {
+        $this->time_zone_icon($name, $label)->click();
+    }
+
+    /**
+     * What a row's open time zone hint says.
+     *
+     * @Then /^the time zone note of "(?P<name>[^"]*)" should say "(?P<text>[^"]*)"$/
+     * @param string $name
+     * @param string $text
+     */
+    public function the_time_zone_note_should_say(string $name, string $text): void {
+        foreach ($this->row($name)->findAll('css', '[data-hint="timezone"]') as $icon) {
+            $shown = $this->tip_text($icon);
+            if ($shown !== null) {
+                if (!str_contains($shown, $text)) {
+                    throw new ExpectationException("The time zone note of '$name' says '$shown'", $this->getSession());
+                }
+                return;
+            }
+        }
+        throw new ExpectationException("No time zone note of '$name' is open", $this->getSession());
+    }
+
+    /**
+     * A row's labelled date line.
+     *
+     * @param string $label
+     * @param string $name
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function dated(string $label, string $name): \Behat\Mink\Element\NodeElement {
+        $xpath = ".//div[@data-date][span[contains(@class, 'ma-row-date-label')][normalize-space(.) = " .
+            behat_context_helper::escape($label) . "]]";
+        return $this->row($name)->find('xpath', $xpath)
+            ?? throw new ExpectationException("'$name' has no '$label' date", $this->getSession());
+    }
+
+    /**
+     * A row's time zone globe: beside a labelled date, or the first.
+     *
+     * @param string $name
+     * @param string $label
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function time_zone_icon(string $name, string $label = ''): \Behat\Mink\Element\NodeElement {
+        $where = $label !== '' ? $this->dated($label, $name) : $this->row($name);
+        $icon = null;
+        self::within(function () use ($where, &$icon) {
+            $icon = $where->find('css', '[data-hint="timezone"]');
+            return $icon !== null;
+        });
+        return $icon ?? throw new ExpectationException("'$name' has no time zone icon", $this->getSession());
+    }
 }
