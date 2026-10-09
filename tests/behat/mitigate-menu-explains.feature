@@ -196,7 +196,6 @@ Feature: The Mitigate menu explains self-certification
     And I click on "Click again to delete" in the Mitigate menu of "C1"
     Then block_rhb's delete link should have been followed
 
-
   # The same menu on sites without mod_coursework: the block_rhb stand-in treats an assignment as a coursework,
   # so CI checks the menu and Delete mitigation too. The count needs mod_coursework, so none shows here.
   Scenario: Without mod_coursework: self-cert and formal mitigation under our labels
