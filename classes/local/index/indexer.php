@@ -176,6 +176,21 @@ class indexer {
         }
     }
 
+    /** Tries at writing an assessment's rows when the database reports a deadlock. */
+    const WRITE_ATTEMPTS = 3;
+
+    /**
+     * Whether an error is the database giving up a transaction in a deadlock (MySQL and MariaDB 1213,
+     * PostgreSQL 40P01), after which trying again is safe.
+     *
+     * @param \Throwable $e
+     * @return bool
+     */
+    protected static function deadlock(\Throwable $e): bool {
+        $text = $e->getMessage() . ' ' . ($e->debuginfo ?? '');
+        return $e instanceof \dml_exception && stripos($text, 'deadlock') !== false;
+    }
+
     /** Seconds a re-index waits for another re-index of the same assessment to finish. */
     const LOCK_WAIT = 60;
 
@@ -360,33 +375,52 @@ class indexer {
         }
 
         $failwrite = registry::take_test_write_failure($cmid);
-        $transaction = $DB->start_delegated_transaction();
-        try {
-            if ($only === null) {
-                $this->delete_rows($cmid);
-                $DB->insert_record(self::CM, $record);
-            } else {
-                $this->delete_unit_rows($cmid, $only, $groupids);
-            }
-            if ($failwrite) {
-                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'cm ' . $cmid);
-            }
-            if ($stu) {
-                $DB->insert_records(self::STU, $stu);
-            }
-            if ($mark) {
-                $DB->insert_records(self::MARK, $mark);
-            }
-            $transaction->allow_commit();
-        } catch (\Throwable $e) {
-            // Undo the half-written rows and close this transaction before anyone catches the error:
-            // a caught error with the transaction still open would silently undo every later write
-            // in the process (PR2). The course and reconcile loops then carry on.
+        // Re-indexes of different assessments can deadlock in the database (MariaDB's gap locks, seen in the
+        // deadline rush load test): the loser tries again, unless this is part of a larger transaction, which
+        // the database has already undone.
+        $retry = !$DB->is_transaction_started();
+        for ($attempt = 1;; $attempt++) {
+            $transaction = $DB->start_delegated_transaction();
             try {
-                $transaction->rollback($e);
-            } finally {
-                registry::record_error($cm->modname, $e);
-                $this->load_error($cm, $courseid, $types[$cmid], $cmrow);
+                if ($only === null) {
+                    $this->delete_rows($cmid);
+                    $DB->insert_record(self::CM, $record);
+                } else {
+                    $this->delete_unit_rows($cmid, $only, $groupids);
+                }
+                if ($failwrite) {
+                    throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'cm ' . $cmid);
+                }
+                if (registry::take_test_deadlock($cmid)) {
+                    throw new \dml_write_exception('Deadlock found when trying to get lock (test)');
+                }
+                if ($stu) {
+                    $DB->insert_records(self::STU, $stu);
+                }
+                if ($mark) {
+                    $DB->insert_records(self::MARK, $mark);
+                }
+                $transaction->allow_commit();
+                break;
+            } catch (\Throwable $e) {
+                if ($retry && $attempt < self::WRITE_ATTEMPTS && self::deadlock($e)) {
+                    try {
+                        $transaction->rollback($e);
+                    } catch (\Throwable $undone) {
+                        // Rolled back: try again shortly.
+                        usleep(random_int(50000, 250000) * $attempt);
+                        continue;
+                    }
+                }
+                // Undo the half-written rows and close this transaction before anyone catches the error:
+                // a caught error with the transaction still open would silently undo every later write
+                // in the process (PR2). The course and reconcile loops then carry on.
+                try {
+                    $transaction->rollback($e);
+                } finally {
+                    registry::record_error($cm->modname, $e);
+                    $this->load_error($cm, $courseid, $types[$cmid], $cmrow);
+                }
             }
         }
         if ($only !== null && ($failed || $markfailed)) {

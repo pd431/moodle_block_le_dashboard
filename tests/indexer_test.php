@@ -241,6 +241,38 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * Deadline rush load test: a write that loses a database deadlock tries again, twice, before it counts as
+     * a failure.
+     */
+    public function test_write_retries_deadlock(): void {
+        global $DB;
+        // Not inside the test's own transaction: a deadlock inside a larger transaction can't be tried again.
+        $this->preventResetByRollback();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $this->ma->tag($a->cmid);
+
+        set_config('testdeadlock', $a->cmid . ':2', 'block_le_dashboard');
+        $DB->delete_records(indexer::STU, ['cmid' => $a->cmid]);
+        (new indexer())->index_cm($a->cmid);
+        $this->assertSame(1, $DB->count_records(indexer::STU, ['cmid' => $a->cmid]));
+        $this->assertEquals(0, $DB->get_field(indexer::CM, 'loaderror', ['cmid' => $a->cmid]));
+
+        set_config('testdeadlock', $a->cmid . ':3', 'block_le_dashboard');
+        try {
+            (new indexer())->index_cm($a->cmid);
+            $this->fail('a third deadlock is an error');
+        } catch (\dml_write_exception $e) {
+            $this->assertStringContainsString('Deadlock', $e->getMessage());
+        }
+        $this->assertEquals(1, $DB->get_field(indexer::CM, 'loaderror', ['cmid' => $a->cmid]));
+        $this->assertSame(1, $DB->count_records(indexer::STU, ['cmid' => $a->cmid]), 'rows as they were');
+        registry::flush_errors();
+    }
+
+    /**
      * Group restrictions: students outside the group can't access.
      */
     public function test_availability(): void {

@@ -177,6 +177,31 @@ class registry {
         return false;
     }
 
+    /**
+     * For tests: whether writing an activity's rows should now meet a deadlock. The config testdeadlock is
+     * "cmid:n", for the next n writes. Counted in memory, as the write's rollback undoes config changes.
+     *
+     * @param int $cmid
+     * @return bool
+     */
+    public static function take_test_deadlock(int $cmid): bool {
+        if (!defined('PHPUNIT_TEST') || !PHPUNIT_TEST) {
+            return false;
+        }
+        $config = (string)get_config('block_le_dashboard', 'testdeadlock');
+        if ($config !== self::$testdeadlock[0]) {
+            self::$testdeadlock = [$config, (int)(explode(':', $config)[1] ?? 0)];
+        }
+        if ((int)explode(':', $config)[0] !== $cmid || self::$testdeadlock[1] < 1) {
+            return false;
+        }
+        self::$testdeadlock[1]--;
+        return true;
+    }
+
+    /** @var array The testdeadlock config last read, and deadlocks left to meet. */
+    protected static $testdeadlock = ['', 0];
+
     /** @var array Errors recorded in this run, by activity type, written once when the run ends (PR14). */
     protected static $errors = [];
 
