@@ -275,8 +275,9 @@ class student extends base {
     protected function notes(\stdClass $r, string $section, string $status): array {
         $notes = [];
         $due = $r->due ? (int)$r->due : null;
-        // Time left: to the cut-off, or to the deadline plus the grace period when there is none (G9).
-        $until = $r->cutoff ? (int)$r->cutoff : ($due ? $due + config::grace() : null);
+        // Time left: to the cut-off (a quiz's close is its cut-off). Without one Moodle keeps taking the work, so
+        // there's no countdown (B9, support map beta22 re-run).
+        $until = $r->cutoff ? (int)$r->cutoff : null;
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
             $notes[] = get_string('stillsubmit', 'block_le_dashboard', format::duration($until - $this->now));
         }
