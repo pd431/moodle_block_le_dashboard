@@ -288,8 +288,11 @@ Feature: Students see only assessments they can actually access
     Then "A1" should not show "late"
     And "A1" should not have a late penalty hint
 
+  # beta23 CI, 4.5 MariaDB at 22:30 UTC: failed three times with relative times. Fixed times and a fixed "now"
+  # make it the same at any hour.
   Scenario: An overdue assessment with a cut-off says how long is left to submit
-    Given a summative "assign" "A1" in "M1" with a cut-off "in 21 hours" was due "3 hours ago"
+    Given a summative "assign" "A1" in "M1" with a cut-off "Tue 13 October 2026 08:00 Europe/London" was due "Mon 12 October 2026 09:00 Europe/London"
+    And it is now "Mon 12 October 2026 12:00" in "Europe/London"
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Overdue" section
     And "A1" should show "You can still submit for 20 h"

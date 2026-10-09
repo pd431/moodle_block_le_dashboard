@@ -2620,9 +2620,11 @@ class behat_block_le_dashboard extends behat_base {
     public function row_should_show(string $name, string $not, string $text, string $when = ''): void {
         $row = $this->row($name);
         if ($when === '') {
-            $has = str_contains($this->row_text($row), $text);
-            if ($has === (bool)$not) {
-                throw new ExpectationException("'$name' " . ($not ? 'shows' : 'does not show') . " '$text'", $this->getSession());
+            $shown = $this->row_text($row);
+            if (str_contains($shown, $text) === (bool)$not) {
+                // What the row does show, so a failure on CI can be read from the log.
+                $what = $not ? 'shows' : 'does not show';
+                throw new ExpectationException("'$name' $what '$text': '$shown'", $this->getSession());
             }
             return;
         }
