@@ -327,6 +327,25 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * Deadline rush (P2): a staff Refresh over too many student rows is queued, however few the assessments.
+     *
+     * @covers \block_le_dashboard\external\refresh
+     */
+    public function test_refresh_queues_by_rows(): void {
+        global $DB;
+        $params = ['classname' => '\\block_le_dashboard\\task\\reindex'];
+        $this->setUser($this->u['convenor']);
+        $DB->delete_records('task_adhoc', $params);
+        $this->assertSame('done', \block_le_dashboard\external\refresh::execute('convenor')['status']);
+        $this->assertSame(0, $DB->count_records('task_adhoc', $params));
+
+        set_config('inlinerefreshrows', 1, 'block_le_dashboard');
+        unset_user_preference('block_le_dashboard_lastrefresh');
+        $this->assertSame('queued', \block_le_dashboard\external\refresh::execute('convenor')['status']);
+        $this->assertSame(1, $DB->count_records('task_adhoc', $params));
+    }
+
+    /**
      * Pierre's screenshot, 2026-10-09: a student's Refresh moves their "Updated" line on without
      * making the assessment look fully indexed to staff.
      */

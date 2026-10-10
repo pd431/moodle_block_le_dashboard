@@ -61,6 +61,19 @@ Feature: Dashboard data is cached, says how fresh it is, and can be refreshed (a
     And I view the "Convenor view" again
     Then I should see "Updated" with the time "now"
 
+  @javascript
+  Scenario: A convenor refresh of a very large assessment is queued, so the page answers straight away
+    # Deadline rush: the limit counts students as well as assessments. Lowered here to stand for a
+    # 3,000-student coursework.
+    Given the following config values are set as admin:
+      | inlinerefreshrows | 1 | block_le_dashboard |
+    And I log in as "convenor" and view the "Convenor view"
+    When I press "Refresh" in the "My assessments" block
+    Then I should see "Refreshing"
+    When the My assessments index catches up
+    And I view the "Convenor view" again
+    Then I should see "Updated" with the time "now"
+
   Scenario: An assessment becomes overdue at its deadline without re-indexing
     Given a summative "assign" "Q1" in "M1" is due "in 1 minute"
     And the My assessments index is up to date

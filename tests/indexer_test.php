@@ -241,6 +241,38 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
+     * Deadline rush load test: a write that loses a database deadlock tries again, twice, before it counts as
+     * a failure.
+     */
+    public function test_write_retries_deadlock(): void {
+        global $DB;
+        // Not inside the test's own transaction: a deadlock inside a larger transaction can't be tried again.
+        $this->preventResetByRollback();
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $this->ma->tag($a->cmid);
+
+        set_config('testdeadlock', $a->cmid . ':2', 'block_le_dashboard');
+        $DB->delete_records(indexer::STU, ['cmid' => $a->cmid]);
+        (new indexer())->index_cm($a->cmid);
+        $this->assertSame(1, $DB->count_records(indexer::STU, ['cmid' => $a->cmid]));
+        $this->assertEquals(0, $DB->get_field(indexer::CM, 'loaderror', ['cmid' => $a->cmid]));
+
+        set_config('testdeadlock', $a->cmid . ':3', 'block_le_dashboard');
+        try {
+            (new indexer())->index_cm($a->cmid);
+            $this->fail('a third deadlock is an error');
+        } catch (\dml_write_exception $e) {
+            $this->assertStringContainsString('Deadlock', $e->getMessage());
+        }
+        $this->assertEquals(1, $DB->get_field(indexer::CM, 'loaderror', ['cmid' => $a->cmid]));
+        $this->assertSame(1, $DB->count_records(indexer::STU, ['cmid' => $a->cmid]), 'rows as they were');
+        registry::flush_errors();
+    }
+
+    /**
      * Group restrictions: students outside the group can't access.
      */
     public function test_availability(): void {
@@ -317,6 +349,73 @@ final class indexer_test extends \advanced_testcase {
         $DB->set_field('task_adhoc', 'timestarted', time(), $params);
         indexer::queue_cm(42);
         $this->assertSame(2, $DB->count_records('task_adhoc', $params), 'the running one has read its data already');
+    }
+
+    /**
+     * Deadline rush: a held-back re-index waits; one asked for now brings it forward rather than waiting behind it.
+     */
+    public function test_queue_delay_and_bring_forward(): void {
+        global $DB;
+        $params = ['classname' => '\\block_le_dashboard\\task\\reindex'];
+        $before = time();
+        indexer::queue_cm(42, indexer::COALESCE);
+        indexer::queue_cm(42, indexer::COALESCE);
+        $this->assertSame(1, $DB->count_records('task_adhoc', $params), 'a rush of submissions is one run');
+        $this->assertGreaterThanOrEqual($before + indexer::COALESCE, (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
+        indexer::queue_cm(42);
+        $this->assertSame(1, $DB->count_records('task_adhoc', $params));
+        // Due before this second, as cron runs only tasks due before the second it starts.
+        $this->assertLessThan(time(), (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
+        // A later hold-back never delays it again.
+        indexer::queue_cm(42, indexer::COALESCE);
+        $this->assertLessThanOrEqual(time(), (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
+    }
+
+    /**
+     * P6: within a web request, re-indexes are collected and each queued once at the end, as early as asked.
+     */
+    public function test_queue_deferred_to_end_of_request(): void {
+        global $DB;
+        $params = ['classname' => '\\block_le_dashboard\\task\\reindex'];
+        indexer::defer_queue();
+        $queries = $DB->perf_get_queries();
+        for ($i = 0; $i < 50; $i++) {
+            indexer::queue_cm(42, indexer::COALESCE);
+        }
+        indexer::queue_cm(42);
+        indexer::queue_course(7);
+        $this->assertSame($queries, $DB->perf_get_queries(), 'no queue checks while grading');
+        $this->assertSame(0, $DB->count_records('task_adhoc', $params));
+        indexer::flush_queue();
+        $this->assertSame(2, $DB->count_records('task_adhoc', $params));
+        $cm = $DB->get_record_select('task_adhoc', 'classname = :classname AND ' .
+            $DB->sql_compare_text('customdata') . ' = :data', $params + ['data' => json_encode(['cmid' => 42])]);
+        $this->assertLessThanOrEqual(time(), (int)$cm->nextruntime, 'the earliest asked for wins');
+        // Back to queueing as it comes.
+        indexer::queue_cm(43);
+        $this->assertSame(3, $DB->count_records('task_adhoc', $params));
+    }
+
+    /**
+     * Deadline rush: a student's submission updates their own row at once and holds back everyone else's re-index.
+     */
+    public function test_submission_holds_back_reindex(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS,
+            'submissiondrafts' => 0, 'assignsubmission_onlinetext_enabled' => 1]);
+        $this->ma->tag($a->cmid);
+        $DB->delete_records('task_adhoc', ['component' => 'block_le_dashboard']);
+        $before = time();
+        $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $s1->id, 'cmid' => $a->cmid,
+            'onlinetext' => 'Mine']);
+        $own = ['cmid' => $a->cmid, 'userid' => $s1->id];
+        $this->assertEquals(1, $DB->get_field('block_le_dashboard_stu', 'submitted', $own));
+        $tasks = $DB->get_records('task_adhoc', ['component' => 'block_le_dashboard']);
+        $this->assertCount(1, $tasks);
+        $this->assertGreaterThanOrEqual($before + indexer::COALESCE, (int)reset($tasks)->nextruntime);
     }
 
     /**

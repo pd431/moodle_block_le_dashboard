@@ -181,4 +181,16 @@ class config {
         $value = (int)get_config('block_le_dashboard', 'inlinerefreshlimit');
         return $value > 0 ? $value : 30;
     }
+
+    /**
+     * Student rows a Refresh re-indexes inline before it queues the work instead, so a Refresh of a few very
+     * large assessments (a convenor at 12:05 on a deadline day) can't hold a web request, or the activities'
+     * locks that students' submissions wait on, for long (deadline rush, P2). A hidden setting, for tests.
+     *
+     * @return int
+     */
+    public static function inline_refresh_rows(): int {
+        $value = (int)get_config('block_le_dashboard', 'inlinerefreshrows');
+        return $value > 0 ? $value : 5000;
+    }
 }

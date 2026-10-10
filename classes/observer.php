@@ -60,15 +60,18 @@ class observer {
         // rows now, everyone else's in the queued task. So does a teacher's lock or unlock, for the
         // student it's about (B4).
         $userid = in_array('\\' . get_class($event), self::FOR_RELATED_USER) ? $event->relateduserid : $event->userid;
+        $delay = 0;
         if ($userid && $DB->record_exists('block_le_dashboard_stu', ['cmid' => $cmid, 'userid' => $userid])) {
             try {
                 // A short wait: the student's request mustn't hang behind a slow re-index (A6).
                 (new indexer())->index_users($cmid, [(int)$userid], indexer::INLINE_LOCK_WAIT);
+                // Their rows are right: everyone else's can wait for the rest of the rush (deadline rush).
+                $delay = indexer::COALESCE;
             } catch (\Throwable $e) {
                 debugging('block_le_dashboard: updating the student\'s own rows failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
             }
         }
-        indexer::queue_cm($cmid);
+        indexer::queue_cm($cmid, $delay);
     }
 
     /**

@@ -167,9 +167,13 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Runs pending index tasks.
+     * Runs pending index tasks, including those held back to coalesce a rush of submissions: the scenario
+     * means the time has passed.
      */
     protected function catch_up(): void {
+        global $DB;
+        $due = time() - 1;
+        $DB->set_field_select('task_adhoc', 'nextruntime', $due, "component = 'block_le_dashboard' AND nextruntime > $due");
         $this->execute('behat_general::i_run_all_adhoc_tasks');
     }
 
