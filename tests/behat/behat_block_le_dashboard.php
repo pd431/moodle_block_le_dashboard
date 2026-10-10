@@ -172,8 +172,8 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected function catch_up(): void {
         global $DB;
-        $now = time();
-        $DB->set_field_select('task_adhoc', 'nextruntime', $now, "component = 'block_le_dashboard' AND nextruntime > $now");
+        $due = time() - 1;
+        $DB->set_field_select('task_adhoc', 'nextruntime', $due, "component = 'block_le_dashboard' AND nextruntime > $due");
         $this->execute('behat_general::i_run_all_adhoc_tasks');
     }
 

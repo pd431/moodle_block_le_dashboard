@@ -1062,7 +1062,8 @@ class indexer {
      * @param int $delay Seconds to hold it back.
      */
     protected static function queue(array $data, int $delay = 0): void {
-        $runat = time() + $delay;
+        // Due now is a second ago, as core queues it: cron runs only tasks due before the time it starts.
+        $runat = $delay ? time() + $delay : time() - 1;
         if (self::$pending === null && !CLI_SCRIPT) {
             self::defer_queue();
         }
