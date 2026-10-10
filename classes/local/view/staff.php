@@ -274,15 +274,18 @@ class staff extends base {
      */
     public static function extensions_hint(string $rowid, \stdClass $pending): array {
         $n = (int)$pending->students;
-        return format::hint(
+        $dated = format::dated('hint_extensions_text', (int)$pending->latest);
+        $hint = format::hint(
             $rowid,
             'extensions',
-            get_string('hint_extensions_text', 'block_le_dashboard', format::datetime((int)$pending->latest)),
+            $dated['text'],
             null,
             $n === 1 ? get_string('hint_extensions_one', 'block_le_dashboard')
                 : get_string('hint_extensions_many', 'block_le_dashboard', $n),
             $n
         );
+        $hint['dated'] = $dated;
+        return $hint;
     }
 
     /**

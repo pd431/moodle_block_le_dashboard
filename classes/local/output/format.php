@@ -56,6 +56,61 @@ class format {
     }
 
     /**
+     * A string with a date in it, split around the date so a template can mark it up as a time element and the
+     * page can show it in the viewer's own time zone, like the row dates (Pierre, 2026-10-09: "all times ...
+     * should look like the server was in china").
+     *
+     * @param string $identifier A block string whose only placeholder is the date.
+     * @param int $time
+     * @return array text (all of it, as Moodle draws it), before, date, iso, after
+     */
+    public static function dated(string $identifier, int $time): array {
+        $mark = "\x01";
+        [$before, $after] = explode($mark, get_string($identifier, 'block_le_dashboard', $mark), 2) + [1 => ''];
+        $date = self::datetime($time);
+        return ['text' => $before . $date . $after, 'before' => $before, 'date' => $date, 'iso' => date('c', $time),
+            'after' => $after];
+    }
+
+    /**
+     * Calendar days from one time to another, counted on the dates they fall on in the user's Moodle time zone:
+     * 0 for later today, 1 for tomorrow.
+     *
+     * @param int $from
+     * @param int $to
+     * @return int
+     */
+    public static function calendar_days(int $from, int $to): int {
+        $zone = \core_date::get_user_timezone_object();
+        $utc = new \DateTimeZone('UTC');
+        $day = fn(int $t) => new \DateTimeImmutable((new \DateTimeImmutable('@' . $t))->setTimezone($zone)->format('Y-m-d'), $utc);
+        $diff = $day($from)->diff($day($to));
+        return $diff->invert ? -$diff->days : $diff->days;
+    }
+
+    /**
+     * A countdown note ("Due in 16 h", "Due tomorrow", "Due in 3 days"). Under a day it's the time left, the same
+     * in every zone; from a day it's calendar days to the date the row shows, so it agrees with that date. The page
+     * recounts the days in the viewer's own time zone when it shows the dates in it (localtime.js).
+     *
+     * @param string $kind duein or stillsubmit: the strings it's made of are {kind}, {kind}_tomorrow.
+     * @param int $time The deadline.
+     * @param int $now
+     * @return array text, kind, until (the deadline) and now, in ISO 8601
+     */
+    public static function countdown(string $kind, int $time, int $now): array {
+        $left = $time - $now;
+        $days = $left < DAYSECS ? 0 : max(1, self::calendar_days($now, $time));
+        if ($days === 1) {
+            $text = get_string($kind . '_tomorrow', 'block_le_dashboard');
+        } else {
+            $text = get_string($kind, 'block_le_dashboard', $days ? get_string('duration_days', 'block_le_dashboard', $days)
+                : self::duration($left));
+        }
+        return ['text' => $text, 'kind' => $kind, 'until' => date('c', $time), 'now' => date('c', $now)];
+    }
+
+    /**
      * A labelled date for a row.
      *
      * @param string $key Date key; the label is the date_{key} string, if there is one.
@@ -118,6 +173,17 @@ class format {
             return get_string('updatedhours', 'block_le_dashboard', (int)floor($diff / HOURSECS));
         }
         return get_string('updatedon', 'block_le_dashboard', self::datetime($time));
+    }
+
+    /**
+     * updated(), with the date split out (dated()) when it gives one.
+     *
+     * @param int|null $time
+     * @param int $now
+     * @return array|null dated(), or null when the line has no date
+     */
+    public static function updated_dated(?int $time, int $now): ?array {
+        return $time && $now - $time >= DAYSECS ? self::dated('updatedon', $time) : null;
     }
 
     /**

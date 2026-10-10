@@ -1,0 +1,27 @@
+{{!
+    This file is part of Moodle - https://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+}}
+{{!
+    @template block_le_dashboard/datedtext
+
+    A sentence with a date in it (format::dated()). The date is a time element, so the page can show it in the
+    viewer's own time zone like the row dates (localtime.js).
+
+    Example context (json):
+    {"before": "Their work may still arrive. The latest extended deadline is ", "date": "21 Oct 2026, 12:00",
+     "iso": "2026-10-21T12:00:00+01:00", "after": "."}
+}}
+{{before}}<time datetime="{{iso}}" data-intext="1">{{date}}</time>{{after}}

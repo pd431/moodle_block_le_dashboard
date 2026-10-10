@@ -83,7 +83,10 @@ class behat_block_le_dashboard extends behat_base {
      * @return int
      */
     protected static function time(string $text): int {
-        $text = trim(strtolower($text));
+        // An absolute time may name its zone ("12 October 2026 10:00 Europe/London"), which strtotime() reads
+        // only as written.
+        $absolute = trim($text);
+        $text = strtolower($absolute);
         $map = ['now' => 0, 'tomorrow' => DAYSECS, 'yesterday' => -DAYSECS];
         if (isset($map[$text])) {
             return time() + $map[$text];
@@ -94,9 +97,9 @@ class behat_block_le_dashboard extends behat_base {
         if (preg_match('/^(\d+) (minute|hour|day|week)s? ago$/', $text, $m)) {
             return strtotime("-{$m[1]} {$m[2]}");
         }
-        $time = strtotime($text);
+        $time = strtotime($absolute);
         if ($time === false) {
-            throw new coding_exception("Unknown time '$text'");
+            throw new coding_exception("Unknown time '$absolute'");
         }
         return $time;
     }
@@ -2617,9 +2620,11 @@ class behat_block_le_dashboard extends behat_base {
     public function row_should_show(string $name, string $not, string $text, string $when = ''): void {
         $row = $this->row($name);
         if ($when === '') {
-            $has = str_contains($this->row_text($row), $text);
-            if ($has === (bool)$not) {
-                throw new ExpectationException("'$name' " . ($not ? 'shows' : 'does not show') . " '$text'", $this->getSession());
+            $shown = $this->row_text($row);
+            if (str_contains($shown, $text) === (bool)$not) {
+                // What the row does show, so a failure on CI can be read from the log.
+                $what = $not ? 'shows' : 'does not show';
+                throw new ExpectationException("'$name' $what '$text': '$shown'", $this->getSession());
             }
             return;
         }
@@ -4271,6 +4276,17 @@ class behat_block_le_dashboard extends behat_base {
     ): void {
         $time = (new \DateTime($due, new \DateTimeZone($zone)))->getTimestamp();
         $this->create_assessment($tag, $modname, $name, $course, '', $time);
+    }
+
+    /**
+     * Sets the time the dashboard is drawn at (config::now()), a date and time in a time zone.
+     *
+     * @Given /^it is now "(?P<when>[^"]*)" in "(?P<zone>[^"]*)"$/
+     * @param string $when Such as "Mon 12 October 2026 20:00".
+     * @param string $zone
+     */
+    public function it_is_now(string $when, string $zone): void {
+        set_config('behatnow', (new \DateTime($when, new \DateTimeZone($zone)))->getTimestamp(), 'block_le_dashboard');
     }
 
     /**

@@ -279,11 +279,11 @@ class student extends base {
         // there's no countdown (B9, support map beta22 re-run).
         $until = $r->cutoff ? (int)$r->cutoff : null;
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
-            $notes[] = get_string('stillsubmit', 'block_le_dashboard', format::duration($until - $this->now));
+            $notes[] = format::countdown('stillsubmit', $until, $this->now);
         }
         $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]);
         if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
-            $notes[] = get_string('duein', 'block_le_dashboard', format::duration($due - $this->now));
+            $notes[] = format::countdown('duein', $due, $this->now);
         }
         return $notes;
     }
@@ -415,7 +415,7 @@ class student extends base {
             return null;
         }
         // The new deadline, when the student self-certified on this one.
-        $here = $r->mitigation === student_row::MITIGATION_SELFCERT && $r->due ? format::datetime((int)$r->due) : null;
+        $here = $r->mitigation === student_row::MITIGATION_SELFCERT && $r->due ? (int)$r->due : null;
         return mitigation::links($r->modname, (int)$r->instance, $this->selfcert(), $here);
     }
 

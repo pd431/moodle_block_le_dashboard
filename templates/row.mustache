@@ -43,6 +43,8 @@
         "hasflags": false,
         "status": {"key": "pending", "label": "Not submitted yet"},
         "dates": [{"key": "due", "label": "Due", "text": "5 Oct 2026, 17:00", "iso": "2026-10-05T17:00:00+01:00"}],
+        "notes": [{"text": "Due tomorrow", "kind": "duein", "until": "2026-10-05T17:00:00+01:00",
+                   "now": "2026-10-04T09:00:00+01:00"}],
         "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}],
         "mitigation": {"id": "ma-row-12-mitigate", "icon": "fa-hand-holding-heart", "items": [
             {"greyed": true, "label": "Self-certify an extension",
@@ -79,7 +81,7 @@
         {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}
     </div>
     {{/dates}}
-    {{#notes}}<div class="ma-row-note">{{.}}</div>{{/notes}}
+    {{#notes}}<div class="ma-row-note" data-until="{{until}}" data-now="{{now}}" data-note="{{kind}}">{{text}}</div>{{/notes}}
     {{#alert}}<div class="ma-row-alert" data-region="ma-alert">{{alert}}</div>{{/alert}}
 </div>
 <div class="ma-row-status">
@@ -108,7 +110,7 @@
             {{#html}}<div class="dropdown-item-text ma-mitigate-item">{{{html}}}</div>{{/html}}
             {{#greyed}}<button type="button" class="dropdown-item ma-mitigate-item ma-mitigate-item--greyed" aria-disabled="true"
                     aria-describedby="{{id}}-reason">{{label}}</button>
-            <div class="dropdown-item-text ma-mitigate-note" id="{{id}}-reason">{{reason}}</div>{{/greyed}}
+            <div class="dropdown-item-text ma-mitigate-note" id="{{id}}-reason">{{#reasondated}}{{> block_le_dashboard/datedtext}}{{/reasondated}}{{^reasondated}}{{reason}}{{/reasondated}}</div>{{/greyed}}
             {{/items}}
         </div>
     </div>

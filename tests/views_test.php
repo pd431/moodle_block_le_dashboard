@@ -461,4 +461,48 @@ final class views_test extends \advanced_testcase {
         \block_le_dashboard\local\untagged::forget($this->u['convenor']->id);
         $this->assertNull((new convenor($this->u['convenor']->id))->export()['untagged']);
     }
+
+    /**
+     * Item 8 (Pierre, 2026-10-09): from a day out, "Due in" counts calendar days to the date shown, in the user's
+     * zone; under a day, the time left.
+     *
+     * @covers \block_le_dashboard\local\output\format::countdown
+     */
+    public function test_countdown(): void {
+        $this->resetAfterTest();
+        $this->setUser($this->getDataGenerator()->create_user(['timezone' => 'Europe/London']));
+        $at = fn(string $when, string $zone = 'Europe/London') => (new \DateTime($when, new \DateTimeZone($zone)))->getTimestamp();
+        $note = fn(string $kind, string $due, string $now) =>
+            \block_le_dashboard\local\output\format::countdown($kind, $at($due), $at($now))['text'];
+        $this->assertSame('Due in 2 days', $note('duein', '2026-10-14 12:00', '2026-10-12 20:00'), 'not 1 day');
+        $this->assertSame('Due tomorrow', $note('duein', '2026-10-13 12:00', '2026-10-12 08:00'));
+        $this->assertSame('Due in 16 h', $note('duein', '2026-10-13 12:00', '2026-10-12 20:00'));
+        $this->assertSame('Due in 45 min', $note('duein', '2026-10-12 12:00', '2026-10-12 11:15'));
+        $this->assertSame('You can still submit until tomorrow', $note('stillsubmit', '2026-10-13 23:00', '2026-10-12 21:00'));
+        $this->assertSame('You can still submit for 2 days', $note('stillsubmit', '2026-10-14 01:00', '2026-10-12 20:00'));
+        // The user's zone decides the calendar: in Tokyo, 13 Oct 20:00 London is already 14 Oct.
+        $this->setUser($this->getDataGenerator()->create_user(['timezone' => 'Asia/Tokyo']));
+        $this->assertSame('Due tomorrow', $note('duein', '2026-10-15 12:00', '2026-10-13 20:00'));
+        $countdown = \block_le_dashboard\local\output\format::countdown('duein', $at('2026-10-15 12:00'), $at('2026-10-13 20:00'));
+        $this->assertSame('duein', $countdown['kind']);
+        $this->assertSame($at('2026-10-15 12:00'), strtotime($countdown['until']));
+        $this->assertSame($at('2026-10-13 20:00'), strtotime($countdown['now']));
+    }
+
+    /**
+     * A sentence with a date in it, split around the date for the page to mark up.
+     *
+     * @covers \block_le_dashboard\local\output\format::dated
+     */
+    public function test_dated(): void {
+        $this->resetAfterTest();
+        $this->setUser($this->getDataGenerator()->create_user(['timezone' => 'Europe/London']));
+        $time = (new \DateTime('2026-10-21 12:00', new \DateTimeZone('Europe/London')))->getTimestamp();
+        $dated = \block_le_dashboard\local\output\format::dated('hint_extensions_text', $time);
+        $this->assertSame('Their work may still arrive. The latest extended deadline is 21 Oct 2026, 12:00.', $dated['text']);
+        $this->assertSame('Their work may still arrive. The latest extended deadline is ', $dated['before']);
+        $this->assertSame('21 Oct 2026, 12:00', $dated['date']);
+        $this->assertSame('.', $dated['after']);
+        $this->assertSame($time, strtotime($dated['iso']));
+    }
 }

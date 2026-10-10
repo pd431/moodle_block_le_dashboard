@@ -16,6 +16,8 @@
 
 namespace block_le_dashboard\local;
 
+use block_le_dashboard\local\output\format;
+
 /**
  * Optional integration with block_rhb (self-certification and the student
  * request form). Everything here does nothing when block_rhb is absent.
@@ -126,11 +128,11 @@ class mitigation {
      * @param string $selfcert block_rhb's self-certification HTML.
      * @param string $srm block_rhb's request form HTML.
      * @param array|null $count used and max (max null: no limit), or null when unknown.
-     * @param string|null $here The new deadline when the student self-certified on this one.
+     * @param int|null $here The new deadline when the student self-certified on this one.
      * @return array|null items (each url and label, delete too for Delete mitigation, html, or greyed with a reason),
      *     or null for no Mitigate
      */
-    public static function menu(bool $takesselfcert, string $selfcert, string $srm, ?array $count, ?string $here): ?array {
+    public static function menu(bool $takesselfcert, string $selfcert, string $srm, ?array $count, ?int $here): ?array {
         $request = self::item(self::KIND_REQUEST, $srm);
         $items = [];
         $live = (bool)$request;
@@ -144,9 +146,10 @@ class mitigation {
                 }
                 $live = true;
             } else {
+                $dated = null;
                 if ($delete || $here !== null) {
-                    $reason = $here !== null ? get_string('mitigate_reason_here', 'block_le_dashboard', $here)
-                        : get_string('mitigate_reason_herenodate', 'block_le_dashboard');
+                    $dated = $here !== null ? format::dated('mitigate_reason_here', $here) : null;
+                    $reason = $dated ? $dated['text'] : get_string('mitigate_reason_herenodate', 'block_le_dashboard');
                 } else {
                     $reason = $count && $count['max'] !== null && $count['used'] >= $count['max']
                         ? get_string('mitigate_reason_used', 'block_le_dashboard', $count['max'])
@@ -160,6 +163,7 @@ class mitigation {
                     'live' => false,
                     'label' => get_string('mitigate_' . self::KIND_SELFCERT, 'block_le_dashboard'),
                     'reason' => $reason,
+                    'reasondated' => $dated,
                 ];
             }
             $items[] = $item;

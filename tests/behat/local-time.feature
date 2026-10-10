@@ -23,7 +23,8 @@ Feature: Dates show in the viewer's own time zone
   # - Only dates whose clock time actually differs change: Europe/Dublin against Europe/London shows nothing.
   # - The icon is neutral (no warning colour) and opens like the other hints: click, keyboard or hover.
   # - Without JavaScript the dates stay as Moodle drew them.
-  # - The "Updated" line and dates inside hint text stay in Moodle's time zone.
+  # - Superseded by consistent-dates.feature (Pierre, 2026-10-09): the "Updated" line and dates inside text now
+  #   follow the row dates.
   # - The browser's zone is set through Chrome DevTools (Emulation.setTimezoneOverride).
   # - The dates are fixed (14 October 2026) so the expected clock times hold; British Summer Time applies.
 
