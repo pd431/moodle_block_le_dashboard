@@ -364,7 +364,8 @@ final class indexer_test extends \advanced_testcase {
         $this->assertGreaterThanOrEqual($before + indexer::COALESCE, (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
         indexer::queue_cm(42);
         $this->assertSame(1, $DB->count_records('task_adhoc', $params));
-        $this->assertLessThanOrEqual(time(), (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
+        // Due before this second, as cron runs only tasks due before the second it starts.
+        $this->assertLessThan(time(), (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
         // A later hold-back never delays it again.
         indexer::queue_cm(42, indexer::COALESCE);
         $this->assertLessThanOrEqual(time(), (int)$DB->get_field('task_adhoc', 'nextruntime', $params));
