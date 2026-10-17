@@ -115,6 +115,31 @@ if ($ADMIN->fulltree) {
         ));
     }
 
+    // Generic assessment names (Pierre, 2026-10-17): a hint for staff on names like "Essay 1".
+    $settings->add(new admin_setting_heading(
+        'block_le_dashboard/genericheading',
+        new lang_string('genericheading', 'block_le_dashboard'),
+        new lang_string('genericheading_desc', 'block_le_dashboard')
+    ));
+    $settings->add(new admin_setting_configcheckbox(
+        'block_le_dashboard/genericnames',
+        new lang_string('genericnames', 'block_le_dashboard'),
+        new lang_string('genericnames_desc', 'block_le_dashboard'),
+        1
+    ));
+    $settings->add(new admin_setting_configtextarea(
+        'block_le_dashboard/genericterms',
+        new lang_string('genericterms', 'block_le_dashboard'),
+        new lang_string('genericterms_desc', 'block_le_dashboard'),
+        \block_le_dashboard\local\genericname::TERMS
+    ));
+    $settings->add(new admin_setting_configtextarea(
+        'block_le_dashboard/genericnametext',
+        new lang_string('genericnametext', 'block_le_dashboard'),
+        new lang_string('genericnametext_desc', 'block_le_dashboard'),
+        ''
+    ));
+
     // Guidance and support (Pierre, 2026-10-09): the text each popover shows under its factual line.
     $settings->add(new admin_setting_heading(
         'block_le_dashboard/guidanceheading',

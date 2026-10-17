@@ -2480,7 +2480,7 @@ class behat_block_le_dashboard extends behat_base {
         'feedbackcontact' => 'feedbackcontact', 'extension' => 'extensions', 'extensions' => 'extensions',
         'setup' => 'setup', 'check settings' => 'setup', 'nodeadline' => 'nodeadline', 'received' => 'received', 'late' => 'late',
         'late penalty' => 'late', 'plagiarism' => 'plagiarism', 'hidden' => 'hidden', 'nosubmission' => 'nosubmission',
-        'load error' => 'loaderror'];
+        'load error' => 'loaderror', 'generic name' => 'genericname'];
 
     /**
      * Clicks a row's hint.

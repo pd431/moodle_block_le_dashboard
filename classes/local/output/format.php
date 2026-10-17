@@ -290,6 +290,7 @@ class format {
     /** Each hint's icon (the Flag icons mockup). */
     const HINT_ICONS = [
         'brief' => 'fa-file-circle-exclamation',
+        'genericname' => 'fa-signature',
         'hidden' => 'fa-eye-slash',
         'unallocated' => 'fa-user-slash',
         'returned' => 'fa-file-circle-plus',
@@ -305,6 +306,7 @@ class format {
     /** Each hint's tone. Attention is for staff and convenors only, never on a student's row. */
     const HINT_TONES = [
         'brief' => 'info',
+        'genericname' => 'info',
         'hidden' => 'grey',
         'unallocated' => 'attention',
         'returned' => 'info',

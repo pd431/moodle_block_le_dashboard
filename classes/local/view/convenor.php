@@ -17,6 +17,7 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
+use block_le_dashboard\local\genericname;
 use block_le_dashboard\local\index\indexer;
 use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
@@ -284,6 +285,9 @@ class convenor extends base {
             }
             if (empty($cm->hasbrief)) {
                 $row['hints'][] = $this->brief_hint($row['id']);
+            }
+            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
+                $row['hints'][] = $generic;
             }
             // Work that arrived after marking was finished brought this back to In progress (G6).
             if ($section === classifier::INPROGRESS && staff::returned($m, $cm->due === null ? null : (int)$cm->due)) {
