@@ -17,7 +17,7 @@
 {{!
     @template block_le_dashboard/dashboard
 
-    The dashboard: view tabs and the open view. JS hooks are data- attributes only.
+    The dashboard: the admin's notice, view tabs and the open view. JS hooks are data- attributes only.
 
     Example context (json):
     {
@@ -26,11 +26,15 @@
         "hastabs": true,
         "tabs": [{"key": "student", "label": "Student", "active": true}, {"key": "staff", "label": "Marking", "active": false}],
         "activeview": "student",
+        "notice": "<div class=\"alert alert-info\">The assessment dashboard is still in live development.</div>",
         "view": {"key": "student", "uniqid": "ma1", "sections": [], "summary": [], "freshness": {"text": "Updated just now"} }
     }
 }}
 <div id="{{uniqid}}" class="block_le_dashboard_dashboard" data-region="ma-dashboard" data-view="{{activeview}}"
      data-timezone="{{timezone}}">
+    {{#notice}}
+    <div class="ma-notice" data-region="ma-notice">{{{notice}}}</div>
+    {{/notice}}
     {{#hastabs}}
     <ul class="nav nav-tabs ma-tabs">
         {{#tabs}}

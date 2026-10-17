@@ -4678,4 +4678,70 @@ class behat_block_le_dashboard extends behat_base {
         $list[] = $cm->modname . ':' . $cm->instance;
         set_config('behatcoursework', implode(',', $list), 'block_le_dashboard');
     }
+
+    /**
+     * No admin notice above the tabs.
+     *
+     * @Then /^the My assessments block should show no notice$/
+     */
+    public function the_block_should_show_no_notice(): void {
+        if ($this->getSession()->getPage()->findAll('css', self::BLOCK . ' [data-region="ma-notice"]')) {
+            throw new ExpectationException('The block shows a notice', $this->getSession());
+        }
+    }
+
+    /**
+     * The admin notice, above the tabs, holds the text.
+     *
+     * @Then /^the My assessments block should show the notice "(?P<text>[^"]*)"$/
+     * @param string $text
+     */
+    public function the_block_should_show_the_notice(string $text): void {
+        $notice = $this->notice();
+        if (!str_contains($notice->getText(), $text)) {
+            throw new ExpectationException("The notice says '{$notice->getText()}', not '$text'", $this->getSession());
+        }
+        // Above the tabs and the view, whichever the viewer has.
+        $after = $this->getSession()->getPage()->findAll('css', self::BLOCK . ' [data-region="ma-notice"] ~ .ma-tabs, '
+            . self::BLOCK . ' [data-region="ma-notice"] ~ [data-region="ma-view"]');
+        if (!$after) {
+            throw new ExpectationException('The notice is not above the dashboard', $this->getSession());
+        }
+    }
+
+    /**
+     * A link in the admin notice.
+     *
+     * @Then /^"(?P<text>[^"]*)" in the notice should link to "(?P<url>[^"]*)"$/
+     * @param string $text
+     * @param string $url
+     */
+    public function in_the_notice_should_link_to(string $text, string $url): void {
+        foreach ($this->notice()->findAll('css', 'a') as $link) {
+            if (trim($link->getText()) === $text && $link->getAttribute('href') === $url) {
+                return;
+            }
+        }
+        throw new ExpectationException("No '$text' link to '$url' in the notice", $this->getSession());
+    }
+
+    /**
+     * Moodle's cleaning took any script out of the admin notice.
+     *
+     * @Then /^the notice should hold no script$/
+     */
+    public function the_notice_should_hold_no_script(): void {
+        if ($this->notice()->findAll('css', 'script')) {
+            throw new ExpectationException('The notice holds a script', $this->getSession());
+        }
+    }
+
+    /**
+     * The admin notice above the tabs.
+     *
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function notice(): \Behat\Mink\Element\NodeElement {
+        return $this->find('css', self::BLOCK . ' [data-region="ma-notice"]');
+    }
 }

@@ -40,6 +40,19 @@ $settings = new admin_settingpage(
 );
 
 if ($ADMIN->fulltree) {
+    // A notice above the tabs (Pierre, 2026-10-17), such as a link to a feedback form.
+    $settings->add(new admin_setting_heading(
+        'block_le_dashboard/noticeheading',
+        new lang_string('noticeheading', 'block_le_dashboard'),
+        ''
+    ));
+    $settings->add(new admin_setting_confightmleditor(
+        'block_le_dashboard/notice',
+        new lang_string('notice', 'block_le_dashboard'),
+        new lang_string('notice_desc', 'block_le_dashboard'),
+        ''
+    ));
+
     $settings->add(new admin_setting_heading(
         'block_le_dashboard/tagsheading',
         new lang_string('tagsheading', 'block_le_dashboard'),
