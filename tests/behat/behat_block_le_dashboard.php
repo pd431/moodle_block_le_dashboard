@@ -3465,6 +3465,33 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Skips the scenario unless the site runs that Moodle version.
+     *
+     * @Given /^the site runs Moodle (?P<version>4\.5|5\.0 or later)$/
+     * @param string $version
+     */
+    public function the_site_runs_moodle(string $version): void {
+        global $CFG;
+        if (((int)$CFG->branch >= 500) !== ($version !== '4.5')) {
+            throw new \Moodle\BehatExtension\Exception\SkippedException("Needs Moodle $version");
+        }
+    }
+
+    /**
+     * Which Font Awesome icon a row's flag shows.
+     *
+     * @Then /^the "(?P<key>[a-z ]+)" flag of "(?P<name>[^"]*)" should show the "(?P<icon>fa-[a-z-]+)" icon$/
+     * @param string $key
+     * @param string $name
+     * @param string $icon
+     */
+    public function the_flag_should_show_the_icon(string $key, string $name, string $icon): void {
+        if (!$this->flag($key, $name)->find('css', 'i.' . $icon)) {
+            throw new ExpectationException("The $key flag of '$name' doesn't show $icon", $this->getSession());
+        }
+    }
+
+    /**
      * Waits for a condition for up to two seconds.
      *
      * @param callable $test
