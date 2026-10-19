@@ -61,6 +61,7 @@ Options:
   -h, --help  Print this help.';
 $string['clirebuild_pending'] = 'A rebuild is already queued or running. Wait for it to finish, or run the ad hoc task now with admin/cli/adhoc_task.php.';
 $string['confirmdeleteyear'] = 'Delete the academic year "{$a}"? If it is the default year, the default goes back to the current year.';
+$string['convenorheading'] = 'Module convenor view';
 $string['courseinyear'] = '{$a->course} ({$a->year})';
 $string['date_due'] = 'Due';
 $string['date_extendeddeadline'] = 'Extended deadline';
@@ -305,6 +306,10 @@ $string['setupchecks_year_one'] = '1 tagged activity needs its settings checked 
 $string['showgrades'] = 'Show grades';
 $string['showless'] = 'Show fewer';
 $string['showmore'] = 'Show more';
+$string['showsetupchecks'] = 'Show tagged activities to check';
+$string['showsetupchecks_desc'] = 'The line "N tagged activities need their settings checked", which also lists tagged activities whose type isn\'t enabled. The Check settings flag on each row is not affected.';
+$string['showuntagged'] = 'Show untagged activities';
+$string['showuntagged_desc'] = 'The line "You have N compatible but untagged activities", with its list of courses and activities.';
 $string['staffrole'] = 'Marker roles';
 $string['staffrole_desc'] = 'People with one of these roles in a course see My marking for it.';
 $string['stage_agreed'] = 'Agreed';

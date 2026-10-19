@@ -128,6 +128,21 @@ if ($ADMIN->fulltree) {
         ));
     }
 
+    // The convenor view's two quiet lines can each be turned off (Pierre, 2026-10-19).
+    $settings->add(new admin_setting_heading(
+        'block_le_dashboard/convenorheading',
+        new lang_string('convenorheading', 'block_le_dashboard'),
+        ''
+    ));
+    foreach (['showuntagged', 'showsetupchecks'] as $name) {
+        $settings->add(new admin_setting_configcheckbox(
+            'block_le_dashboard/' . $name,
+            new lang_string($name, 'block_le_dashboard'),
+            new lang_string($name . '_desc', 'block_le_dashboard'),
+            1
+        ));
+    }
+
     // Generic assessment names (Pierre, 2026-10-17): a hint for staff on names like "Essay 1".
     $settings->add(new admin_setting_heading(
         'block_le_dashboard/genericheading',

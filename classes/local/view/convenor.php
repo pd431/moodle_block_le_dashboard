@@ -72,14 +72,26 @@ class convenor extends base {
         return $this->courses();
     }
 
+    /**
+     * Whether an admin switch for one of the convenor's lines is on. Unset, before the settings are saved, is on.
+     *
+     * @param string $name
+     * @return bool
+     */
+    protected static function shown(string $name): bool {
+        return get_config('block_le_dashboard', $name) !== '0';
+    }
+
     #[\Override]
     public function export(): array {
         global $DB;
         $extra = ['hasyears' => true, 'years' => $this->years(),
             // Compatible activities nobody tagged, in the selected year's courses (Pierre, 2026-10-06).
-            'untagged' => untagged::hint($this->userid, $this->year(), $this->courses()),
+            // Each line has an admin switch (Pierre, 2026-10-19); off skips its queries too.
+            'untagged' => self::shown('showuntagged') ? untagged::hint($this->userid, $this->year(), $this->courses()) : null,
             // Tagged activities missing a setting, or of a type no dashboard shows (Pierre, 2026-10-07).
-            'setupchecks' => setupchecks::hint($this->userid, $this->year(), $this->courses())];
+            'setupchecks' => self::shown('showsetupchecks')
+                ? setupchecks::hint($this->userid, $this->year(), $this->courses()) : null];
         $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::UNDATED => [],
             classifier::CONVENOR_PAST => []];
         // In progress shows whatever its year; Upcoming and Past follow the year picker (EC3).
