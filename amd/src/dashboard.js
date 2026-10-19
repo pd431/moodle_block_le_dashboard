@@ -103,6 +103,13 @@ class Dashboard {
                 this.disarm(toggle.closest(SELECTORS.mitigate));
             }
         }, true);
+        // A greyed Mitigate item does nothing, and the menu stays open on its reason (Pierre's UAT, 2026-10-19).
+        root.addEventListener('click', e => {
+            if (e.target.closest && e.target.closest('.ma-mitigate-item--greyed')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
         root.addEventListener('input', e => this.input(e));
         root.addEventListener('change', e => this.change(e));
         root.addEventListener('focusin', e => this.focusin(e));

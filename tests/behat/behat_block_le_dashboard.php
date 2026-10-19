@@ -5044,4 +5044,73 @@ class behat_block_le_dashboard extends behat_base {
             throw new ExpectationException('A first fill is still queued or pending', $this->getSession());
         }
     }
+
+    // Beta27: a greyed Self-certify never looks available (Pierre's UAT, 2026-10-19).
+
+    /**
+     * Keeps the pointer over a Mitigate menu item for a while.
+     *
+     * @When /^I pass the pointer over "(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" for "(?P<ms>\d+)" milliseconds$/
+     * @param string $text
+     * @param string $name
+     * @param int $ms
+     */
+    public function i_pass_over_the_mitigate_item(string $text, string $name, int $ms): void {
+        $this->mitigate_item($name, $text)->mouseOver();
+        usleep($ms * 1000);
+    }
+
+    /**
+     * A greyed Mitigate item looks unavailable: muted text on no fill, whatever the pointer or focus.
+     *
+     * @Then /^"(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" should look greyed$/
+     * @param string $text
+     * @param string $name
+     */
+    public function the_mitigate_item_should_look_greyed(string $text, string $name): void {
+        $xpath = json_encode($this->mitigate_item($name, $text)->getXpath());
+        $result = $this->evaluate_script("return (function() {
+            const item = document.evaluate($xpath, document, null, 9, null).singleNodeValue;
+            const probe = document.createElement('span');
+            probe.style.color = 'var(--ma-text-muted)';
+            item.parentNode.appendChild(probe);
+            const muted = getComputedStyle(probe).color;
+            probe.remove();
+            const style = getComputedStyle(item);
+            const clear = style.backgroundColor === 'transparent' || /, 0\)$/.test(style.backgroundColor);
+            return style.color === muted && clear ? '' : style.color + ' on ' + style.backgroundColor + ', muted is ' + muted;
+        })();");
+        if ($result !== '') {
+            throw new ExpectationException(
+                "'$text' in the Mitigate menu of '$name' doesn't look greyed: $result",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * A Mitigate menu item has the keyboard focus and shows it with an outline.
+     *
+     * @Then /^"(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" should have a visible focus outline$/
+     * @param string $text
+     * @param string $name
+     */
+    public function the_mitigate_item_should_have_focus_outline(string $text, string $name): void {
+        $xpath = json_encode($this->mitigate_item($name, $text)->getXpath());
+        $result = $this->evaluate_script("return (function() {
+            const item = document.evaluate($xpath, document, null, 9, null).singleNodeValue;
+            if (document.activeElement !== item) {
+                return 'it is not focused';
+            }
+            const style = getComputedStyle(item);
+            const outline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
+            return outline || style.boxShadow !== 'none' ? '' : 'no outline';
+        })();");
+        if ($result !== '') {
+            throw new ExpectationException(
+                "'$text' in the Mitigate menu of '$name' has no visible focus: $result",
+                $this->getSession()
+            );
+        }
+    }
 }

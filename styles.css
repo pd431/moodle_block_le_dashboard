@@ -437,9 +437,17 @@
     cursor: default;
 }
 .block_le_dashboard_dashboard .ma-mitigate-item--greyed:hover,
-.block_le_dashboard_dashboard .ma-mitigate-item--greyed:active {
+.block_le_dashboard_dashboard .ma-mitigate-item--greyed:active,
+.block_le_dashboard_dashboard .ma-mitigate-item--greyed:focus,
+.block_le_dashboard_dashboard .ma-mitigate-item--greyed.active {
     background-color: transparent;
     color: var(--ma-text-muted);
+}
+/* Reached by keyboard, it shows focus with an outline only: the selected-item fill made it look available
+   (Pierre's UAT, 2026-10-19). */
+.block_le_dashboard_dashboard .ma-mitigate-item--greyed:focus-visible {
+    outline: 2px solid var(--ma-text-muted);
+    outline-offset: -2px;
 }
 .block_le_dashboard_dashboard .ma-status-wrap {
     display: inline-flex;
