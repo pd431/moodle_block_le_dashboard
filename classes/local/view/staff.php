@@ -371,10 +371,11 @@ class staff extends base {
                 }
                 foreach ($share as $r) {
                     $key = $cmid . '-' . $r->stage;
-                    $o = $out[$key] ??= (object)['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
+                    // The array is complete before the cast: object + array is a PHP error (beta27).
+                    $o = $out[$key] ??= (object)(['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
                         'mine' => 0, 'marked' => 0, 'unallocated' => 0, 'isgroup' => 0,
                         'firstready' => null, 'lastmarked' => null]
-                        + array_fill_keys(array_map(fn($d) => 'dueby' . $d, self::WINDOWS), 0);
+                        + array_fill_keys(array_map(fn($d) => 'dueby' . $d, self::WINDOWS), 0));
                     $o->mine++;
                     if ($r->marked) {
                         $o->marked++;
