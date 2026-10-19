@@ -122,7 +122,12 @@ if ($ADMIN->fulltree) {
         $settings->add(new admin_setting_configtext(
             'block_le_dashboard/' . $name,
             new lang_string($name, 'block_le_dashboard'),
-            new lang_string($name . '_desc', 'block_le_dashboard'),
+            // The time limit's description links to the Index page, where the progress is (Pierre, 2026-10-19).
+            new lang_string(
+                $name . '_desc',
+                'block_le_dashboard',
+                (new moodle_url('/blocks/le_dashboard/admin/index.php'))->out(false)
+            ),
             $default,
             PARAM_INT
         ));

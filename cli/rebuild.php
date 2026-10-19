@@ -27,7 +27,6 @@ define('CLI_SCRIPT', true);
 require(__DIR__ . '/../../../config.php');
 require_once($CFG->libdir . '/clilib.php');
 
-use block_le_dashboard\local\adapter\registry;
 use block_le_dashboard\local\index\indexer;
 use block_le_dashboard\task\backfill;
 
@@ -39,20 +38,10 @@ if ($options['help']) {
     cli_writeln(get_string('clirebuild_help', 'block_le_dashboard'));
     exit(0);
 }
-// A queued or running backfill would race this one over the same rows.
-if (backfill::pending()) {
-    cli_error(get_string('clirebuild_pending', 'block_le_dashboard'));
-}
-
 \core\cron::setup_user();
-indexer::purge();
-set_config('backfillpending', time(), 'block_le_dashboard');
-try {
-    (new indexer())->reconcile(fn($line) => cli_writeln($line), true);
-} finally {
-    registry::flush_errors();
+if (!backfill::rebuild_now(fn($line) => cli_writeln($line))) {
+    cli_error(get_string('clirebuild_locked', 'block_le_dashboard'));
 }
-backfill::mark_done();
 $counts = indexer::counts();
 cli_writeln(get_string('indexcount_cm', 'block_le_dashboard', $counts['cm']));
 cli_writeln(get_string('indexcount_stu', 'block_le_dashboard', $counts['stu']));

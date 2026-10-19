@@ -26,6 +26,7 @@ require(__DIR__ . '/../../../config.php');
 require_once($CFG->libdir . '/adminlib.php');
 
 use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\index\pass;
 use block_le_dashboard\task\backfill;
 
 admin_externalpage_setup('block_le_dashboard_index');
@@ -65,6 +66,8 @@ $context = [
     'status' => $pending
         ? get_string('indexpending', 'block_le_dashboard', userdate((int)$pending))
         : ($done ? get_string('indexdone', 'block_le_dashboard', userdate((int)$done)) : null),
+    // How far the first fill and the nightly check have got (Pierre, 2026-10-19).
+    'progress' => array_map(fn($line) => ['line' => $line], pass::progress((bool)$pending)),
     'rebuildurl' => (new moodle_url($PAGE->url, ['rebuild' => 1]))->out(false),
 ];
 

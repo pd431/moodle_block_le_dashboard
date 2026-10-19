@@ -29,9 +29,10 @@ class config {
 
     /**
      * Number settings and their defaults: grace period (hours), Mitigate window (days before, hours
-     * after), and the nightly reconcile's live window (months, 0 for every course).
+     * after), the nightly reconcile's live window (months, 0 for every course) and the time limit of each
+     * index run (minutes, 0 for none).
      */
-    const NUMBERS = ['graceperiod' => 24, 'mitigationcloses' => 24, 'reconcilemonths' => 13];
+    const NUMBERS = ['graceperiod' => 24, 'mitigationcloses' => 24, 'reconcilemonths' => 13, 'indexminutes' => 45];
 
     /**
      * A whole-number setting, or its default when unset.

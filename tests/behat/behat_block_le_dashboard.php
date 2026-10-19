@@ -42,6 +42,18 @@ class behat_block_le_dashboard extends behat_base {
     /** Block selector. */
     const BLOCK = '.block_le_dashboard';
 
+    /** @var bool Ad hoc tasks don't run on this site (index-passes.feature). */
+    protected $noadhoc = false;
+
+    /** @var int[] The courses the last index run did. */
+    protected $lastrun = [];
+
+    /** @var int[] The courses the nightly check has done in this scenario. */
+    protected $nightlydone = [];
+
+    /** @var int When the hourly index task last ran in this scenario. */
+    protected $lasthourly = 0;
+
     /** Module tables searched when looking up an activity by name. */
     const MODULES = ['assign', 'quiz', 'peerwork', 'coursework', 'workshop', 'forum', 'page', 'lti', 'attendance'];
 
@@ -172,6 +184,9 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected function catch_up(): void {
         global $DB;
+        if ($this->noadhoc) {
+            return;
+        }
         $due = time() - 1;
         $DB->set_field_select('task_adhoc', 'nextruntime', $due, "component = 'block_le_dashboard' AND nextruntime > $due");
         $this->execute('behat_general::i_run_all_adhoc_tasks');
@@ -1734,7 +1749,12 @@ class behat_block_le_dashboard extends behat_base {
      * @When /^the My assessments nightly reconcile runs$/
      */
     public function the_nightly_reconcile_runs(): void {
-        (new \block_le_dashboard\task\reconcile())->execute();
+        // A whole nightly pass, whatever the hour: the hourly task's timing has its own steps (index-passes.feature).
+        try {
+            \block_le_dashboard\local\index\pass::run(\block_le_dashboard\local\index\pass::NIGHTLY);
+        } finally {
+            \block_le_dashboard\local\adapter\registry::flush_errors();
+        }
     }
 
     /**
@@ -4781,5 +4801,223 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected function notice(): \Behat\Mink\Element\NodeElement {
         return $this->find('css', self::BLOCK . ' [data-region="ma-notice"]');
+    }
+
+    // Beta27: index passes with a time limit (index-passes.feature).
+
+    /**
+     * Each index run stops as at its time limit after this many courses.
+     *
+     * @Given /^every My assessments index run has a time limit of (?P<n>\d+) courses?$/
+     * @param int $n
+     */
+    public function every_index_run_has_a_limit(int $n): void {
+        set_config('behatindexcourses', $n, 'block_le_dashboard');
+    }
+
+    /**
+     * Ad hoc tasks never run: the steps that catch the index up leave them queued.
+     *
+     * @Given /^ad hoc tasks don't run$/
+     */
+    public function ad_hoc_tasks_dont_run(): void {
+        $this->noadhoc = true;
+    }
+
+    /**
+     * Rebuilds the index as the Index page's button does.
+     *
+     * @Given /^the My assessments index is rebuilt$/
+     */
+    public function the_index_is_rebuilt(): void {
+        \block_le_dashboard\task\backfill::rebuild();
+    }
+
+    /**
+     * Collects the courses a run's progress lines name.
+     *
+     * @param callable $run Receives the trace.
+     * @return mixed What the run returned.
+     */
+    protected function traced(callable $run) {
+        $this->lastrun = [];
+        $trace = function (string $line) {
+            if (preg_match('/^Indexing course (\d+)$/', $line, $m)) {
+                $this->lastrun[] = (int)$m[1];
+            }
+        };
+        ob_start();
+        try {
+            return $run($trace);
+        } finally {
+            foreach (explode("\n", (string)ob_get_clean()) as $line) {
+                $trace(trim($line));
+            }
+        }
+    }
+
+    /**
+     * One nightly check run, whatever the hour.
+     *
+     * @When /^the nightly check runs$/
+     */
+    public function the_nightly_check_runs(): void {
+        $this->traced(fn($trace) => \block_le_dashboard\local\index\pass::run(
+            \block_le_dashboard\local\index\pass::NIGHTLY,
+            $trace
+        ));
+        \block_le_dashboard\local\adapter\registry::flush_errors();
+    }
+
+    /**
+     * The hourly task runs at a time of day, server time, on the same day as its last run in this scenario
+     * when that is later, or else the next day.
+     *
+     * @When /^the hourly index task runs at "(?P<time>\d\d:\d\d)"$/
+     * @param string $time
+     */
+    public function the_hourly_task_runs_at(string $time): void {
+        $zone = \core_date::get_server_timezone_object();
+        $at = new \DateTime('@' . ($this->lasthourly ?: time()));
+        $at->setTimezone($zone);
+        [$hour, $minute] = array_map('intval', explode(':', $time));
+        $at->setTime($hour, $minute);
+        if ($this->lasthourly && $at->getTimestamp() <= $this->lasthourly) {
+            $at->modify('+1 day');
+        }
+        $this->lasthourly = $at->getTimestamp();
+        $filling = (bool)get_config('block_le_dashboard', 'backfillpending');
+        $this->traced(fn($trace) => (new \block_le_dashboard\task\reconcile())->run($this->lasthourly));
+        if (!$filling) {
+            $this->nightlydone = array_merge($this->nightlydone, $this->lastrun);
+        }
+    }
+
+    /**
+     * The nightly check died part-way: it saved its progress up to a course, then stopped without ending.
+     *
+     * @Given /^the nightly check died after "(?P<course>[^"]*)"$/
+     * @param string $shortname
+     */
+    public function the_nightly_check_died_after(string $shortname): void {
+        $this->traced(fn($trace) => \block_le_dashboard\local\index\pass::run(
+            \block_le_dashboard\local\index\pass::NIGHTLY,
+            $trace,
+            0,
+            0,
+            0,
+            1
+        ));
+        $state = \block_le_dashboard\local\index\pass::state(\block_le_dashboard\local\index\pass::NIGHTLY);
+        if ($state['after'] !== $this->course_id($shortname)) {
+            throw new ExpectationException("The nightly check didn't start with '$shortname'", $this->getSession());
+        }
+        // Not stopped at the limit: it died, so how the run ended was never saved.
+        $state['reason'] = '';
+        set_config('pass_nightly', json_encode($state), 'block_le_dashboard');
+    }
+
+    /**
+     * The courses the last index run did.
+     *
+     * @Then /^the (?:last index run|first fill) should have done (?P<courses>"[^"]*"(?:(?:, | and )"[^"]*")*) only$/
+     * @param string $courses
+     */
+    public function the_last_run_should_have_done(string $courses): void {
+        $this->assert_courses($this->lastrun, $courses, 'The last index run');
+    }
+
+    /**
+     * The courses the nightly check has done in this scenario so far.
+     *
+     * @Then /^the nightly check should have done (?P<courses>no courses|"[^"]*"(?:(?:, | and )"[^"]*")*) so far$/
+     * @param string $courses
+     */
+    public function the_nightly_check_should_have_done(string $courses): void {
+        $this->assert_courses($this->nightlydone, $courses === 'no courses' ? '' : $courses, 'The nightly check');
+    }
+
+    /**
+     * Compares course ids with a list of quoted short names.
+     *
+     * @param int[] $ids
+     * @param string $courses Such as '"M1", "M2" and "M3"', or empty for none.
+     * @param string $what
+     */
+    protected function assert_courses(array $ids, string $courses, string $what): void {
+        preg_match_all('/"([^"]*)"/', $courses, $m);
+        $expected = array_map(fn($name) => $this->course_id($name), $m[1]);
+        if ($ids !== $expected) {
+            global $DB;
+            $names = array_map(fn($id) => $DB->get_field('course', 'shortname', ['id' => $id]), $ids);
+            throw new ExpectationException("$what did " . (implode(', ', $names) ?: 'nothing'), $this->getSession());
+        }
+    }
+
+    /**
+     * A course's id by its short name.
+     *
+     * @param string $shortname
+     * @return int
+     */
+    protected function course_id(string $shortname): int {
+        global $DB;
+        return (int)$DB->get_field('course', 'id', ['shortname' => $shortname], MUST_EXIST);
+    }
+
+    /**
+     * The Index admin page's text, as an admin sees it.
+     *
+     * @Then /^the Index page should say "(?P<text>[^"]*)"$/
+     * @param string $text
+     */
+    public function the_index_page_should_say(string $text): void {
+        $this->execute('behat_auth::i_log_in_as', ['admin']);
+        $this->getSession()->visit($this->locate_path('/blocks/le_dashboard/admin/index.php'));
+        $this->execute('behat_general::assert_page_contains_text', [$text]);
+    }
+
+    /**
+     * Runs the command-line rebuild's work, as cli/rebuild.php does.
+     *
+     * @When /^I run the command-line rebuild$/
+     */
+    public function i_run_the_command_line_rebuild(): void {
+        $done = $this->traced(fn($trace) => \block_le_dashboard\task\backfill::rebuild_now($trace));
+        if (!$done) {
+            throw new ExpectationException('The command-line rebuild did not finish', $this->getSession());
+        }
+    }
+
+    /**
+     * Every course with a tagged assessment is in the index.
+     *
+     * @Then /^it should finish with every course done$/
+     */
+    public function it_should_finish_with_every_course_done(): void {
+        global $DB;
+        $tagged = (int)$DB->count_records_sql("SELECT COUNT(DISTINCT cm.course)
+                                                 FROM {tag_instance} ti
+                                                 JOIN {course_modules} cm ON cm.id = ti.itemid
+                                                WHERE ti.component = 'core' AND ti.itemtype = 'course_modules'");
+        $indexed = (int)$DB->count_records_sql("SELECT COUNT(DISTINCT courseid) FROM {block_le_dashboard_cm}");
+        if ($indexed !== $tagged || !\block_le_dashboard\local\index\pass::complete(\block_le_dashboard\local\index\pass::FILL)) {
+            throw new ExpectationException("$indexed of $tagged courses are indexed", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a first fill (backfill ad hoc task) is queued, and "Preparing" pending.
+     *
+     * @Then /^no first fill should be queued$/
+     */
+    public function no_first_fill_should_be_queued(): void {
+        global $DB;
+        if (
+            $DB->record_exists('task_adhoc', ['classname' => '\\' . \block_le_dashboard\task\backfill::class])
+                || get_config('block_le_dashboard', 'backfillpending')
+        ) {
+            throw new ExpectationException('A first fill is still queued or pending', $this->getSession());
+        }
     }
 }

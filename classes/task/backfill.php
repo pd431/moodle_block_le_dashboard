@@ -18,6 +18,7 @@ namespace block_le_dashboard\task;
 
 use block_le_dashboard\local\adapter\registry;
 use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\index\pass;
 
 /**
  * First fill of the index after install or upgrade. The dashboard says
@@ -37,14 +38,18 @@ class backfill extends \core\task\adhoc_task {
     public function execute() {
         try {
             // What is indexed changed, so every course, not only the nightly live window (F5).
-            (new indexer())->reconcile(fn($line) => mtrace($line), true);
+            $result = pass::run(pass::FILL, fn($line) => mtrace($line), pass::deadline());
         } finally {
             registry::flush_errors();
         }
-        // A backfill queued while this one ran does the rest: "Preparing" stays until it has.
-        if (!self::waiting((int)$this->get_id())) {
+        if ($result === pass::DONE && pass::complete(pass::FILL)) {
             self::mark_done();
+        } else if ($result === pass::LIMIT && !self::waiting((int)$this->get_id())) {
+            // Let other background tasks run, then carry on. The hourly task carries on too, where ad hoc
+            // tasks don't run (Pierre, 2026-10-19).
+            \core\task\manager::queue_adhoc_task(new self());
         }
+        // Locked or restarted: the run holding the lock, a queued fill or the hourly task carries on.
     }
 
     /**
@@ -55,6 +60,8 @@ class backfill extends \core\task\adhoc_task {
      */
     public static function queue(): void {
         set_config('backfillpending', time(), 'block_le_dashboard');
+        // From the first course again; a run in progress stops after the course it is on.
+        pass::restart(pass::FILL);
         if (!self::waiting()) {
             \core\task\manager::queue_adhoc_task(new self());
         }
@@ -84,21 +91,6 @@ class backfill extends \core\task\adhoc_task {
     }
 
     /**
-     * Whether a backfill is queued or running and has not failed. A failed one waits to retry and
-     * must not hold up the nightly reconcile in the meantime.
-     *
-     * @return bool
-     */
-    public static function active(): bool {
-        global $DB;
-        return $DB->record_exists_select(
-            'task_adhoc',
-            'classname = :classname AND faildelay = 0',
-            ['classname' => '\\' . self::class]
-        );
-    }
-
-    /**
      * Whether a backfill is queued or running.
      *
      * @return bool
@@ -115,6 +107,34 @@ class backfill extends \core\task\adhoc_task {
     public static function rebuild(): void {
         indexer::purge();
         self::queue();
+    }
+
+    /**
+     * Empties the index and fills it again in this process, with no time limit: cli/rebuild.php. It takes the
+     * queued fill's place, so it works where ad hoc tasks don't run (Pierre, 2026-10-19). A run in progress
+     * stops after the course it is on, and this one waits up to 15 minutes for its lock.
+     *
+     * @param callable|null $trace Receives progress lines.
+     * @return bool False when another run kept the lock.
+     */
+    public static function rebuild_now(?callable $trace = null): bool {
+        global $DB;
+        indexer::purge();
+        self::queue();
+        $DB->delete_records_select(
+            'task_adhoc',
+            'classname = :classname AND timestarted IS NULL',
+            ['classname' => '\\' . self::class]
+        );
+        try {
+            $result = pass::run(pass::FILL, $trace, 0, 15 * MINSECS);
+        } finally {
+            registry::flush_errors();
+        }
+        if ($result === pass::DONE && pass::complete(pass::FILL)) {
+            self::mark_done();
+        }
+        return $result === pass::DONE;
     }
 
     /**

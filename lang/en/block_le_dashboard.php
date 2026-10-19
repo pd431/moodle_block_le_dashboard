@@ -59,7 +59,7 @@ Usage:
 
 Options:
   -h, --help  Print this help.';
-$string['clirebuild_pending'] = 'A rebuild is already queued or running. Wait for it to finish, or run the ad hoc task now with admin/cli/adhoc_task.php.';
+$string['clirebuild_locked'] = 'Another index run is still working and didn\'t stop within 15 minutes. Try again later.';
 $string['confirmdeleteyear'] = 'Delete the academic year "{$a}"? If it is the default year, the default goes back to the current year.';
 $string['convenorheading'] = 'Module convenor view';
 $string['courseinyear'] = '{$a->course} ({$a->year})';
@@ -172,9 +172,15 @@ $string['indexcount_cm'] = 'Activities: {$a}';
 $string['indexcount_mark'] = 'Marking rows: {$a}';
 $string['indexcount_stu'] = 'Student rows: {$a}';
 $string['indexdone'] = 'Last filled {$a}.';
+$string['indexminutes'] = 'Time limit for each index run';
+$string['indexminutes_desc'] = 'Minutes. When an index run reaches this limit, it finishes the course it is on and stops. The next run carries on where it stopped: the first fill at the next hourly run, the nightly check the following night. 0 means no limit. Progress is on the <a href="{$a}">Index page</a>.';
 $string['indexpage'] = 'Index';
 $string['indexpage_desc'] = 'The dashboard reads from its own index of assessments, students and marking, kept up to date as things change. Rebuilding empties it and fills it again from scratch. Students see "Preparing your assessments" until the rebuild has run, on the next cron.';
 $string['indexpending'] = 'Rebuild queued {$a}. It runs on the next cron.';
+$string['indexprogress_fill'] = 'Preparing: {$a->done} of {$a->total} courses done.';
+$string['indexprogress_finished'] = 'Nightly check: the last full pass finished {$a}.';
+$string['indexprogress_limit'] = 'The last run stopped at its time limit and carries on at the next run.';
+$string['indexprogress_nightly'] = 'Nightly check: {$a->done} of {$a->total} courses done.';
 $string['inlinerefreshlimit'] = 'Refresh inline up to';
 $string['inlinerefreshlimit_desc'] = 'Refresh updates up to this many assessments straight away, as long as together they have no more than 5,000 students. A larger refresh, such as a convenor of many modules or of a few very large ones, is queued and done by the next cron run.';
 $string['inpersontags'] = 'In-person tags';
@@ -344,7 +350,7 @@ $string['support_generic_desc'] = 'The due date from the calendar and the grade 
 $string['tagsheading'] = 'Tags';
 $string['tagsheading_desc'] = 'Only activities tagged with one of these tags appear on the dashboard.';
 $string['task_backfill'] = 'Fill the Le Dashboard index';
-$string['task_reconcile'] = 'Reconcile the Le Dashboard index';
+$string['task_reconcile'] = 'Le Dashboard index: carry on the first fill, and the nightly check';
 $string['task_reindex'] = 'Update the Le Dashboard index';
 $string['testfailure'] = 'Indexing {$a} activities failed (test).';
 $string['tip_duesoon'] = 'Due soon.';

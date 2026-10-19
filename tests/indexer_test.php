@@ -528,10 +528,11 @@ final class indexer_test extends \advanced_testcase {
     }
 
     /**
-     * Pierre, 2026-10-06 (beta14): the nightly reconcile ran alongside the first backfill. It now
-     * leaves the work to a queued or running backfill, and leaves "Preparing" showing.
+     * Pierre, 2026-10-06 (beta14): the nightly reconcile ran alongside the first backfill, so it skipped while
+     * one was queued. Where ad hoc tasks don't run that left both stuck (Pierre, 2026-10-19): the hourly task
+     * now does the first fill itself, under the same lock as the backfill, and only then clears "Preparing".
      */
-    public function test_reconcile_waits_for_backfill(): void {
+    public function test_reconcile_does_queued_backfill(): void {
         global $DB;
         $gen = $this->getDataGenerator();
         $course = $gen->create_course();
@@ -540,10 +541,10 @@ final class indexer_test extends \advanced_testcase {
         $this->ma->tag($a->cmid);
         $DB->delete_records('task_adhoc');
         task\backfill::rebuild();
-        $this->expectOutputRegex('/reconcile is skipped/');
+        $this->expectOutputRegex('/Indexing course/');
         (new task\reconcile())->execute();
-        $this->assertSame(0, indexer::counts()['cm']);
-        $this->assertNotEmpty(get_config('block_le_dashboard', 'backfillpending'));
+        $this->assertSame(1, indexer::counts()['cm']);
+        $this->assertEmpty(get_config('block_le_dashboard', 'backfillpending'));
     }
 
     /**
