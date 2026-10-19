@@ -2488,6 +2488,30 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Picks a summary box's window, as the user's own preference, then reloads the page (with or without JavaScript).
+     *
+     * @When /^I set the "(?P<label>[^"]*)" summary box window to "(?P<option>[^"]*)"$/
+     * @param string $label
+     * @param string $option
+     */
+    public function i_set_the_summary_box_window(string $label, string $option): void {
+        foreach ($this->find_all('css', self::BLOCK . ' [data-region="ma-box"]') as $box) {
+            if (trim($box->find('css', '.ma-box-label')->getText()) !== $label) {
+                continue;
+            }
+            foreach ($box->findAll('css', 'select option') as $opt) {
+                if (trim($opt->getText()) === $option) {
+                    set_user_preference('block_le_dashboard_window', $opt->getAttribute('value'), $this->get_session_user());
+                    $this->getSession()->reload();
+                    return;
+                }
+            }
+            throw new ExpectationException("The '$label' box has no '$option' option", $this->getSession());
+        }
+        throw new ExpectationException("No '$label' summary box", $this->getSession());
+    }
+
+    /**
      * Nothing in the block is wider than the block.
      *
      * @Then /^the My assessments block should not scroll sideways$/
@@ -2524,7 +2548,8 @@ class behat_block_le_dashboard extends behat_base {
         'feedbackcontact' => 'feedbackcontact', 'extension' => 'extensions', 'extensions' => 'extensions',
         'setup' => 'setup', 'check settings' => 'setup', 'nodeadline' => 'nodeadline', 'received' => 'received', 'late' => 'late',
         'late penalty' => 'late', 'plagiarism' => 'plagiarism', 'hidden' => 'hidden', 'nosubmission' => 'nosubmission',
-        'load error' => 'loaderror', 'generic name' => 'genericname'];
+        'load error' => 'loaderror', 'generic name' => 'genericname', 'defaultmarkingdue' => 'defaultmarkingdue',
+        'default marking deadline' => 'defaultmarkingdue'];
 
     /**
      * Clicks a row's hint.

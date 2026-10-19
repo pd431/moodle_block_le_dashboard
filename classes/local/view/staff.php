@@ -92,7 +92,15 @@ class staff extends base {
         $shared = $staff ? $this->shared_marking($staff) : [];
         $params += ['me2' => $this->userid];
         $ready = self::ready_sql($this->now);
+        // Work still to mark whose marking deadline falls within each summary window, or has passed (UAT, beta27).
+        $deadline = self::marking_deadline_sql();
+        $windows = '';
+        foreach (self::WINDOWS as $days) {
+            $by = $this->now + $days * DAYSECS;
+            $windows .= "SUM(CASE WHEN $ready AND m.marked = 0 AND $deadline <= $by THEN 1 ELSE 0 END) AS dueby$days, ";
+        }
         $records = $DB->get_records_sql("SELECT " . $DB->sql_concat('m.cmid', "'-'", 'm.stage') . " AS id, m.cmid, m.stage,
+                                            $windows
                                             SUM(CASE WHEN $ready AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
                                             SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS mine,
                                             SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
@@ -176,6 +184,33 @@ class staff extends base {
     public static function ready_sql(int $now): string {
         // A released unit is finished: a stage that only sampled (moderation) owes it nothing.
         return "(m.submitted = 1 AND (m.marked = 1 OR (m.released = 0 AND (m.unitdue IS NULL OR m.unitdue < $now))))";
+    }
+
+    /**
+     * SQL for a mark index row's marking deadline (aliases m and c): the assessment's own, or else the unit's own
+     * deadline plus the default marking period (config::markingdue()). NULL when there is none.
+     *
+     * @return string
+     */
+    public static function marking_deadline_sql(): string {
+        $period = config::number('defaultmarkingdays') * DAYSECS;
+        return $period ? "(CASE WHEN c.markingdue > 0 THEN c.markingdue ELSE COALESCE(m.unitdue, c.due) + $period END)"
+            : "(CASE WHEN c.markingdue > 0 THEN c.markingdue ELSE NULL END)";
+    }
+
+    /**
+     * A mark index row's marking deadline, as marking_deadline_sql().
+     *
+     * @param \stdClass $r Mark index row.
+     * @param \stdClass $cm Index record.
+     * @return int|null
+     */
+    public static function marking_deadline(\stdClass $r, \stdClass $cm): ?int {
+        if (!empty($cm->markingdue)) {
+            return (int)$cm->markingdue;
+        }
+        $due = $r->unitdue ?? $cm->due;
+        return config::markingdue((object)['due' => $due])[0];
     }
 
     /**
@@ -303,7 +338,8 @@ class staff extends base {
         [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sh');
         $params['multi'] = '%marker%';
         $rs = $DB->get_recordset_sql("SELECT m.id, m.cmid, m.unitid, m.unittype, m.stage, m.submitted, m.marked,
-                                             m.markedby, m.timemarked, m.timeready, m.unitdue, m.released
+                                             m.markedby, m.timemarked, m.timeready, m.unitdue, m.released,
+                                             c.markingdue, c.due
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                         " . base::LIVE . "
@@ -332,12 +368,17 @@ class staff extends base {
                     $key = $cmid . '-' . $r->stage;
                     $o = $out[$key] ??= (object)['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
                         'mine' => 0, 'marked' => 0, 'unallocated' => 0, 'isgroup' => 0,
-                        'firstready' => null, 'lastmarked' => null];
+                        'firstready' => null, 'lastmarked' => null]
+                        + array_fill_keys(array_map(fn($d) => 'dueby' . $d, self::WINDOWS), 0);
                     $o->mine++;
                     if ($r->marked) {
                         $o->marked++;
                     } else {
                         $o->tomark++;
+                        $deadline = self::marking_deadline($r, $r);
+                        foreach (self::WINDOWS as $days) {
+                            $o->{'dueby' . $days} += $deadline !== null && $deadline <= $this->now + $days * DAYSECS ? 1 : 0;
+                        }
                         $o->firstready = $o->firstready === null ? $r->timeready
                             : min((int)$o->firstready, (int)$r->timeready);
                     }
@@ -426,6 +467,10 @@ class staff extends base {
         $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::STAFF_UPCOMING => [],
             classifier::UNDATED => []];
         $tomarkcounts = format::zero_counts();
+        $windowcounts = [];
+        foreach (self::WINDOWS as $days) {
+            $windowcounts[$days] = format::zero_counts();
+        }
         $oldest = null;
         // Marking still to do shows whatever its year; the rest follows the year picker (EC3).
         $inyear = array_flip($this->courses()[1]);
@@ -456,13 +501,17 @@ class staff extends base {
             if ($otheryear) {
                 $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
             }
+            [$markingdate, $defaulthint] = format::markingdue($row, $cm);
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
-                $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
+                $markingdate,
             ]));
             $row['tomark'] = $tomark;
             $row['bars'] = $this->stage_bars($stages);
             $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
+            if ($defaulthint) {
+                $row['hints'][] = $defaulthint;
+            }
             if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
                 $row['hints'][] = $setup;
             }
@@ -495,9 +544,16 @@ class staff extends base {
             }
             $row['actions'] = [format::view_action($row['url'])];
             $row = format::load_error($row, $cm, false);
-            $sections[$section][] = $row + ['sortkey' => (int)($cm->markingdue ?: $cm->due)];
+            $sections[$section][] = $row + ['sortkey' => (int)(config::markingdue($cm)[0] ?? $cm->due)];
             if ($section === classifier::TOMARK) {
                 format::count($tomarkcounts, $cm->assesstype, $tomark);
+                foreach (self::WINDOWS as $days) {
+                    $due = 0;
+                    foreach ($stages as $st) {
+                        $due += (int)($st->{'dueby' . $days} ?? 0);
+                    }
+                    format::count($windowcounts[$days], $cm->assesstype, $due);
+                }
             }
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
@@ -516,10 +572,6 @@ class staff extends base {
         }
         unset($row);
 
-        $windowcounts = [];
-        foreach (self::WINDOWS as $days) {
-            $windowcounts[$days] = format::zero_counts();
-        }
         // Upcoming leaves out what is already listed, and adds what is past its deadline with
         // only extensions to come (G9).
         $listed = array_flip(array_merge(
@@ -539,11 +591,6 @@ class staff extends base {
         // Upcoming covers every assessment in the staff courses, not only those with marking rows (R1, beta22 audit).
         $names += format::course_names(array_diff(array_unique(array_column($upcoming, 'courseid')), array_keys($names)));
         foreach ($upcoming as $cmid => $cm) {
-            foreach (self::WINDOWS as $days) {
-                if ((int)$cm->due >= $this->now && (int)$cm->due <= $this->now + $days * DAYSECS) {
-                    format::count($windowcounts[$days], $cm->assesstype);
-                }
-            }
             if (isset($listed[$cmid])) {
                 continue;
             }

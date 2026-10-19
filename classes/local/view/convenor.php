@@ -258,9 +258,10 @@ class convenor extends base {
             if ($otheryear) {
                 $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
             }
+            [$markingdate, $defaulthint] = format::markingdue($row, $cm);
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
-                $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
+                $markingdate,
             ]));
             // Marking starts after the deadline: before it, only submissions and allocation.
             $upcoming = $section === classifier::STAFF_UPCOMING;
@@ -301,6 +302,9 @@ class convenor extends base {
             if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
                 $row['hints'][] = $generic;
             }
+            if ($defaulthint) {
+                $row['hints'][] = $defaulthint;
+            }
             // Work that arrived after marking was finished brought this back to In progress (G6).
             if ($section === classifier::INPROGRESS && staff::returned($m, $cm->due === null ? null : (int)$cm->due)) {
                 $text = get_string('hint_returned_convenor', 'block_le_dashboard');
@@ -315,7 +319,8 @@ class convenor extends base {
             $row = format::load_error($row, $cm, (int)($s->total ?? 0) === 0);
             // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
             $late = (int)($unmarked[$cmid] ?? 0);
-            if ($cm->markingdue && (int)$cm->markingdue < $this->now && $late && !$upcoming) {
+            [$markingdue] = config::markingdue($cm);
+            if ($markingdue && $markingdue < $this->now && $late && !$upcoming) {
                 $row['alert'] = get_string('unmarkedafterdeadline', 'block_le_dashboard', $late);
             }
             if ($section === classifier::CONVENOR_PAST) {
@@ -323,7 +328,7 @@ class convenor extends base {
                 $row['grading'] = format::grading($units, $released, (int)($unmarked[$cmid] ?? 0), !empty($cm->norelease));
                 $row = format::marking_detail($row, get_string('marking_all', 'block_le_dashboard'));
             }
-            $row['sortkey'] = [(int)($cm->markingdue ?: PHP_INT_MAX), (int)$cm->due];
+            $row['sortkey'] = [$markingdue ?? PHP_INT_MAX, (int)$cm->due];
             $sections[$section][] = $row;
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }

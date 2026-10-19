@@ -52,4 +52,23 @@ final class config_test extends \advanced_testcase {
         set_config('graceperiod', 0, 'block_le_dashboard');
         $this->assertSame(0, config::grace());
     }
+
+    /**
+     * The marking deadline: the assessment's own wins; without one, the deadline plus the default marking period
+     * (12 days, as set, or none at 0); nothing without a deadline (UAT, beta27).
+     */
+    public function test_markingdue(): void {
+        $this->resetAfterTest();
+        $due = 1790000000;
+        $own = $due + 3 * DAYSECS;
+        $this->assertSame([$own, false], config::markingdue((object)['due' => $due, 'markingdue' => $own]));
+        $this->assertSame([$due + 12 * DAYSECS, true], config::markingdue((object)['due' => $due, 'markingdue' => null]));
+        $this->assertSame([$due + 12 * DAYSECS, true], config::markingdue((object)['due' => $due, 'markingdue' => 0]));
+        $this->assertSame([null, false], config::markingdue((object)['due' => null, 'markingdue' => null]));
+
+        set_config('defaultmarkingdays', 20, 'block_le_dashboard');
+        $this->assertSame([$due + 20 * DAYSECS, true], config::markingdue((object)['due' => $due, 'markingdue' => null]));
+        set_config('defaultmarkingdays', 0, 'block_le_dashboard');
+        $this->assertSame([null, false], config::markingdue((object)['due' => $due, 'markingdue' => null]));
+    }
 }

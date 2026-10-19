@@ -30,9 +30,10 @@ class config {
     /**
      * Number settings and their defaults: grace period (hours), Mitigate window (days before, hours
      * after), the nightly reconcile's live window (months, 0 for every course) and the time limit of each
-     * index run (minutes, 0 for none).
+     * index run (minutes, 0 for none) and the default marking period (days, 0 for none).
      */
-    const NUMBERS = ['graceperiod' => 24, 'mitigationcloses' => 24, 'reconcilemonths' => 13, 'indexminutes' => 45];
+    const NUMBERS = ['graceperiod' => 24, 'mitigationcloses' => 24, 'reconcilemonths' => 13, 'indexminutes' => 45,
+        'defaultmarkingdays' => 12];
 
     /**
      * A whole-number setting, or its default when unset.
@@ -43,6 +44,22 @@ class config {
     public static function number(string $name): int {
         $value = get_config('block_le_dashboard', $name);
         return $value === false || $value === '' ? self::NUMBERS[$name] : max(0, (int)$value);
+    }
+
+    /**
+     * An assessment's marking deadline: its own, or else its deadline plus the default marking period, whether its
+     * type has no such setting (quiz, peer work) or it was left empty (Pierre, 2026-10-19). None without a deadline,
+     * or with the period set to 0.
+     *
+     * @param \stdClass $cm Index record (markingdue, due).
+     * @return array [deadline or null, whether it is the default]
+     */
+    public static function markingdue(\stdClass $cm): array {
+        if (!empty($cm->markingdue)) {
+            return [(int)$cm->markingdue, false];
+        }
+        $days = self::number('defaultmarkingdays');
+        return $days && !empty($cm->due) ? [(int)$cm->due + $days * DAYSECS, true] : [null, false];
     }
 
     /**

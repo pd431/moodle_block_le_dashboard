@@ -16,6 +16,7 @@
 
 namespace block_le_dashboard\local\output;
 
+use block_le_dashboard\local\config;
 use block_le_dashboard\local\guidance;
 
 /**
@@ -280,6 +281,7 @@ class format {
     /** Each hint's icon (the Flag icons mockup). */
     const HINT_ICONS = [
         'brief' => 'fa-file-circle-exclamation',
+        'defaultmarkingdue' => 'fa-calendar-day',
         'genericname' => 'fa-signature',
         'hidden' => 'fa-eye-slash',
         'unallocated' => 'fa-user-slash',
@@ -296,6 +298,7 @@ class format {
     /** Each hint's tone. Attention is for staff and convenors only, never on a student's row. */
     const HINT_TONES = [
         'brief' => 'info',
+        'defaultmarkingdue' => 'info',
         'genericname' => 'info',
         'hidden' => 'grey',
         'unallocated' => 'attention',
@@ -543,6 +546,27 @@ class format {
             ];
         }
         return $icons[$modname];
+    }
+
+    /**
+     * A staff row's Marking deadline date, the assessment's own or the default (config::markingdue()), with a hint
+     * when it is the default.
+     *
+     * @param array $row The row, for its id.
+     * @param \stdClass $cm Index record.
+     * @return array [date or null, hint or null]
+     */
+    public static function markingdue(array $row, \stdClass $cm): array {
+        [$deadline, $default] = config::markingdue($cm);
+        if ($deadline === null) {
+            return [null, null];
+        }
+        $hint = $default ? self::hint($row['id'], 'defaultmarkingdue', get_string(
+            'hint_defaultmarkingdue_text',
+            'block_le_dashboard',
+            config::number('defaultmarkingdays')
+        )) : null;
+        return [self::date('markingdue', $deadline), $hint];
     }
 
     /**
