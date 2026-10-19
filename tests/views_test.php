@@ -553,4 +553,40 @@ final class views_test extends \advanced_testcase {
             $this->assertGreaterThan($reads[$section], $DB->perf_get_reads() - $before, "$section: the query runs only when on");
         }
     }
+
+    /**
+     * Beta27 regression: work with several markers and no allocation (coursework double marking, or an assignment
+     * with 2 markers) is shared between the markers, and counts in Marking due soon for each one still to mark. In
+     * beta27 building that count was a PHP error, so these markers' My marking didn't load at all.
+     */
+    public function test_shared_marking_due_soon(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $due = (int)$DB->get_field('block_le_dashboard_cm', 'due', ['cmid' => $cmid]);
+        $DB->update_record('block_le_dashboard_cm', (object)[
+            'id' => $DB->get_field('block_le_dashboard_cm', 'id', ['cmid' => $cmid]),
+            'hasallocation' => 0, 'stages' => 'marker1,marker2', 'markingdue' => null]);
+        $row = $DB->get_record(
+            'block_le_dashboard_mark',
+            ['cmid' => $cmid, 'unitid' => $this->u['s2']->id],
+            '*',
+            IGNORE_MULTIPLE
+        );
+        $DB->delete_records('block_le_dashboard_mark', ['cmid' => $cmid]);
+        unset($row->id);
+        foreach (['marker1', 'marker2'] as $stage) {
+            $DB->insert_record('block_le_dashboard_mark', (object)(['stage' => $stage, 'allocatedto' => null, 'marked' => 0,
+                'markedby' => null, 'timemarked' => null, 'released' => 0, 'submitted' => 1, 'unitdue' => $due] + (array)$row));
+        }
+
+        // The default marking period (12 days) puts the deadline 11 days ahead.
+        foreach (['marker', 'other'] as $name) {
+            $export = (new staff($this->u[$name]->id))->export();
+            $this->assertSame(1, self::rows($export, 'tomark')['Overdue essay']['tomark'], $name);
+            $box = array_column($export['summary'], null, 'key')['duesoon'];
+            $counts = json_decode($box['counts'], true);
+            $this->assertSame(1, $counts['15']['both'], "$name: within 15 days");
+            $this->assertSame(0, $counts['7']['both'], "$name: not within 7 days");
+        }
+    }
 }
