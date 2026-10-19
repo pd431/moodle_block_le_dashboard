@@ -67,6 +67,7 @@ $string['date_due'] = 'Due';
 $string['date_extendeddeadline'] = 'Extended deadline';
 $string['date_feedbackexpected'] = 'Feedback expected';
 $string['date_markingdue'] = 'Marking deadline';
+$string['date_opens'] = 'Opens';
 $string['date_released'] = 'Feedback received';
 $string['date_submissiondeadline'] = 'Submission deadline';
 $string['defaultacademicyear'] = 'Default academic year';

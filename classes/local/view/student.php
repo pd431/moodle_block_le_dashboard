@@ -95,7 +95,7 @@ class student extends base {
         }
         [$insql, $params] = $DB->get_in_or_equal(array_keys($courses), SQL_PARAMS_NAMED);
         $params['userid'] = $this->userid;
-        $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue,
+        $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue, c.opens,
                                                 c.hiddenfromstudents, c.nosubmission, c.norelease, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
                                                 s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.lockreason, s.enrolstart
@@ -242,7 +242,8 @@ class student extends base {
             // Not for Closed: the block can't see those submissions (F6).
             $state = 'notsubmitted';
         } else if (
-            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && $r->due && (int)$r->due > $this->now
+            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && !$this->not_yet_open($r)
+                && $r->due && (int)$r->due > $this->now
                 && (int)$r->due - $this->now <= self::DUESOON_DAYS * DAYSECS
         ) {
             $state = 'duesoon';
@@ -251,6 +252,18 @@ class student extends base {
             $parts[] = get_string('tip_' . $state, 'block_le_dashboard');
         }
         return [$state ? ['state' => $state, 'icon' => self::OVERLAY_ICONS[$state]] : null, $mitigation, $parts];
+    }
+
+    /**
+     * Whether the activity hasn't opened for submissions yet (quiz open, assignment "allow submissions from",
+     * coursework start, peer work from): the student can't hand anything in, so it isn't due soon and has no
+     * Submit (Pierre's UAT, 2026-10-19).
+     *
+     * @param \stdClass $r
+     * @return bool
+     */
+    protected function not_yet_open(\stdClass $r): bool {
+        return !empty($r->opens) && (int)$r->opens > $this->now && (int)$r->submitted !== 1;
     }
 
     /**
@@ -281,7 +294,7 @@ class student extends base {
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
             $notes[] = format::countdown('stillsubmit', $until, $this->now);
         }
-        $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]);
+        $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && !$this->not_yet_open($r);
         if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
             $notes[] = format::countdown('duein', $due, $this->now);
         }
@@ -320,6 +333,10 @@ class student extends base {
             ? [format::nosubmission_hint($row['id'], false)] : [];
 
         $dates = [];
+        if ($this->not_yet_open($r)) {
+            // Said first, so the row reads "Opens ..., Due ..." (Pierre's UAT, 2026-10-19).
+            $dates[] = format::date('opens', (int)$r->opens);
+        }
         if ($r->due) {
             // An extension is ordinary upcoming work: no note (Pierre, 2026-10-06).
             $dates[] = format::date('due', (int)$r->due);
@@ -360,6 +377,9 @@ class student extends base {
         } else if ($section !== classifier::PAST && classifier::teacher_locked($r)) {
             // Locked before anything was handed in (B1).
             $row['locked'] = $this->lock_control($row['id'], $r->lockreason, false);
+        } else if ($this->not_yet_open($r)) {
+            // Nothing can be handed in yet: View, not Submit.
+            $actions[] = format::view_action($row['url']);
         } else if (in_array($status, $open) && $section !== classifier::PAST) {
             $actions[] = format::action('submit', $row['url']);
         } else if ($status === classifier::STATUS_SUBMITTED && $section === classifier::UPCOMING) {

@@ -286,7 +286,8 @@ class behat_block_le_dashboard extends behat_base {
      * marking workflow, reopened attempts, a cut-off "...", manual agreement, tagged "..." (a second tag),
      * N attempts allowed, marks never shown, marks shown immediately after only, marks shown after
      * close only, a maximum grade of 0 (quiz), submission type attendance (coursework), required Submit
-     * (assign: students must click Submit, which makes the submission final).
+     * (assign: students must click Submit, which makes the submission final). Also: opens "..." and (when
+     * submissions open).
      *
      * @Given /^an? (?P<tag>summative|formative|"[^"]+") "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag
@@ -420,6 +421,12 @@ class behat_block_le_dashboard extends behat_base {
                 break;
             default:
                 $record += ['duedate' => (int)$due];
+        }
+        if (preg_match('/opens "([^"]*)"/', $opts, $m)) {
+            // When submissions open (Pierre's UAT, 2026-10-19), in each type's own field.
+            $fields = ['assign' => 'allowsubmissionsfromdate', 'quiz' => 'timeopen', 'coursework' => 'startdate',
+                'peerwork' => 'fromdate'];
+            $record[$fields[$modname]] = self::time($m[1]);
         }
         if (str_contains($opts, 'no grade')) {
             // A grade of 0 is grade type None.
