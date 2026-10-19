@@ -4744,4 +4744,175 @@ class behat_block_le_dashboard extends behat_base {
     protected function notice(): \Behat\Mink\Element\NodeElement {
         return $this->find('css', self::BLOCK . ' [data-region="ma-notice"]');
     }
+
+    // Colour modes (Moodle 5.3).
+
+    /**
+     * Turns on Boost's colour modes, which Moodle 5.3 added. Earlier versions have none, so the scenario is skipped.
+     *
+     * @Given /^the site has colour modes turned on$/
+     */
+    public function the_site_has_colour_modes_turned_on(): void {
+        if (!class_exists('\theme_boost\colour_mode')) {
+            throw new \Moodle\BehatExtension\Exception\SkippedException('Needs Moodle 5.3 or later, which has colour modes');
+        }
+        set_config('enablecolourmodes', 1, 'theme_boost');
+    }
+
+    /**
+     * Turns on colour modes where the site has them, so one scenario outline covers 4.5, 5.2 and 5.3.
+     *
+     * @Given /^the site has colour modes turned on if it can$/
+     */
+    public function the_site_has_colour_modes_turned_on_if_it_can(): void {
+        if (class_exists('\theme_boost\colour_mode')) {
+            set_config('enablecolourmodes', 1, 'theme_boost');
+        }
+    }
+
+    /**
+     * Opens every section's hidden rows, where a section has more than it shows.
+     *
+     * @When /^I press "Show more" in the "My assessments" block if there is one$/
+     */
+    public function i_press_show_more_if_there_is_one(): void {
+        foreach ($this->getSession()->getPage()->findAll('css', self::BLOCK . ' .ma-more[aria-expanded="false"]') as $more) {
+            if ($more->isVisible()) {
+                $more->click();
+            }
+        }
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * Sets a user's colour mode, the way the navbar menu stores it. Light is every version's only mode before 5.3.
+     *
+     * @Given /^"(?P<user>[^"]*)" uses the (?P<mode>light|dark) colour mode$/
+     * @param string $username
+     * @param string $mode
+     */
+    public function uses_the_colour_mode(string $username, string $mode): void {
+        global $DB;
+        if (!class_exists('\theme_boost\colour_mode')) {
+            if ($mode === 'dark') {
+                throw new \Moodle\BehatExtension\Exception\SkippedException('Needs Moodle 5.3 or later, which has dark mode');
+            }
+            return;
+        }
+        $user = $DB->get_record('user', ['username' => $username], '*', MUST_EXIST);
+        set_user_preference(\theme_boost\colour_mode::PREFERENCE, $mode, $user);
+    }
+
+    /**
+     * Picks a colour mode from the navbar menu, which switches the page without reloading it.
+     *
+     * @When /^I choose the (?P<mode>light|dark) colour mode from the navbar$/
+     * @param string $mode
+     */
+    public function i_choose_the_colour_mode(string $mode): void {
+        $this->find('css', '[data-region="colourmode-menu"] [data-bs-toggle="dropdown"]')->click();
+        $this->find('css', '[data-action="set-colourmode"][data-colourmode="' . $mode . '"]')->click();
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * The colour mode the page is drawn in: Boost's data-bs-theme attribute, missing before 5.3.
+     *
+     * @Then /^the page should be in (?P<mode>light|dark) colour mode$/
+     * @param string $mode
+     */
+    public function the_page_should_be_in_colour_mode(string $mode): void {
+        $actual = $this->evaluate_script('return document.documentElement.getAttribute("data-bs-theme") || "light"');
+        if ($actual !== $mode) {
+            throw new ExpectationException("The page is in $actual colour mode", $this->getSession());
+        }
+    }
+
+    /**
+     * Every visible text, icon, progress bar and control outline in the block meets the block's contrast targets.
+     *
+     * @Then /^the My assessments block should meet its contrast targets$/
+     */
+    public function the_block_should_meet_its_contrast_targets(): void {
+        $this->assert_contrast($this->contrast('all', self::BLOCK), 'At rest');
+    }
+
+    /**
+     * The same, with the pointer over each kind of control in turn: one of each tab, button, flag, link and select.
+     *
+     * @Then /^every kind of control in the My assessments block should meet its contrast targets when hovered$/
+     */
+    public function every_control_should_meet_its_contrast_targets_when_hovered(): void {
+        $failures = [];
+        $kinds = [];
+        $selector = self::BLOCK . ' :is(.nav-link, .btn, .ma-flag, .ma-row-iconbtn, .ma-untagged-summary, a, select,' .
+            ' .dropdown-item)';
+        foreach ($this->getSession()->getPage()->findAll('css', $selector) as $control) {
+            $kind = $control->getTagName() . ' ' . preg_replace('/\b(active|show|ma-row-\S*--\S+)\b/', '',
+                (string) $control->getAttribute('class'));
+            if (isset($kinds[$kind]) || !$control->isVisible()) {
+                continue;
+            }
+            $kinds[$kind] = true;
+            $id = 'ma-contrast-' . count($kinds);
+            $this->evaluate_script('document.evaluate(' . json_encode($control->getXpath()) . ', document, null, ' .
+                'XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute("data-contrast", "' . $id . '")');
+            $control->mouseOver();
+            foreach ($this->contrast('all', '[data-contrast="' . $id . '"]') as $failure) {
+                $failures[] = "hovered $kind: $failure";
+            }
+        }
+        $this->evaluate_script('document.querySelectorAll("[data-contrast]").forEach(e => e.removeAttribute("data-contrast"))');
+        $this->getSession()->getPage()->find('css', 'body')->mouseOver();
+        $this->assert_contrast($failures, 'Hovered');
+    }
+
+    /**
+     * Tabbing through the block: every control's focus indicator reaches 3:1 and Lc 45 against what's behind it.
+     *
+     * @Then /^keyboard focus should be visible on every control in the My assessments block$/
+     */
+    public function keyboard_focus_should_be_visible_on_every_control(): void {
+        $inblock = 'return !!document.activeElement.closest(' . json_encode(self::BLOCK) . ')';
+        $this->evaluate_script('document.activeElement.blur(); document.body.focus()');
+        for ($i = 0; $i < 100 && !$this->evaluate_script($inblock); $i++) {
+            $this->execute('behat_general::i_press_named_key', ['', 'tab']);
+        }
+        $failures = [];
+        for ($stops = 0; $stops < 300 && $this->evaluate_script($inblock); $stops++) {
+            $failures = array_merge($failures, $this->contrast('focus', self::BLOCK));
+            $this->execute('behat_general::i_press_named_key', ['', 'tab']);
+        }
+        if ($stops < 5) {
+            throw new ExpectationException("Tab reached only $stops controls in the block", $this->getSession());
+        }
+        $this->assert_contrast($failures, 'Focused');
+    }
+
+    /**
+     * Runs tests/fixtures/contrast.js in the page.
+     *
+     * @param string $check "all" or "focus"
+     * @param string $selector What to check
+     * @return string[] One line per failure
+     */
+    protected function contrast(string $check, string $selector): array {
+        $js = file_get_contents(__DIR__ . '/../fixtures/contrast.js');
+        $js = trim(preg_replace('~^\s*//.*$~m', '', $js));
+        return $this->evaluate_script('return (' . $js . ')(' . json_encode($check) . ', ' . json_encode($selector) . ')');
+    }
+
+    /**
+     * Fails with every contrast failure, one per line.
+     *
+     * @param string[] $failures
+     * @param string $state
+     */
+    protected function assert_contrast(array $failures, string $state): void {
+        if ($failures) {
+            $failures = array_values(array_unique($failures));
+            throw new ExpectationException("$state, " . count($failures) . " parts of the block miss their contrast targets:\n" .
+                implode("\n", $failures), $this->getSession());
+        }
+    }
 }

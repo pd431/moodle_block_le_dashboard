@@ -33,23 +33,41 @@ $ma-open-ring: inset 0 0 0 2px var(--ma-border);
 // tone names a theme variable the tints follow the theme; older browsers
 // get hex that Sass computes from the same base colours.
 // Tone: (base colour, Boost theme variable or null, the steps it uses or
-// null for all of them). Danger is only ever the overdue clock's solid.
+// null for all of them). Danger is only the overdue clock and the Delete
+// mitigation item's text.
 $ma-tones: (
     "primary": (#003c3c, "primary", null),
     "info": (#008196, "info", null),
     "attention": (#f2a42a, null, null),
     "grey": (#6c757d, null, null),
-    "success": (#357a32, "success", ("fill", "border", "ink")),
-    "danger": (#ca3120, "danger", ()),
+    "success": (#357a32, "success", ("fill", "border", "ink", "bar")),
+    "danger": (#ca3120, "danger", ("ink",)),
 );
 
-// Step: (OKLCH lightness, share of the base colour's chroma). Border is
-// also the progress bar fill.
+// Step: (OKLCH lightness, share of the base colour's chroma). Bar is the
+// progress bar fill: dark enough for 3:1 and APCA Lc 45 against its white
+// track (WCAG 1.4.11), which the pastel border step wasn't (2.1:1).
 $ma-steps: (
     "fill": (0.93, 0.35),
     "hover": (0.9, 0.45),
     "border": (0.76, 0.8),
     "ink": (0.33, 0.75),
+    "bar": (0.58, 0.8),
+);
+
+// The same steps for Moodle 5.3's dark colour mode, mirrored: dark fills
+// under light ink. Ink reaches APCA Lc 75 on its fill, its hover, Boost's
+// dark card (#343a40) and page (#1d2125). Every tone gets a glyph step in
+// dark, for icons on a dark surface (Lc 45 and 3:1 or more). Border is
+// also the search box's and toggles' outline, so it reaches Lc 45 on the card. Orange needs
+// no exceptions here: light orange text on dark brown stays orange.
+$ma-dark-steps: (
+    "fill": (0.3, 0.45),
+    "hover": (0.36, 0.5),
+    "border": (0.74, 0.8),
+    "ink": (0.92, 0.35),
+    "bar": (0.74, 0.8),
+    "glyph": (0.8, 1),
 );
 
 // Per-tone exceptions and extra steps. Orange text turns brown, so
@@ -60,16 +78,29 @@ $ma-steps: (
 // overlays.
 $ma-step-overrides: (
     "attention": ("ink": (0.3, 0.19), "glyph": (0.62, 1)),
+    // The Delete item's text: the lightest red at full chroma that keeps
+    // Lc 75 on white (#b71a09, Lc 80.7), so it still reads as red.
+    "danger": ("ink": (0.5, 1)),
 );
 
 // A tone's steps, as (step: (OKLCH lightness, chroma share)), after its
-// overrides and limited to the steps it uses.
-@function ma-tone-steps($tone) {
-    $steps: map.merge($ma-steps, map.get($ma-step-overrides, $tone) or ());
+// overrides and limited to the steps it uses. In dark mode every tone also
+// has its glyph step.
+@function ma-tone-steps($tone, $dark: false) {
+    $steps: $ma-dark-steps;
+
+    @if not $dark {
+        $steps: map.merge($ma-steps, map.get($ma-step-overrides, $tone) or ());
+    }
+
     $uses: list.nth(map.get($ma-tones, $tone), 3);
 
     @if $uses == null {
         @return $steps;
+    }
+
+    @if $dark {
+        $uses: list.append($uses, "glyph");
     }
 
     $out: ();
@@ -104,6 +135,7 @@ $ma-primary: list.nth(map.get($ma-tones, "primary"), 1);
     --ma-hover: var(--ma-#{$name}-hover);
     --ma-border: var(--ma-#{$name}-border);
     --ma-ink: var(--ma-#{$name}-ink);
+    --ma-bar: var(--ma-#{$name}-bar);
     --ma-solid: var(--ma-#{$name}-solid);
 }
 
@@ -157,18 +189,21 @@ $ma-state-tones: (
     ),
 );
 
-// Tones too light for a glyph in their solid step on white; such glyphs
-// take the tone's glyph step.
-$ma-glyph-tones: ("attention");
-
 // The tone rules for one component: the default tone and the component's
 // own declarations (the @content) on $base, each state on $base--state.
-// $glyphs: the component paints icons on white, so it needs --ma-glyph.
+// $glyphs: the component paints icons on the surface, so it needs
+// --ma-glyph: the tone's glyph step where it has one (orange on white, every
+// tone in dark mode), otherwise its solid.
 @mixin ma-state-tones($component, $base, $glyphs: false) {
     $states: map.get($ma-state-tones, $component);
 
     #{$base} {
         @include ma-tone(map.get($states, "default"));
+
+        @if $glyphs {
+            --ma-glyph: var(--ma-#{map.get($states, "default")}-glyph, var(--ma-#{map.get($states, "default")}-solid));
+        }
+
         @content;
     }
 
@@ -186,8 +221,8 @@ $ma-glyph-tones: ("attention");
         #{$selectors} {
             @include ma-tone($tone);
 
-            @if $glyphs and list.index($ma-glyph-tones, $tone) {
-                --ma-glyph: var(--ma-#{$tone}-glyph);
+            @if $glyphs {
+                --ma-glyph: var(--ma-#{$tone}-glyph, var(--ma-#{$tone}-solid));
             }
         }
     }
@@ -225,8 +260,18 @@ $ma-glyph-tones: ("attention");
         }
     }
 
-    // Focus ring for the block's own tabs and buttons (Boost styles the rest).
-    --ma-focus-ring: 0 0 0 0.2rem color-mix(in srgb, var(--ma-primary-solid) 75%, transparent);
+    // Outline of the search box and the control bar toggles: 3:1 against the
+    // card (WCAG 1.4.11).
+    --ma-control-line: var(--ma-grey-solid);
+    // The block's links: the primary colour, darkened where needed to keep
+    // APCA Lc 75 on the card. Boost's default blue (#0f6cbf) only reaches
+    // Lc 72.4; a dark brand such as #003c3c is left as it is.
+    --ma-link: oklch(from var(--ma-primary-solid) min(l, 0.47) c h);
+    --ma-link-hover: oklch(from var(--ma-primary-solid) min(l, 0.4) c h);
+    // Focus ring for the block's own tabs and buttons (Boost styles the rest):
+    // the link colour, so it keeps 3:1 on the pale tone fills whatever the
+    // brand (Boost's blue at 75% got 2.9:1 on a section header).
+    --ma-focus-ring: 0 0 0 0.2rem color-mix(in srgb, var(--ma-link) 85%, transparent);
     // Width of the actions column in every row grid, so the date and status
     // columns line up whatever buttons a row has. Fits two small buttons
     // (Submit and Mitigate, or View and Show markers); a third wraps.
@@ -240,11 +285,74 @@ $ma-glyph-tones: ("attention");
     // The same palette as hex, from the brand colours, for browsers without
     // relative colours (Chrome < 119, Firefox < 128, Safari < 18).
     @supports not (color: oklch(from red l c h)) {
+        --ma-link: var(--ma-primary-solid);
+        --ma-link-hover: var(--ma-primary-solid);
+
         @each $tone, $def in $ma-tones {
             @each $step, $v in ma-tone-steps($tone) {
                 --ma-#{$tone}-#{$step}: #{ma-step-hex(list.nth($def, 1), list.nth($v, 1), list.nth($v, 2))};
             }
         }
+    }
+
+    // Moodle 5.3's dark colour mode: Boost sets data-bs-theme="dark" on the
+    // html tag, and switches it in place when the user picks a mode. Boost's
+    // card, list rows and inputs go dark under the block, so every colour
+    // the block sets itself is re-pointed here. Moodle 4.5 and 5.2 never set
+    // the attribute.
+    @at-root [data-bs-theme="dark"] & {
+        // Body text is Boost's. Muted is the darkest grey that keeps APCA
+        // Lc 75 on the dark card (#343a40), so it is close to the body text:
+        // on a dark surface Lc 75 leaves little room under it.
+        --ma-text: var(--bs-body-color, #dee2e6);
+        --ma-text-muted: #d4dadf;
+        --ma-rule: var(--bs-border-color, #495057);
+        // Boost's dark mode re-points white to its raised surface (#343a40).
+        --ma-surface: var(--bs-white, #343a40);
+        --ma-control-line: var(--ma-grey-border);
+        --ma-tip-border: var(--ma-rule);
+        // Links: Boost lifts its link colour to WCAG 4.6:1, short of Lc 75,
+        // so the block's links take a lighter step (Lc 77.5 or more on the
+        // card whatever the brand hue).
+        --ma-link: oklch(from var(--ma-primary-solid) 0.91 calc(c * 0.45) h);
+        --ma-link-hover: oklch(from var(--ma-primary-solid) 0.95 calc(c * 0.3) h);
+        --ma-focus-ring: 0 0 0 0.2rem color-mix(in srgb, var(--ma-primary-glyph) 85%, transparent);
+
+        @each $tone, $def in $ma-tones {
+            @each $step, $v in ma-tone-steps($tone, $dark: true) {
+                --ma-#{$tone}-#{$step}: oklch(from var(--ma-#{$tone}-solid) #{list.nth($v, 1)} calc(c * #{list.nth($v, 2)}) h);
+            }
+        }
+
+        @supports not (color: oklch(from red l c h)) {
+            --ma-link: #{ma-step-hex($ma-primary, 0.91, 0.45)};
+            --ma-link-hover: #{ma-step-hex($ma-primary, 0.95, 0.3)};
+
+            @each $tone, $def in $ma-tones {
+                @each $step, $v in ma-tone-steps($tone, $dark: true) {
+                    --ma-#{$tone}-#{$step}: #{ma-step-hex(list.nth($def, 1), list.nth($v, 1), list.nth($v, 2))};
+                }
+            }
+        }
+
+        // A light link is no longer told apart from the text by its colour
+        // (WCAG 1.4.1), so it is underlined, as Boost does in dark mode.
+        a:not(.btn, .dropdown-item) {
+            text-decoration: underline;
+        }
+
+        // Chrome's default ring on links and Boost's select ring (a compiled
+        // colour that doesn't follow the mode) both vanish on the dark card.
+        a:not(.btn):focus-visible {
+            outline: 2px solid var(--ma-primary-glyph);
+            outline-offset: 1px;
+        }
+
+        select:focus {
+            border-color: var(--ma-primary-glyph);
+            box-shadow: var(--ma-focus-ring);
+        }
+
     }
 
     * {
@@ -257,6 +365,22 @@ $ma-glyph-tones: ("attention");
     strong,
     b {
         font-weight: 600;
+    }
+
+    // Links and link buttons take --ma-link. Course and marker names keep the
+    // colour of the text around them (below).
+    a:not(.btn, .dropdown-item, .ma-row-course, .ma-marker-name) {
+        color: var(--ma-link);
+
+        &:hover {
+            color: var(--ma-link-hover);
+        }
+    }
+
+    .btn-link {
+        --bs-btn-color: var(--ma-link);
+        --bs-btn-hover-color: var(--ma-link-hover);
+        --bs-btn-active-color: var(--ma-link-hover);
     }
 
     // Muted text. Boost's .text-muted is #6a737b with !important; ours is a
@@ -395,7 +519,7 @@ $ma-glyph-tones: ("attention");
 
         .input-group-text,
         .form-control {
-            border-color: var(--ma-grey-solid);
+            border-color: var(--ma-control-line);
             background-color: var(--ma-surface);
             box-shadow: none;
         }
@@ -480,7 +604,7 @@ $ma-glyph-tones: ("attention");
         @include ma-tone("primary");
 
         --ma-rest: transparent;
-        --ma-line: var(--ma-grey-solid);
+        --ma-line: var(--ma-control-line);
 
         font-weight: 400;
 
@@ -649,10 +773,11 @@ $ma-glyph-tones: ("attention");
     }
 
     // Delete mitigation: Moodle's look for a destructive menu action, red with
-    // a bin (the red marks the action, never the student). Hover and focus
-    // fill it red with white text, as Boost's danger buttons do.
+    // a bin (the red marks the action, never the student). The text takes the
+    // danger ink, as Boost's red reaches APCA Lc 74.8 on white, just short. Hover and
+    // focus fill it red with white text (Lc 80), as Boost's danger buttons do.
     .ma-mitigate-item--delete {
-        color: var(--bs-danger, var(--danger, #ca3120));
+        color: var(--ma-danger-ink);
 
         &:hover,
         &:focus {
@@ -1027,7 +1152,7 @@ $ma-glyph-tones: ("attention");
         height: 1rem;
         border-radius: 50%;
         background-color: var(--ma-surface);
-        color: var(--ma-glyph, var(--ma-solid));
+        color: var(--ma-glyph);
         font-size: 0.875rem;
         line-height: 1;
     }
@@ -1147,8 +1272,8 @@ $ma-glyph-tones: ("attention");
         white-space: normal;
     }
 
-    // Progress bars: the pastel -border step on a grey track, the count
-    // always beside the bar.
+    // Progress bars: the tone's bar step on the track, the count always
+    // beside the bar.
     @include ma-state-tones("bar", ".ma-bar") {
         display: grid;
         grid-template-columns: 5.5rem minmax(2.5rem, 1fr) minmax(3.5rem, auto);
@@ -1171,7 +1296,7 @@ $ma-glyph-tones: ("attention");
     }
 
     .ma-bar-fill {
-        background-color: var(--ma-border);
+        background-color: var(--ma-bar);
     }
 
     // Tips: Moodle's help-icon popover look. They open on a click, keyboard
@@ -1191,7 +1316,7 @@ $ma-glyph-tones: ("attention");
         // stylelint-disable-next-line csstree/validator
         max-width: min(17.25rem, 70vw);
         padding: 0.5rem 0.75rem;
-        border: 1px solid rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--ma-tip-border, rgba(0, 0, 0, 0.2));
         border-radius: 0.3rem;
         box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
         background-color: var(--ma-surface);
