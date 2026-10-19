@@ -273,16 +273,17 @@ class format {
     ];
 
     /**
-     * A hint's icon. The missing brief is a half-dashed file where Moodle's Font Awesome has one (6.6 and later,
-     * so Moodle 5.0 and later): 4.5's 6.5.2 would draw a blank square (Pierre, 2026-10-17).
+     * A hint's icon. The missing brief is a half-dashed file (Pierre, 2026-10-17). Moodle's Font Awesome has it
+     * from 6.6, so Moodle 5.0 and later; on 4.5 (6.5.2) the plugin draws its own copy, pix/file-half-dashed.svg,
+     * in styles.css (Pierre, 2026-10-19: "UNTIL WE MOVE TO 5.3"). Remove both then.
      *
      * @param string $key
      * @return string
      */
     public static function hint_icon(string $key): string {
         global $CFG;
-        if ($key === 'brief' && (int)$CFG->branch >= 500) {
-            return 'fa-file-half-dashed';
+        if ($key === 'brief') {
+            return (int)$CFG->branch >= 500 ? 'fa-file-half-dashed' : 'ma-icon-file-half-dashed';
         }
         return self::HINT_ICONS[$key];
     }

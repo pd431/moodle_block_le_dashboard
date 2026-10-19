@@ -3492,6 +3492,44 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The plugin's own half-dashed file, used where Moodle's Font Awesome has none (Moodle 4.5).
+     *
+     * @Then /^the "(?P<key>[a-z ]+)" flag of "(?P<name>[^"]*)" should show the plugin's own half-dashed file$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_flag_should_show_own_half_dashed_file(string $key, string $name): void {
+        $this->the_flag_should_show_the_icon($key, $name, 'ma-icon-file-half-dashed');
+    }
+
+    /**
+     * The plugin's half-dashed file is drawn, as a mask filled with the flag's text colour.
+     *
+     * @Then /^the "(?P<key>[a-z ]+)" flag of "(?P<name>[^"]*)" should draw the plugin's own half-dashed file in the flag's text colour$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_flag_should_draw_own_half_dashed_file(string $key, string $name): void {
+        $this->the_flag_should_show_own_half_dashed_file($key, $name);
+        $xpath = json_encode($this->flag($key, $name)->find('css', 'i.ma-icon-file-half-dashed')->getXpath());
+        $result = $this->evaluate_script("return (function() {
+            const i = document.evaluate($xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            const before = getComputedStyle(i, '::before');
+            const mask = before.maskImage || before.webkitMaskImage || '';
+            if (!mask.includes('file-half-dashed')) {
+                return 'no mask: ' + mask;
+            }
+            if (before.backgroundColor !== getComputedStyle(i).color) {
+                return 'filled ' + before.backgroundColor + ', text is ' + getComputedStyle(i).color;
+            }
+            return parseFloat(before.width) > 0 && parseFloat(before.height) > 0 ? '' : 'not drawn: ' + before.width;
+        })();");
+        if ($result !== '') {
+            throw new ExpectationException("The half-dashed file of '$name' isn't drawn right: $result", $this->getSession());
+        }
+    }
+
+    /**
      * Waits for a condition for up to two seconds.
      *
      * @param callable $test

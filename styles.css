@@ -1024,3 +1024,16 @@
 .ma-gap {
     margin-inline-end: 1rem;
 }
+
+/* Moodle 4.5's Font Awesome (6.5.2) has no file-half-dashed: draw the plugin's copy in the text colour.
+   Remove with pix/file-half-dashed.svg once the site is on Moodle 5.0 or later (format::hint_icon). */
+.block_le_dashboard_dashboard .ma-icon-file-half-dashed::before {
+    content: "";
+    display: inline-block;
+    width: .75em;
+    height: 1em;
+    vertical-align: -.125em;
+    background-color: currentColor;
+    -webkit-mask: url([[pix:block_le_dashboard|file-half-dashed]]) no-repeat center / contain;
+    mask: url([[pix:block_le_dashboard|file-half-dashed]]) no-repeat center / contain;
+}
