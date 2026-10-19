@@ -25,7 +25,7 @@ use block_le_dashboard\local\scope;
  * The marker view: marking that is mine, whatever the plugin (R3: hidden activities included, flagged).
  *
  * "Mine" is the units allocated to me, plus every unit of activities without
- * allocation in courses where I hold a staff role. Unallocated units of
+ * allocation in courses where I hold a staff or convenor role. Unallocated units of
  * activities with allocation are for convenors only (D6).
  *
  * @package    block_le_dashboard
@@ -51,8 +51,8 @@ class staff extends base {
     }
 
     /**
-     * Courses in scope: [staff role courses, courses where I may have allocated work,
-     * convenor role courses].
+     * Courses in scope: [staff role and convenor role courses, courses where I may have allocated work (the
+     * same), convenor role courses].
      *
      * @param bool $allyears Every year, for marking still to do (EC3), instead of the selected one.
      * @return array
@@ -61,9 +61,14 @@ class staff extends base {
         $key = $allyears ? 'all' : 'year';
         if (!isset($this->courses[$key])) {
             $year = $allyears ? null : $this->year();
-            $staff = scope::courses_with_roles($this->userid, config::role_ids('staffrole'), $year);
             $convenor = scope::courses_with_roles($this->userid, config::role_ids('moduleconvenorrole'), $year);
-            $this->courses[$key] = [$staff, array_values(array_unique(array_merge($staff, $convenor))), $convenor];
+            // A convenor's own courses count as staff courses, so marking without allocation there is theirs too
+            // (UAT, beta27: a convenor who wasn't also a teacher there never saw quiz marking).
+            $staff = array_values(array_unique(array_merge(
+                scope::courses_with_roles($this->userid, config::role_ids('staffrole'), $year),
+                $convenor
+            )));
+            $this->courses[$key] = [$staff, $staff, $convenor];
         }
         return $this->courses[$key];
     }
