@@ -2055,15 +2055,32 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Which Font Awesome icon a row's activity icon is.
+     * A row's activity icon is the module's own, as on the course page (Pierre's UAT, 2026-10-19).
      *
-     * @Then /^the activity icon of "(?P<name>[^"]*)" should be the "(?P<icon>[^"]*)" icon$/
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should be the "(?P<mod>[a-z]+)" module's own icon$/
      * @param string $name
-     * @param string $icon
+     * @param string $mod
      */
-    public function the_activity_icon_should_be(string $name, string $icon): void {
-        if (!$this->activity_icon($name)->find('css', '.ma-row-faicon.' . $icon)) {
-            throw new ExpectationException("The icon of '$name' is not '$icon'", $this->getSession());
+    public function the_activity_icon_should_be_the_modules(string $name, string $mod): void {
+        global $OUTPUT;
+        $img = $this->activity_icon($name)->find('css', '.ma-row-modicon img.activityicon');
+        $expected = $OUTPUT->image_url('monologo', $mod)->out(false);
+        if (!$img || $img->getAttribute('src') !== $expected) {
+            $src = $img ? $img->getAttribute('src') : 'no image';
+            throw new ExpectationException("The icon of '$name' is $src, not $expected", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's activity icon has its module's purpose colour.
+     *
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should use the "(?P<purpose>[a-z]+)" purpose colour$/
+     * @param string $name
+     * @param string $purpose
+     */
+    public function the_activity_icon_should_use_purpose(string $name, string $purpose): void {
+        if (!$this->activity_icon($name)->find('css', '.ma-row-modicon.activityiconcontainer.' . $purpose)) {
+            throw new ExpectationException("The icon of '$name' doesn't use the $purpose colour", $this->getSession());
         }
     }
 

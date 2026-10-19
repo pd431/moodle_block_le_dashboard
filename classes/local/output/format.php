@@ -26,17 +26,6 @@ use block_le_dashboard\local\guidance;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class format {
-    /** Font Awesome icon per activity type. Add a line here for a new adapter. */
-    const ICONS = [
-        'assign' => 'fa-file-arrow-up',
-        'quiz' => 'fa-clipboard-question',
-        'coursework' => 'fa-file-pen',
-        'peerwork' => 'fa-people-group',
-    ];
-
-    /** Icon for any other activity type. */
-    const ICON_FALLBACK = 'fa-file-lines';
-
     /** Font Awesome icon per row action (Show markers has none, as in rc6). */
     const ACTION_ICONS = [
         'submit' => 'fa-upload',
@@ -518,7 +507,7 @@ class format {
             'courseurl' => (new \moodle_url('/course/view.php', ['id' => $cm->courseid]))->out(false),
             'modname' => $cm->modname,
             'modlabel' => $modname,
-            'faicon' => self::ICONS[$cm->modname] ?? self::ICON_FALLBACK,
+            'modicon' => self::modicon($cm->modname),
             'assesstype' => $cm->assesstype,
             'typelabel' => get_string($cm->assesstype, 'block_le_dashboard'),
             'typeline' => get_string('rowtype', 'block_le_dashboard', [
@@ -531,6 +520,29 @@ class format {
             'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_le_dashboard')] : []),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),
         ];
+    }
+
+    /**
+     * An activity type's icon as the course page draws it (core_courseformat cmicon): the module's own
+     * monologo, which a theme can override, in its purpose colour (Pierre's UAT, 2026-10-19: "Activity icons
+     * in the dash don't match the course view"). Per type, not per activity: no assessment module sets its
+     * own icon per activity, and this needs no course modinfo.
+     *
+     * @param string $modname
+     * @return array url, filter (whether the theme colours it), purpose, branded
+     */
+    public static function modicon(string $modname): array {
+        global $OUTPUT;
+        static $icons = [];
+        if (!isset($icons[$modname])) {
+            $icons[$modname] = [
+                'url' => $OUTPUT->image_url('monologo', $modname)->out(false),
+                'filter' => \core_component::has_monologo_icon('mod', $modname),
+                'purpose' => plugin_supports('mod', $modname, FEATURE_MOD_PURPOSE, MOD_PURPOSE_OTHER),
+                'branded' => (bool)component_callback('mod_' . $modname, 'is_branded', [], false),
+            ];
+        }
+        return $icons[$modname];
     }
 
     /**
