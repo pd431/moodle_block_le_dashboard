@@ -16,6 +16,7 @@
 
 namespace block_le_dashboard\output;
 
+use block_le_dashboard\local\guidance;
 use block_le_dashboard\local\scope;
 use block_le_dashboard\local\view\factory;
 
@@ -56,9 +57,25 @@ class dashboard implements \renderable, \templatable {
             'hastabs' => count($tabs) > 1,
             'tabs' => $tabs,
             'activeview' => $active,
+            'notice' => self::notice(),
             // The zone Moodle draws dates in; localtime.js shows them in the browser's when that differs.
             'timezone' => \core_date::get_user_timezone(),
             'view' => $view,
         ];
+    }
+
+    /**
+     * The admin's notice above the tabs (Pierre, 2026-10-17), formatted, or null when there is none.
+     *
+     * @return string|null
+     */
+    public static function notice(): ?string {
+        $raw = (string)get_config('block_le_dashboard', 'notice');
+        if (guidance::is_empty($raw)) {
+            return null;
+        }
+        // Filters (multilang included) apply, and unsafe HTML is cleaned.
+        $html = format_text($raw, FORMAT_HTML, ['context' => \context_system::instance()]);
+        return guidance::is_empty($html) ? null : $html;
     }
 }

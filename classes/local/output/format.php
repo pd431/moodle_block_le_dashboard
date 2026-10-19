@@ -248,7 +248,7 @@ class format {
         return [
             'id' => $rowid . '-hint-' . $key,
             'key' => $key,
-            'icon' => self::HINT_ICONS[$key],
+            'icon' => self::hint_icon($key),
             'tone' => self::HINT_TONES[$key],
             // Student hints are bare glyphs beside what they explain; staff flags keep their outline.
             'glyph' => in_array($key, self::GLYPH_HINTS),
@@ -272,9 +272,25 @@ class format {
         'loaderror' => 'loaderror',
     ];
 
+    /**
+     * A hint's icon. The missing brief is a half-dashed file where Moodle's Font Awesome has one (6.6 and later,
+     * so Moodle 5.0 and later): 4.5's 6.5.2 would draw a blank square (Pierre, 2026-10-17).
+     *
+     * @param string $key
+     * @return string
+     */
+    public static function hint_icon(string $key): string {
+        global $CFG;
+        if ($key === 'brief' && (int)$CFG->branch >= 500) {
+            return 'fa-file-half-dashed';
+        }
+        return self::HINT_ICONS[$key];
+    }
+
     /** Each hint's icon (the Flag icons mockup). */
     const HINT_ICONS = [
         'brief' => 'fa-file-circle-exclamation',
+        'genericname' => 'fa-signature',
         'hidden' => 'fa-eye-slash',
         'unallocated' => 'fa-user-slash',
         'returned' => 'fa-file-circle-plus',
@@ -290,6 +306,7 @@ class format {
     /** Each hint's tone. Attention is for staff and convenors only, never on a student's row. */
     const HINT_TONES = [
         'brief' => 'info',
+        'genericname' => 'info',
         'hidden' => 'grey',
         'unallocated' => 'attention',
         'returned' => 'info',

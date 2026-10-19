@@ -17,6 +17,7 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
+use block_le_dashboard\local\genericname;
 use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
 
@@ -465,6 +466,9 @@ class staff extends base {
             if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
                 $row['hints'][] = $setup;
             }
+            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
+                $row['hints'][] = $generic;
+            }
             if ($unallocated) {
                 $row['hints'][] = format::hint(
                     $row['id'],
@@ -559,6 +563,9 @@ class staff extends base {
             $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
             if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
                 $row['hints'][] = $setup;
+            }
+            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
+                $row['hints'][] = $generic;
             }
             if (isset($pending[$cmid])) {
                 $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
