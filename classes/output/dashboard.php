@@ -57,6 +57,8 @@ class dashboard implements \renderable, \templatable {
             'hastabs' => count($tabs) > 1,
             'tabs' => $tabs,
             'activeview' => $active,
+            // Popovers open on hover unless an admin turned it off (beta27 hints audit).
+            'hoverpopovers' => \block_le_dashboard\local\config::shown('hoverpopovers'),
             'notice' => self::notice(),
             // The zone Moodle draws dates in; localtime.js shows them in the browser's when that differs.
             'timezone' => \core_date::get_user_timezone(),

@@ -273,8 +273,12 @@ class student extends base {
      * @return bool
      */
     protected static function is_late(\stdClass $r): bool {
-        return (int)$r->submitted === 1 && $r->due && $r->timesubmitted && (int)$r->timesubmitted > (int)$r->due;
+        // Work within the late tolerance isn't late (beta27 hints audit).
+        $tolerance = config::number('latetolerance') * MINSECS;
+        return (int)$r->submitted === 1 && $r->due && $r->timesubmitted
+            && (int)$r->timesubmitted > (int)$r->due + $tolerance;
     }
+
 
     /**
      * Plain lines under the dates (G5), each at the precision its size needs: time left to submit,
@@ -329,7 +333,7 @@ class student extends base {
         $row['hasmodifiers'] = $row['overlay'] || $row['mitigationoverlay'];
         $row['tip'] = format::tip($row['modlabel'], $parts);
         // Nothing to hand in online: say so while the date is ahead (Pierre, 2026-10-06).
-        $row['hints'] = !empty($r->nosubmission) && $section !== classifier::PAST
+        $row['hints'] = !empty($r->nosubmission) && $section !== classifier::PAST && config::shown('hint_nosubmission')
             ? [format::nosubmission_hint($row['id'], false)] : [];
 
         $dates = [];
@@ -348,11 +352,11 @@ class student extends base {
             if ($r->gradedisplay !== null && $r->gradedisplay !== '') {
                 $row['grade'] = ['text' => $r->gradedisplay];
             }
-        } else if ($status === classifier::STATUS_INMARKING && $r->markingdue) {
+        } else if ($status === classifier::STATUS_INMARKING && ($feedback = config::feedback_date($r)) !== null) {
             // The date stays once it has passed, with a hint saying who to contact (G12).
-            $date = format::date('feedbackexpected', (int)$r->markingdue);
-            // The question-circle beside the date once it has passed, saying who to contact (G12).
-            if ((int)$r->markingdue < $this->now) {
+            $date = format::date('feedbackexpected', $feedback);
+            // The question-circle beside the date once the date students see has passed, saying who to contact (G12).
+            if ($feedback < $this->now) {
                 $date['hint'] = $this->feedback_hint($row['id']);
             }
             $dates[] = $date;
@@ -360,7 +364,7 @@ class student extends base {
         $row['dates'] = $dates;
         $row['notes'] = $this->notes($r, $section, $status);
         // Late work: the clock beside the grade once there is one, else beside the status pill.
-        if (self::is_late($r)) {
+        if (self::is_late($r) && config::shown('hint_late')) {
             $hint = $this->late_hint($row['id'], $r);
             if (!empty($row['grade'])) {
                 $row['grade']['hint'] = $hint;

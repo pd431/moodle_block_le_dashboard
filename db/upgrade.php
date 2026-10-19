@@ -92,5 +92,12 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026100901, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026100908) {
+        // Hints and guidance (beta27): new sites start with some hints off and neutral guidance; this site keeps
+        // what it has today.
+        \block_le_dashboard\local\config::keep_today();
+        upgrade_block_savepoint(true, 2026100908, 'le_dashboard', 'block');
+    }
+
     return true;
 }

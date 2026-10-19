@@ -41,6 +41,7 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
       | marker1  | M1     | teacher        |
       | convenor | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
 
   # ---------- Finished undated work goes to Past (Pierre: "finished work, no matter the view, can move to past") ----------
 

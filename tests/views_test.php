@@ -524,4 +524,33 @@ final class views_test extends \advanced_testcase {
         $this->assertSame('.', $dated['after']);
         $this->assertSame($time, strtotime($dated['iso']));
     }
+
+    /**
+     * Beta27 hints audit: academic conduct flags are off on a new site, and off means their query isn't run either;
+     * on, the marker and the convenor both see the flag.
+     */
+    public function test_plagiarism_switch(): void {
+        global $DB;
+        $DB->set_field('block_le_dashboard_mark', 'flagged', 1, ['cmid' => $this->a['overdue']->cmid]);
+        $hints = fn(array $export, string $section) => array_column(self::rows($export, $section)['Overdue essay']['hints'], 'key');
+        $views = [
+            'tomark' => fn() => new staff($this->u['marker']->id),
+            'inprogress' => fn() => new convenor($this->u['convenor']->id),
+        ];
+
+        $reads = [];
+        foreach ($views as $section => $view) {
+            // Once first, so caches are warm for both counts.
+            $view()->export();
+            $before = $DB->perf_get_reads();
+            $this->assertNotContains('plagiarism', $hints($view()->export(), $section));
+            $reads[$section] = $DB->perf_get_reads() - $before;
+        }
+        set_config('hint_plagiarism', 1, 'block_le_dashboard');
+        foreach ($views as $section => $view) {
+            $before = $DB->perf_get_reads();
+            $this->assertContains('plagiarism', $hints($view()->export(), $section));
+            $this->assertGreaterThan($reads[$section], $DB->perf_get_reads() - $before, "$section: the query runs only when on");
+        }
+    }
 }

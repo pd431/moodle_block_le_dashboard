@@ -42,6 +42,7 @@ Feature: Assessments with no online submission
       | teacher1  | M1     | editingteacher |
       | convenor1 | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
     And the My assessments block treats "moduleconvenor" as a module convenor role
     And the "workshop" activity type is enabled in My assessments
 

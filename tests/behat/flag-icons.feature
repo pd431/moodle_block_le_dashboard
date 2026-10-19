@@ -53,6 +53,7 @@ Feature: Hints and flags are single icons that explain themselves on demand
       | convenor1 | M1     | moduleconvenor |
       | convenor1 | M1     | editingteacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
     And the My assessments block treats "moduleconvenor" as a module convenor role
 
   @javascript

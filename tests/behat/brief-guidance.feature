@@ -30,6 +30,7 @@ Feature: Convenors are nudged to attach a brief or description
       | marker1  | M1     | teacher        |
       | convenor | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
 
   @javascript
   Scenario: An assessment with no brief or description shows the hint to its convenor

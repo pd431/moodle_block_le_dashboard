@@ -459,7 +459,8 @@ class staff extends base {
             $bycm[(int)$m->cmid][$m->stage] = $m;
         }
         $pending = $this->extensions();
-        $flagged = $this->flagged();
+        // Off means the query isn't run either (beta27 hints audit).
+        $flagged = config::shown('hint_plagiarism') ? $this->flagged() : [];
         $cmids = array_unique(array_merge(array_keys($bycm), array_keys($pending)));
         $cms = [];
         if ($cmids) {
@@ -513,17 +514,18 @@ class staff extends base {
             ]));
             $row['tomark'] = $tomark;
             $row['bars'] = $this->stage_bars($stages);
-            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
+            $row['hints'] = !empty($cm->nosubmission) && config::shown('hint_nosubmission')
+                ? [format::nosubmission_hint($row['id'], true)] : [];
             if ($defaulthint) {
                 $row['hints'][] = $defaulthint;
             }
-            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
+            if (config::shown('hint_setup') && $setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
                 $row['hints'][] = $setup;
             }
             if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
                 $row['hints'][] = $generic;
             }
-            if ($unallocated) {
+            if ($unallocated && config::shown('hint_unallocated')) {
                 $row['hints'][] = format::hint(
                     $row['id'],
                     'unallocated',
@@ -538,10 +540,10 @@ class staff extends base {
                 );
             }
             // Work that arrived after I finished marking here: the row came back (G6).
-            if ($tomark && self::returned($stages, $cm->due === null ? null : (int)$cm->due)) {
+            if ($tomark && config::shown('hint_returned') && self::returned($stages, $cm->due === null ? null : (int)$cm->due)) {
                 $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_le_dashboard'));
             }
-            if (isset($pending[$cmid])) {
+            if (isset($pending[$cmid]) && config::shown('hint_extensions')) {
                 $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
             }
             if (!empty($flagged[$cmid])) {
@@ -612,14 +614,15 @@ class staff extends base {
                 (int)$cm->submissions,
                 (int)$cm->students
             )];
-            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
-            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
+            $row['hints'] = !empty($cm->nosubmission) && config::shown('hint_nosubmission')
+                ? [format::nosubmission_hint($row['id'], true)] : [];
+            if (config::shown('hint_setup') && $setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
                 $row['hints'][] = $setup;
             }
             if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
                 $row['hints'][] = $generic;
             }
-            if (isset($pending[$cmid])) {
+            if (isset($pending[$cmid]) && config::shown('hint_extensions')) {
                 $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
             }
             if (!empty($flagged[$cmid])) {

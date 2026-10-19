@@ -284,7 +284,8 @@ class Dashboard {
      */
     hoverIn(e) {
         const wrap = e.target.closest('.ma-tip-wrap');
-        if (!wrap) {
+        // Off, a tip opens only on click or keyboard focus (beta27 hints audit).
+        if (!wrap || this.root.dataset.nohover) {
             return;
         }
         clearTimeout(this.leaveTimer);

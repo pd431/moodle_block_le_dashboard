@@ -518,7 +518,7 @@ class format {
                 'type' => get_string($cm->assesstype, 'block_le_dashboard'),
             ]),
             // The first flag on staff rows; students never see hidden work.
-            'hiddenhint' => empty($cm->hiddenfromstudents) ? null
+            'hiddenhint' => empty($cm->hiddenfromstudents) || !config::shown('hint_hidden') ? null
                 : self::hint($id, 'hidden', get_string('hint_hidden_text', 'block_le_dashboard')),
             'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_le_dashboard')] : []),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),

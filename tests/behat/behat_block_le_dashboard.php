@@ -2488,6 +2488,99 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A hint's accessible name, which is the title its popover shows.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" hint of "(?P<name>[^"]*)" should be titled "(?P<title>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $title
+     */
+    public function the_hint_should_be_titled(string $key, string $name, string $title): void {
+        $hint = $this->row($name)->find('css', '[data-hint="' . $key . '"]')
+            ?? throw new ExpectationException("'$name' has no $key hint", $this->getSession());
+        $shown = (string)$hint->getAttribute('aria-label');
+        if ($shown !== $title) {
+            throw new ExpectationException("The $key hint of '$name' is titled '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a marker's name on a convenor row links to their email.
+     *
+     * @Then /^the marker "(?P<marker>[^"]*)" of "(?P<name>[^"]*)" should (?P<not>not )?link to their email$/
+     * @param string $marker
+     * @param string $name
+     * @param string $not
+     */
+    public function the_marker_should_link_to_their_email(string $marker, string $name, string $not = ''): void {
+        foreach ($this->row($name)->findAll('css', '.ma-marker-name') as $el) {
+            if (trim($el->getText()) !== $marker) {
+                continue;
+            }
+            $links = $el->getTagName() === 'a' && str_starts_with((string)$el->getAttribute('href'), 'mailto:');
+            if ($links === (bool)$not) {
+                throw new ExpectationException(
+                    "'$marker' " . ($links ? 'links' : 'does not link') . ' to their email',
+                    $this->getSession()
+                );
+            }
+            return;
+        }
+        throw new ExpectationException("'$name' lists no marker '$marker'", $this->getSession());
+    }
+
+    /**
+     * A site upgraded from before beta27 whose admin never saved the hint and guidance settings.
+     *
+     * @Given /^the My assessments guidance settings were never saved before the beta27 upgrade$/
+     */
+    public function guidance_never_saved(): void {
+        foreach (\block_le_dashboard\local\guidance::KEYS as $key) {
+            unset_config('guidance_' . $key, 'block_le_dashboard');
+        }
+        foreach (array_keys(\block_le_dashboard\local\config::HINTS) as $name) {
+            unset_config($name, 'block_le_dashboard');
+        }
+        unset_config('feedbackdatemode', 'block_le_dashboard');
+    }
+
+    /**
+     * Hints and guidance as a site upgraded to beta27 has them (config::keep_today()): every hint on, marking deadlines
+     * shown to students as set, and the old guidance text. For scenarios written before beta27's neutral defaults.
+     *
+     * @Given /^the My assessments block keeps its hints and guidance from before beta27$/
+     */
+    public function keeps_hints_from_before_beta27(): void {
+        $this->guidance_never_saved();
+        \block_le_dashboard\local\config::keep_today();
+    }
+
+    /**
+     * Runs the beta27 upgrade step.
+     *
+     * @When /^the beta27 upgrade runs$/
+     */
+    public function the_beta27_upgrade_runs(): void {
+        \block_le_dashboard\local\config::keep_today();
+    }
+
+    /**
+     * A plugin setting's saved value.
+     *
+     * @Then /^the "(?P<name>[a-z_]+)" setting should (?P<how>contain|be) "(?P<value>[^"]*)"$/
+     * @param string $name
+     * @param string $how
+     * @param string $value
+     */
+    public function the_setting_should_be(string $name, string $how, string $value): void {
+        $saved = get_config('block_le_dashboard', $name);
+        $ok = $saved !== false && ($how === 'be' ? (string)$saved === $value : str_contains((string)$saved, $value));
+        if (!$ok) {
+            throw new ExpectationException("'$name' is " . var_export($saved, true), $this->getSession());
+        }
+    }
+
+    /**
      * Picks a summary box's window, as the user's own preference, then reloads the page (with or without JavaScript).
      *
      * @When /^I set the "(?P<label>[^"]*)" summary box window to "(?P<option>[^"]*)"$/

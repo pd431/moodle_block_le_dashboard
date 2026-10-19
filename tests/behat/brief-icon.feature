@@ -20,6 +20,7 @@ Feature: The missing brief flag shows a half-dashed file
       | user     | course  | role           |
       | convenor | LAW1001 | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
     And a summative "assign" "A1" in "LAW1001" with no description is due "tomorrow"
 
   Scenario: The missing brief flag shows a half-dashed file on Moodle 5.0 and later

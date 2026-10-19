@@ -31,6 +31,7 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
       | student1 | M1     | student        |
       | teacher1 | M1     | editingteacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
 
   Scenario: An assignment submitted under required Submit stays in Upcoming until its deadline
     Given a summative "assign" "A1" in "M1" with required Submit is due "in 3 days"

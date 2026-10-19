@@ -119,6 +119,10 @@ if ($ADMIN->fulltree) {
         ));
     }
     foreach (\block_le_dashboard\local\config::NUMBERS as $name => $default) {
+        // These two are on the Hints and guidance page, with the hints they change.
+        if (in_array($name, ['latetolerance', 'feedbackdatedelay'])) {
+            continue;
+        }
         $settings->add(new admin_setting_configtext(
             'block_le_dashboard/' . $name,
             new lang_string($name, 'block_le_dashboard'),
@@ -130,61 +134,6 @@ if ($ADMIN->fulltree) {
             ),
             $default,
             PARAM_INT
-        ));
-    }
-
-    // The convenor view's two quiet lines can each be turned off (Pierre, 2026-10-19).
-    $settings->add(new admin_setting_heading(
-        'block_le_dashboard/convenorheading',
-        new lang_string('convenorheading', 'block_le_dashboard'),
-        ''
-    ));
-    foreach (['showuntagged', 'showsetupchecks'] as $name) {
-        $settings->add(new admin_setting_configcheckbox(
-            'block_le_dashboard/' . $name,
-            new lang_string($name, 'block_le_dashboard'),
-            new lang_string($name . '_desc', 'block_le_dashboard'),
-            1
-        ));
-    }
-
-    // Generic assessment names (Pierre, 2026-10-17): a hint for staff on names like "Essay 1".
-    $settings->add(new admin_setting_heading(
-        'block_le_dashboard/genericheading',
-        new lang_string('genericheading', 'block_le_dashboard'),
-        new lang_string('genericheading_desc', 'block_le_dashboard')
-    ));
-    $settings->add(new admin_setting_configcheckbox(
-        'block_le_dashboard/genericnames',
-        new lang_string('genericnames', 'block_le_dashboard'),
-        new lang_string('genericnames_desc', 'block_le_dashboard'),
-        1
-    ));
-    $settings->add(new admin_setting_configtextarea(
-        'block_le_dashboard/genericterms',
-        new lang_string('genericterms', 'block_le_dashboard'),
-        new lang_string('genericterms_desc', 'block_le_dashboard'),
-        \block_le_dashboard\local\genericname::TERMS
-    ));
-    $settings->add(new admin_setting_configtextarea(
-        'block_le_dashboard/genericnametext',
-        new lang_string('genericnametext', 'block_le_dashboard'),
-        new lang_string('genericnametext_desc', 'block_le_dashboard'),
-        ''
-    ));
-
-    // Guidance and support (Pierre, 2026-10-09): the text each popover shows under its factual line.
-    $settings->add(new admin_setting_heading(
-        'block_le_dashboard/guidanceheading',
-        new lang_string('guidanceheading', 'block_le_dashboard'),
-        new lang_string('guidanceheading_desc', 'block_le_dashboard')
-    ));
-    foreach (\block_le_dashboard\local\guidance::KEYS as $key) {
-        $settings->add(new admin_setting_confightmleditor(
-            'block_le_dashboard/guidance_' . $key,
-            new lang_string('guidance_' . $key, 'block_le_dashboard'),
-            new lang_string('guidance_' . $key . '_desc', 'block_le_dashboard'),
-            \block_le_dashboard\local\guidance::default($key)
         ));
     }
 
@@ -218,6 +167,98 @@ if ($ADMIN->fulltree) {
     ));
 }
 $ADMIN->add('block_le_dashboard_category', $settings);
+
+// Hints and guidance (beta27 hints audit, Pierre, 2026-10-19): an on/off switch for each optional hint, who sees it,
+// then the guidance its popover shows under its own line of facts.
+$hints = new admin_settingpage(
+    'block_le_dashboard_hints',
+    new lang_string('hintspage', 'block_le_dashboard'),
+    'moodle/site:config',
+    $hidden
+);
+if ($ADMIN->fulltree) {
+    $hints->add(new admin_setting_heading(
+        'block_le_dashboard/hintspageheading',
+        '',
+        new lang_string('hintspage_desc', 'block_le_dashboard')
+    ));
+    $guidanceeditor = function (string $key) use ($hints) {
+        $hints->add(new admin_setting_confightmleditor(
+            'block_le_dashboard/guidance_' . $key,
+            new lang_string('guidance_' . $key, 'block_le_dashboard'),
+            new lang_string('guidance_' . $key . '_desc', 'block_le_dashboard'),
+            \block_le_dashboard\local\guidance::default($key)
+        ));
+    };
+    $withswitch = [];
+    foreach (\block_le_dashboard\local\config::HINTS as $name => [$default, $boxes]) {
+        $hints->add(new admin_setting_configcheckbox(
+            'block_le_dashboard/' . $name,
+            new lang_string('switch_' . $name, 'block_le_dashboard'),
+            new lang_string('switch_' . $name . '_desc', 'block_le_dashboard'),
+            $default
+        ));
+        if ($name === 'genericnames') {
+            $hints->add(new admin_setting_configtextarea(
+                'block_le_dashboard/genericterms',
+                new lang_string('genericterms', 'block_le_dashboard'),
+                new lang_string('genericterms_desc', 'block_le_dashboard'),
+                \block_le_dashboard\local\genericname::TERMS
+            ));
+            $hints->add(new admin_setting_configtextarea(
+                'block_le_dashboard/genericnametext',
+                new lang_string('genericnametext', 'block_le_dashboard'),
+                new lang_string('genericnametext_desc', 'block_le_dashboard'),
+                ''
+            ));
+        }
+        foreach ($boxes as $key) {
+            $guidanceeditor($key);
+            $withswitch[] = $key;
+        }
+        if ($name !== 'hint_late') {
+            continue;
+        }
+        $hints->add(new admin_setting_configtext(
+            'block_le_dashboard/latetolerance',
+            new lang_string('latetolerance', 'block_le_dashboard'),
+            new lang_string('latetolerance_desc', 'block_le_dashboard'),
+            \block_le_dashboard\local\config::NUMBERS['latetolerance'],
+            PARAM_INT
+        ));
+        // Marking deadlines students see as their Feedback expected date (Pierre, 2026-10-19).
+        $modes = [];
+        foreach (\block_le_dashboard\local\config::FEEDBACK_MODES as $mode) {
+            $modes[$mode] = new lang_string('feedbackdatemode_' . $mode, 'block_le_dashboard');
+        }
+        $hints->add(new admin_setting_configselect(
+            'block_le_dashboard/feedbackdatemode',
+            new lang_string('feedbackdatemode', 'block_le_dashboard'),
+            new lang_string('feedbackdatemode_desc', 'block_le_dashboard'),
+            'none',
+            $modes
+        ));
+        $hints->add(new admin_setting_configtext(
+            'block_le_dashboard/feedbackdatedelay',
+            new lang_string('feedbackdatedelay', 'block_le_dashboard'),
+            new lang_string('feedbackdatedelay_desc', 'block_le_dashboard'),
+            \block_le_dashboard\local\config::NUMBERS['feedbackdatedelay'],
+            PARAM_INT
+        ));
+        $guidanceeditor('feedbacklate');
+        $withswitch[] = 'feedbacklate';
+    }
+    // Guidance on pills and notices that have no switch, because they say what a row means or show a fault.
+    $hints->add(new admin_setting_heading(
+        'block_le_dashboard/guidanceheading',
+        new lang_string('guidanceheading', 'block_le_dashboard'),
+        new lang_string('guidanceheading_desc', 'block_le_dashboard')
+    ));
+    foreach (array_diff(\block_le_dashboard\local\guidance::KEYS, $withswitch) as $key) {
+        $guidanceeditor($key);
+    }
+}
+$ADMIN->add('block_le_dashboard_category', $hints);
 foreach (['types' => 'activitytypes', 'years' => 'academicyears', 'index' => 'indexpage'] as $page => $string) {
     $ADMIN->add('block_le_dashboard_category', new admin_externalpage(
         'block_le_dashboard_' . $page,

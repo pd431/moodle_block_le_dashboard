@@ -30,10 +30,88 @@ class config {
     /**
      * Number settings and their defaults: grace period (hours), Mitigate window (days before, hours
      * after), the nightly reconcile's live window (months, 0 for every course) and the time limit of each
-     * index run (minutes, 0 for none) and the default marking period (days, 0 for none).
+     * index run (minutes, 0 for none), the default marking period (days, 0 for none) and how many minutes after a
+     * deadline work starts to count as late.
      */
     const NUMBERS = ['graceperiod' => 24, 'mitigationcloses' => 24, 'reconcilemonths' => 13, 'indexminutes' => 45,
-        'defaultmarkingdays' => 12];
+        'defaultmarkingdays' => 12, 'latetolerance' => 0, 'feedbackdatedelay' => 2];
+
+    /**
+     * The optional hints' on/off settings, in the order the Hints and guidance page lists them, each with its default
+     * on a new site and its guidance boxes (beta27 hints audit, Pierre, 2026-10-19). An upgrade turns
+     * each one on, so a site sees no change until an admin changes it.
+     */
+    const HINTS = [
+        'hint_late' => [1, ['latepenalty']],
+        'hint_nosubmission' => [1, ['nosubmission']],
+        'hint_hidden' => [1, []],
+        'hint_unallocated' => [1, ['unallocated']],
+        'hint_returned' => [1, []],
+        'hint_extensions' => [1, []],
+        'hint_plagiarism' => [0, ['plagiarism']],
+        'hint_setup' => [1, ['setup']],
+        'hint_brief' => [0, ['brief']],
+        'genericnames' => [0, []],
+        'showuntagged' => [1, ['untagged']],
+        'showsetupchecks' => [1, []],
+        'hint_unmarkedlate' => [1, []],
+        'hint_markeremail' => [1, []],
+        'hoverpopovers' => [1, []],
+    ];
+
+    /** How students see marking deadlines (feedbackdatemode): as set, with a delay, or not at all. */
+    const FEEDBACK_MODES = ['asset', 'delayed', 'none'];
+
+    /**
+     * The Feedback expected date a student sees (Pierre, 2026-10-19: "Site admin can choose whether to expose
+     * internal marking deadlines to students as is, with a specified delay, or not at all"): the marking deadline,
+     * the assessment's own or the default marking period after the student's own deadline, as set, plus the delay,
+     * or none. A new site shows none; an upgrade keeps "as set".
+     *
+     * @param \stdClass $r Student row (markingdue, due: the student's own deadline).
+     * @return int|null
+     */
+    public static function feedback_date(\stdClass $r): ?int {
+        $mode = get_config('block_le_dashboard', 'feedbackdatemode');
+        $mode = in_array($mode, self::FEEDBACK_MODES, true) ? $mode : 'none';
+        [$deadline] = $mode === 'none' ? [null] : self::markingdue($r);
+        if ($deadline === null) {
+            return null;
+        }
+        return $mode === 'delayed' ? $deadline + self::number('feedbackdatedelay') * DAYSECS : $deadline;
+    }
+
+    /**
+     * Upgrade to beta27: a site sees no change until an admin changes it. Every hint switch it never saved is on,
+     * marking deadlines are shown to students as set, and guidance boxes it never saved keep their old text.
+     */
+    public static function keep_today(): void {
+        foreach (array_keys(self::HINTS) as $name) {
+            if (get_config('block_le_dashboard', $name) === false) {
+                set_config($name, 1, 'block_le_dashboard');
+            }
+        }
+        if (get_config('block_le_dashboard', 'feedbackdatemode') === false) {
+            set_config('feedbackdatemode', 'asset', 'block_le_dashboard');
+        }
+        foreach (guidance::LEGACY as $key => $html) {
+            if (get_config('block_le_dashboard', 'guidance_' . $key) === false) {
+                set_config('guidance_' . $key, $html, 'block_le_dashboard');
+            }
+        }
+        guidance::reset_caches();
+    }
+
+    /**
+     * Whether an optional hint is on: its setting, or its new-site default when unset.
+     *
+     * @param string $name A key of HINTS.
+     * @return bool
+     */
+    public static function shown(string $name): bool {
+        $value = get_config('block_le_dashboard', $name);
+        return $value === false || $value === '' ? (bool)self::HINTS[$name][0] : (bool)$value;
+    }
 
     /**
      * A whole-number setting, or its default when unset.

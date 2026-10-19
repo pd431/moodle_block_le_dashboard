@@ -29,6 +29,7 @@ Feature: Students see only assessments they can actually access
       | user     | group |
       | student1 | GA    |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
 
   @javascript
   Scenario Outline: A visible, tagged, unrestricted <activity> appears
