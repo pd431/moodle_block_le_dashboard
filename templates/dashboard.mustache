@@ -23,6 +23,7 @@
     {
         "uniqid": "ma-dashboard1",
         "timezone": "Europe/London",
+        "hoverpopovers": true,
         "hastabs": true,
         "tabs": [{"key": "student", "label": "Student", "active": true}, {"key": "staff", "label": "Marking", "active": false}],
         "activeview": "student",
@@ -31,7 +32,7 @@
     }
 }}
 <div id="{{uniqid}}" class="block_le_dashboard_dashboard" data-region="ma-dashboard" data-view="{{activeview}}"
-     data-timezone="{{timezone}}">
+     data-timezone="{{timezone}}"{{^hoverpopovers}} data-nohover="1"{{/hoverpopovers}}>
     {{#notice}}
     <div class="ma-notice" data-region="ma-notice">{{{notice}}}</div>
     {{/notice}}

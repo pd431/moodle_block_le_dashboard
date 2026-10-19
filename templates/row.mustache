@@ -30,7 +30,8 @@
         "url": "https://example.com/mod/assign/view.php?id=12",
         "course": "M1",
         "modlabel": "Assignment",
-        "faicon": "fa-file-arrow-up",
+        "modicon": {"url": "https://example.com/theme/image.php/boost/assign/1/monologo", "filter": true,
+            "purpose": "assessment", "branded": false},
         "tip": "Assignment. Extension granted. Due soon.",
         "assesstype": "summative",
         "typelabel": "Summative",
@@ -55,7 +56,11 @@
 <div class="ma-row-icon ma-tip-wrap">
     <button type="button" class="ma-row-iconbtn" data-action="tip" data-region="ma-row-icon" aria-expanded="false" aria-controls="{{id}}-tip"
             aria-label="{{tip}}">
-        <i class="fa-solid {{faicon}} ma-row-faicon" aria-hidden="true"></i>
+        {{#modicon}}
+        <span class="activityiconcontainer smaller {{purpose}}{{#branded}} isbranded{{/branded}} ma-row-modicon" aria-hidden="true">
+            <img src="{{url}}" class="activityicon{{^filter}} nofilter{{/filter}}" alt="">
+        </span>
+        {{/modicon}}
         {{#hasmodifiers}}
         <span class="ma-row-modifiers" aria-hidden="true">
             {{#mitigationoverlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/mitigationoverlay}}

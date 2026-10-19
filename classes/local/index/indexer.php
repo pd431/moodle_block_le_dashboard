@@ -960,6 +960,19 @@ class indexer {
      * @param bool $all Every course, whatever the live window: what is indexed changed (a backfill, F5).
      */
     public function reconcile(?callable $trace = null, bool $all = false): void {
+        foreach ($this->pass_courses($all) as $courseid) {
+            $this->reconcile_course($courseid, $trace);
+        }
+    }
+
+    /**
+     * The courses a reconcile goes through, in course id order so a pass can carry on where it stopped
+     * (pass, Pierre 2026-10-19). Rows of deleted activities and courses are removed on the way.
+     *
+     * @param bool $all Every course, whatever the live window.
+     * @return int[]
+     */
+    public function pass_courses(bool $all = false): array {
         global $DB;
         // Rows whose course module has gone.
         $orphans = $DB->get_fieldset_sql("SELECT i.cmid
@@ -976,25 +989,35 @@ class indexer {
                                                          JOIN {course_modules} cm ON cm.id = ti.itemid
                                                         WHERE ti.component = 'core' AND ti.itemtype = 'course_modules'"))
         ));
+        sort($courses);
         $live = $all ? null : $this->live_courses();
+        $result = [];
         foreach ($courses as $courseid) {
             if (!$DB->record_exists('course', ['id' => $courseid])) {
                 $this->remove_course($courseid);
-                continue;
+            } else if ($live === null || isset($live[$courseid])) {
+                $result[] = $courseid;
             }
-            if ($live !== null && !isset($live[$courseid])) {
-                continue;
-            }
+        }
+        return $result;
+    }
+
+    /**
+     * Re-indexes one course of a reconcile. A failure is recorded for the admin page and doesn't stop the run;
+     * events, Refresh or the next run pick the course up again.
+     *
+     * @param int $courseid
+     * @param callable|null $trace Receives progress lines.
+     */
+    public function reconcile_course(int $courseid, ?callable $trace = null): void {
+        if ($trace) {
+            $trace("Indexing course $courseid");
+        }
+        try {
+            $this->index_course($courseid);
+        } catch (\Throwable $e) {
             if ($trace) {
-                $trace("Indexing course $courseid");
-            }
-            try {
-                $this->index_course($courseid);
-            } catch (\Throwable $e) {
-                // Recorded for the admin page; events, Refresh or the next run pick it up again.
-                if ($trace) {
-                    $trace("Course $courseid: " . $e->getMessage());
-                }
+                $trace("Course $courseid: " . $e->getMessage());
             }
         }
     }

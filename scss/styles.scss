@@ -490,6 +490,22 @@ $ma-glyph-tones: ("attention");
         }
     }
 
+    // Their outer corners are the theme's, as the search box's are, not Bootstrap's fixed small-button radius
+    // (Pierre, 2026-10-19, Boost Union). Bootstrap's .btn-group still squares the joins between the type buttons.
+    .ma-type-filter > .ma-filter-btn:first-child {
+        border-start-start-radius: $ma-control-radius;
+        border-end-start-radius: $ma-control-radius;
+    }
+
+    .ma-type-filter > .ma-filter-btn:last-child {
+        border-start-end-radius: $ma-control-radius;
+        border-end-end-radius: $ma-control-radius;
+    }
+
+    .ma-grades-toggle {
+        border-radius: $ma-control-radius;
+    }
+
     // Flags (hints): one icon, with its count, that opens its popover on a
     // click, keyboard focus or a short hover (dashboard.js). Staff flags are
     // outlined in their tone; student hints are bare glyphs, still 24px buttons.
@@ -668,9 +684,18 @@ $ma-glyph-tones: ("attention");
         cursor: default;
 
         &:hover,
-        &:active {
+        &:active,
+        &:focus,
+        &.active {
             background-color: transparent;
             color: var(--ma-text-muted);
+        }
+
+        // Reached by keyboard, it shows focus with an outline only: the selected-item fill made it look available
+        // (Pierre's UAT, 2026-10-19).
+        &:focus-visible {
+            outline: 2px solid var(--ma-text-muted);
+            outline-offset: -2px;
         }
     }
 
@@ -1009,6 +1034,24 @@ $ma-glyph-tones: ("attention");
         cursor: pointer;
     }
 
+    // The module's own icon, as on the course page (core's activityiconcontainer, purpose colour), sized to the
+    // button.
+    .ma-row-modicon.activityiconcontainer {
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: none;
+        padding: 0;
+        background: none;
+    }
+
+    .ma-row-modicon .activityicon {
+        width: 1.25rem;
+        height: 1.25rem;
+        max-width: 1.25rem;
+        max-height: 1.25rem;
+    }
+
     // Modifiers sit side by side along the icon's bottom edge (Pierre,
     // 2026-10-04), a little bigger than rc6's.
     .ma-row-modifiers {
@@ -1255,4 +1298,17 @@ $ma-glyph-tones: ("attention");
 // Admin pages: space between row actions.
 .ma-gap {
     margin-inline-end: 1rem;
+}
+
+// Moodle 4.5's Font Awesome (6.5.2) has no file-half-dashed: draw the plugin's copy in the text colour.
+// Remove with pix/file-half-dashed.svg once the site is on Moodle 5.0 or later (format::hint_icon).
+.block_le_dashboard_dashboard .ma-icon-file-half-dashed::before {
+    content: "";
+    display: inline-block;
+    width: 0.75em;
+    height: 1em;
+    vertical-align: -0.125em;
+    background-color: currentColor;
+    -webkit-mask: url([[pix:block_le_dashboard|file-half-dashed]]) no-repeat center / contain;
+    mask: url([[pix:block_le_dashboard|file-half-dashed]]) no-repeat center / contain;
 }

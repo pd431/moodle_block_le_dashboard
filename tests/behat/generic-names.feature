@@ -24,6 +24,7 @@ Feature: Assessments with generic names get a hint for staff
       | teacher1 | LAW1001 | editingteacher |
       | convenor | LAW1001 | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
 
   Scenario Outline: A name made only of generic words gets a hint for staff
     Given a summative "assign" "<name>" in "LAW1001" is due "in 3 days"

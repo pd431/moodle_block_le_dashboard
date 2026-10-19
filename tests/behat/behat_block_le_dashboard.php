@@ -42,6 +42,18 @@ class behat_block_le_dashboard extends behat_base {
     /** Block selector. */
     const BLOCK = '.block_le_dashboard';
 
+    /** @var bool Ad hoc tasks don't run on this site (index-passes.feature). */
+    protected $noadhoc = false;
+
+    /** @var int[] The courses the last index run did. */
+    protected $lastrun = [];
+
+    /** @var int[] The courses the nightly check has done in this scenario. */
+    protected $nightlydone = [];
+
+    /** @var int When the hourly index task last ran in this scenario. */
+    protected $lasthourly = 0;
+
     /** Module tables searched when looking up an activity by name. */
     const MODULES = ['assign', 'quiz', 'peerwork', 'coursework', 'workshop', 'forum', 'page', 'lti', 'attendance'];
 
@@ -172,6 +184,9 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected function catch_up(): void {
         global $DB;
+        if ($this->noadhoc) {
+            return;
+        }
         $due = time() - 1;
         $DB->set_field_select('task_adhoc', 'nextruntime', $due, "component = 'block_le_dashboard' AND nextruntime > $due");
         $this->execute('behat_general::i_run_all_adhoc_tasks');
@@ -271,7 +286,8 @@ class behat_block_le_dashboard extends behat_base {
      * marking workflow, reopened attempts, a cut-off "...", manual agreement, tagged "..." (a second tag),
      * N attempts allowed, marks never shown, marks shown immediately after only, marks shown after
      * close only, a maximum grade of 0 (quiz), submission type attendance (coursework), required Submit
-     * (assign: students must click Submit, which makes the submission final).
+     * (assign: students must click Submit, which makes the submission final). Also: opens "..." and (when
+     * submissions open).
      *
      * @Given /^an? (?P<tag>summative|formative|"[^"]+") "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag
@@ -405,6 +421,12 @@ class behat_block_le_dashboard extends behat_base {
                 break;
             default:
                 $record += ['duedate' => (int)$due];
+        }
+        if (preg_match('/opens "([^"]*)"/', $opts, $m)) {
+            // When submissions open (Pierre's UAT, 2026-10-19), in each type's own field.
+            $fields = ['assign' => 'allowsubmissionsfromdate', 'quiz' => 'timeopen', 'coursework' => 'startdate',
+                'peerwork' => 'fromdate'];
+            $record[$fields[$modname]] = self::time($m[1]);
         }
         if (str_contains($opts, 'no grade')) {
             // A grade of 0 is grade type None.
@@ -1734,7 +1756,12 @@ class behat_block_le_dashboard extends behat_base {
      * @When /^the My assessments nightly reconcile runs$/
      */
     public function the_nightly_reconcile_runs(): void {
-        (new \block_le_dashboard\task\reconcile())->execute();
+        // A whole nightly pass, whatever the hour: the hourly task's timing has its own steps (index-passes.feature).
+        try {
+            \block_le_dashboard\local\index\pass::run(\block_le_dashboard\local\index\pass::NIGHTLY);
+        } finally {
+            \block_le_dashboard\local\adapter\registry::flush_errors();
+        }
     }
 
     /**
@@ -2035,15 +2062,32 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Which Font Awesome icon a row's activity icon is.
+     * A row's activity icon is the module's own, as on the course page (Pierre's UAT, 2026-10-19).
      *
-     * @Then /^the activity icon of "(?P<name>[^"]*)" should be the "(?P<icon>[^"]*)" icon$/
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should be the "(?P<mod>[a-z]+)" module's own icon$/
      * @param string $name
-     * @param string $icon
+     * @param string $mod
      */
-    public function the_activity_icon_should_be(string $name, string $icon): void {
-        if (!$this->activity_icon($name)->find('css', '.ma-row-faicon.' . $icon)) {
-            throw new ExpectationException("The icon of '$name' is not '$icon'", $this->getSession());
+    public function the_activity_icon_should_be_the_modules(string $name, string $mod): void {
+        global $OUTPUT;
+        $img = $this->activity_icon($name)->find('css', '.ma-row-modicon img.activityicon');
+        $expected = $OUTPUT->image_url('monologo', $mod)->out(false);
+        if (!$img || $img->getAttribute('src') !== $expected) {
+            $src = $img ? $img->getAttribute('src') : 'no image';
+            throw new ExpectationException("The icon of '$name' is $src, not $expected", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's activity icon has its module's purpose colour.
+     *
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should use the "(?P<purpose>[a-z]+)" purpose colour$/
+     * @param string $name
+     * @param string $purpose
+     */
+    public function the_activity_icon_should_use_purpose(string $name, string $purpose): void {
+        if (!$this->activity_icon($name)->find('css', '.ma-row-modicon.activityiconcontainer.' . $purpose)) {
+            throw new ExpectationException("The icon of '$name' doesn't use the $purpose colour", $this->getSession());
         }
     }
 
@@ -2444,6 +2488,184 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A hint's accessible name, which is the title its popover shows.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" hint of "(?P<name>[^"]*)" should be titled "(?P<title>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $title
+     */
+    public function the_hint_should_be_titled(string $key, string $name, string $title): void {
+        $hint = $this->row($name)->find('css', '[data-hint="' . $key . '"]')
+            ?? throw new ExpectationException("'$name' has no $key hint", $this->getSession());
+        $shown = (string)$hint->getAttribute('aria-label');
+        if ($shown !== $title) {
+            throw new ExpectationException("The $key hint of '$name' is titled '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a marker's name on a convenor row links to their email.
+     *
+     * @Then /^the marker "(?P<marker>[^"]*)" of "(?P<name>[^"]*)" should (?P<not>not )?link to their email$/
+     * @param string $marker
+     * @param string $name
+     * @param string $not
+     */
+    public function the_marker_should_link_to_their_email(string $marker, string $name, string $not = ''): void {
+        foreach ($this->row($name)->findAll('css', '.ma-marker-name') as $el) {
+            if (trim($el->getText()) !== $marker) {
+                continue;
+            }
+            $links = $el->getTagName() === 'a' && str_starts_with((string)$el->getAttribute('href'), 'mailto:');
+            if ($links === (bool)$not) {
+                throw new ExpectationException(
+                    "'$marker' " . ($links ? 'links' : 'does not link') . ' to their email',
+                    $this->getSession()
+                );
+            }
+            return;
+        }
+        throw new ExpectationException("'$name' lists no marker '$marker'", $this->getSession());
+    }
+
+    /**
+     * A site upgraded from before beta27 whose admin never saved the hint and guidance settings.
+     *
+     * @Given /^the My assessments guidance settings were never saved before the beta27 upgrade$/
+     */
+    public function guidance_never_saved(): void {
+        foreach (\block_le_dashboard\local\guidance::KEYS as $key) {
+            unset_config('guidance_' . $key, 'block_le_dashboard');
+        }
+        foreach (array_keys(\block_le_dashboard\local\config::HINTS) as $name) {
+            unset_config($name, 'block_le_dashboard');
+        }
+        unset_config('feedbackdatemode', 'block_le_dashboard');
+    }
+
+    /**
+     * Hints and guidance as a site upgraded to beta27 has them (config::keep_today()): every hint on, marking deadlines
+     * shown to students as set, and the old guidance text. For scenarios written before beta27's neutral defaults.
+     *
+     * @Given /^the My assessments block keeps its hints and guidance from before beta27$/
+     */
+    public function keeps_hints_from_before_beta27(): void {
+        $this->guidance_never_saved();
+        \block_le_dashboard\local\config::keep_today();
+    }
+
+    /**
+     * Runs the beta27 upgrade step.
+     *
+     * @When /^the beta27 upgrade runs$/
+     */
+    public function the_beta27_upgrade_runs(): void {
+        \block_le_dashboard\local\config::keep_today();
+    }
+
+    /**
+     * A plugin setting's saved value.
+     *
+     * @Then /^the "(?P<name>[a-z_]+)" setting should (?P<how>contain|be) "(?P<value>[^"]*)"$/
+     * @param string $name
+     * @param string $how
+     * @param string $value
+     */
+    public function the_setting_should_be(string $name, string $how, string $value): void {
+        $saved = get_config('block_le_dashboard', $name);
+        $ok = $saved !== false && ($how === 'be' ? (string)$saved === $value : str_contains((string)$saved, $value));
+        if (!$ok) {
+            throw new ExpectationException("'$name' is " . var_export($saved, true), $this->getSession());
+        }
+    }
+
+    /**
+     * A theme with rounder corners than Bootstrap's default, as Boost Union can set (raw SCSS on Boost).
+     *
+     * @Given /^the theme sets its border radius to "(?P<radius>[0-9.]+rem)"$/
+     * @param string $radius
+     */
+    public function the_theme_sets_its_border_radius(string $radius): void {
+        set_config('scss', ":root { --bs-border-radius: $radius; }", 'theme_boost');
+        theme_reset_all_caches();
+        self::$themeradius = $radius;
+    }
+
+    /** @var string|null The radius the theme was given, in rem. */
+    protected static ?string $themeradius = null;
+
+    /**
+     * The type filter's outer corners against the search box's.
+     *
+     * @Then /^the outer corners of the type filter should have the same radius as the search box$/
+     */
+    public function the_type_filter_outer_corners(): void {
+        $js = "(function() {
+            var root = document.querySelector('" . self::BLOCK . "');
+            var r = function(el, corner) { return getComputedStyle(el)['border' + corner + 'Radius']; };
+            var buttons = root.querySelectorAll('.ma-type-filter > .ma-filter-btn');
+            var search = root.querySelector('.ma-search .input-group-text');
+            return JSON.stringify({search: r(search, 'TopLeft'), first: [r(buttons[0], 'TopLeft'), r(buttons[0], 'BottomLeft')],
+                last: [r(buttons[buttons.length - 1], 'TopRight'), r(buttons[buttons.length - 1], 'BottomRight')]});
+        })()";
+        $got = json_decode($this->evaluate_script($js), true);
+        $corners = array_merge($got['first'], $got['last']);
+        // The theme's radius must have reached the page, or the check proves nothing.
+        $expected = self::$themeradius === null ? null : round((float)self::$themeradius * 16) . 'px';
+        if (($expected !== null && $got['search'] !== $expected) || array_unique($corners) !== [$got['search']]) {
+            throw new ExpectationException('The type filter has corners ' . implode(', ', $corners) . ' and the search box '
+                . $got['search'], $this->getSession());
+        }
+    }
+
+    /**
+     * The joins between the type filter's buttons.
+     *
+     * @Then /^the inner corners of the type filter should be square$/
+     */
+    public function the_type_filter_inner_corners(): void {
+        $js = "(function() {
+            var buttons = document.querySelectorAll('" . self::BLOCK . " .ma-type-filter > .ma-filter-btn');
+            var out = [];
+            buttons.forEach(function(b, i) {
+                var cs = getComputedStyle(b);
+                if (i > 0) { out.push(cs.borderTopLeftRadius, cs.borderBottomLeftRadius); }
+                if (i < buttons.length - 1) { out.push(cs.borderTopRightRadius, cs.borderBottomRightRadius); }
+            });
+            return JSON.stringify(out);
+        })()";
+        $corners = json_decode($this->evaluate_script($js), true);
+        if (array_unique($corners) !== ['0px']) {
+            throw new ExpectationException('Inner corners: ' . implode(', ', $corners), $this->getSession());
+        }
+    }
+
+    /**
+     * Picks a summary box's window, as the user's own preference, then reloads the page (with or without JavaScript).
+     *
+     * @When /^I set the "(?P<label>[^"]*)" summary box window to "(?P<option>[^"]*)"$/
+     * @param string $label
+     * @param string $option
+     */
+    public function i_set_the_summary_box_window(string $label, string $option): void {
+        foreach ($this->find_all('css', self::BLOCK . ' [data-region="ma-box"]') as $box) {
+            if (trim($box->find('css', '.ma-box-label')->getText()) !== $label) {
+                continue;
+            }
+            foreach ($box->findAll('css', 'select option') as $opt) {
+                if (trim($opt->getText()) === $option) {
+                    set_user_preference('block_le_dashboard_window', $opt->getAttribute('value'), $this->get_session_user());
+                    $this->getSession()->reload();
+                    return;
+                }
+            }
+            throw new ExpectationException("The '$label' box has no '$option' option", $this->getSession());
+        }
+        throw new ExpectationException("No '$label' summary box", $this->getSession());
+    }
+
+    /**
      * Nothing in the block is wider than the block.
      *
      * @Then /^the My assessments block should not scroll sideways$/
@@ -2480,7 +2702,8 @@ class behat_block_le_dashboard extends behat_base {
         'feedbackcontact' => 'feedbackcontact', 'extension' => 'extensions', 'extensions' => 'extensions',
         'setup' => 'setup', 'check settings' => 'setup', 'nodeadline' => 'nodeadline', 'received' => 'received', 'late' => 'late',
         'late penalty' => 'late', 'plagiarism' => 'plagiarism', 'hidden' => 'hidden', 'nosubmission' => 'nosubmission',
-        'load error' => 'loaderror', 'generic name' => 'genericname'];
+        'load error' => 'loaderror', 'generic name' => 'genericname', 'defaultmarkingdue' => 'defaultmarkingdue',
+        'default marking deadline' => 'defaultmarkingdue'];
 
     /**
      * Clicks a row's hint.
@@ -3488,6 +3711,44 @@ class behat_block_le_dashboard extends behat_base {
     public function the_flag_should_show_the_icon(string $key, string $name, string $icon): void {
         if (!$this->flag($key, $name)->find('css', 'i.' . $icon)) {
             throw new ExpectationException("The $key flag of '$name' doesn't show $icon", $this->getSession());
+        }
+    }
+
+    /**
+     * The plugin's own half-dashed file, used where Moodle's Font Awesome has none (Moodle 4.5).
+     *
+     * @Then /^the "(?P<key>[a-z ]+)" flag of "(?P<name>[^"]*)" should show the plugin's own half-dashed file$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_flag_should_show_own_half_dashed_file(string $key, string $name): void {
+        $this->the_flag_should_show_the_icon($key, $name, 'ma-icon-file-half-dashed');
+    }
+
+    /**
+     * The plugin's half-dashed file is drawn, as a mask filled with the flag's text colour.
+     *
+     * @Then /^the "(?P<key>[a-z ]+)" flag of "(?P<name>[^"]*)" should draw the plugin's own half-dashed file in the flag's text colour$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_flag_should_draw_own_half_dashed_file(string $key, string $name): void {
+        $this->the_flag_should_show_own_half_dashed_file($key, $name);
+        $xpath = json_encode($this->flag($key, $name)->find('css', 'i.ma-icon-file-half-dashed')->getXpath());
+        $result = $this->evaluate_script("return (function() {
+            const i = document.evaluate($xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            const before = getComputedStyle(i, '::before');
+            const mask = before.maskImage || before.webkitMaskImage || '';
+            if (!mask.includes('file-half-dashed')) {
+                return 'no mask: ' + mask;
+            }
+            if (before.backgroundColor !== getComputedStyle(i).color) {
+                return 'filled ' + before.backgroundColor + ', text is ' + getComputedStyle(i).color;
+            }
+            return parseFloat(before.width) > 0 && parseFloat(before.height) > 0 ? '' : 'not drawn: ' + before.width;
+        })();");
+        if ($result !== '') {
+            throw new ExpectationException("The half-dashed file of '$name' isn't drawn right: $result", $this->getSession());
         }
     }
 
@@ -4743,5 +5004,292 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected function notice(): \Behat\Mink\Element\NodeElement {
         return $this->find('css', self::BLOCK . ' [data-region="ma-notice"]');
+    }
+
+    // Beta27: index passes with a time limit (index-passes.feature).
+
+    /**
+     * Each index run stops as at its time limit after this many courses.
+     *
+     * @Given /^every My assessments index run has a time limit of (?P<n>\d+) courses?$/
+     * @param int $n
+     */
+    public function every_index_run_has_a_limit(int $n): void {
+        set_config('behatindexcourses', $n, 'block_le_dashboard');
+    }
+
+    /**
+     * Ad hoc tasks never run: the steps that catch the index up leave them queued.
+     *
+     * @Given /^ad hoc tasks don't run$/
+     */
+    public function ad_hoc_tasks_dont_run(): void {
+        $this->noadhoc = true;
+    }
+
+    /**
+     * Rebuilds the index as the Index page's button does.
+     *
+     * @Given /^the My assessments index is rebuilt$/
+     */
+    public function the_index_is_rebuilt(): void {
+        \block_le_dashboard\task\backfill::rebuild();
+    }
+
+    /**
+     * Collects the courses a run's progress lines name.
+     *
+     * @param callable $run Receives the trace.
+     * @return mixed What the run returned.
+     */
+    protected function traced(callable $run) {
+        $this->lastrun = [];
+        $trace = function (string $line) {
+            if (preg_match('/^Indexing course (\d+)$/', $line, $m)) {
+                $this->lastrun[] = (int)$m[1];
+            }
+        };
+        ob_start();
+        try {
+            return $run($trace);
+        } finally {
+            foreach (explode("\n", (string)ob_get_clean()) as $line) {
+                $trace(trim($line));
+            }
+        }
+    }
+
+    /**
+     * One nightly check run, whatever the hour.
+     *
+     * @When /^the nightly check runs$/
+     */
+    public function the_nightly_check_runs(): void {
+        $this->traced(fn($trace) => \block_le_dashboard\local\index\pass::run(
+            \block_le_dashboard\local\index\pass::NIGHTLY,
+            $trace
+        ));
+        \block_le_dashboard\local\adapter\registry::flush_errors();
+    }
+
+    /**
+     * The hourly task runs at a time of day, server time, on the same day as its last run in this scenario
+     * when that is later, or else the next day.
+     *
+     * @When /^the hourly index task runs at "(?P<time>\d\d:\d\d)"$/
+     * @param string $time
+     */
+    public function the_hourly_task_runs_at(string $time): void {
+        $zone = \core_date::get_server_timezone_object();
+        $at = new \DateTime('@' . ($this->lasthourly ?: time()));
+        $at->setTimezone($zone);
+        [$hour, $minute] = array_map('intval', explode(':', $time));
+        $at->setTime($hour, $minute);
+        if ($this->lasthourly && $at->getTimestamp() <= $this->lasthourly) {
+            $at->modify('+1 day');
+        }
+        $this->lasthourly = $at->getTimestamp();
+        $filling = (bool)get_config('block_le_dashboard', 'backfillpending');
+        $this->traced(fn($trace) => (new \block_le_dashboard\task\reconcile())->run($this->lasthourly));
+        if (!$filling) {
+            $this->nightlydone = array_merge($this->nightlydone, $this->lastrun);
+        }
+    }
+
+    /**
+     * The nightly check died part-way: it saved its progress up to a course, then stopped without ending.
+     *
+     * @Given /^the nightly check died after "(?P<course>[^"]*)"$/
+     * @param string $shortname
+     */
+    public function the_nightly_check_died_after(string $shortname): void {
+        $this->traced(fn($trace) => \block_le_dashboard\local\index\pass::run(
+            \block_le_dashboard\local\index\pass::NIGHTLY,
+            $trace,
+            0,
+            0,
+            0,
+            1
+        ));
+        $state = \block_le_dashboard\local\index\pass::state(\block_le_dashboard\local\index\pass::NIGHTLY);
+        if ($state['after'] !== $this->course_id($shortname)) {
+            throw new ExpectationException("The nightly check didn't start with '$shortname'", $this->getSession());
+        }
+        // Not stopped at the limit: it died, so how the run ended was never saved.
+        $state['reason'] = '';
+        set_config('pass_nightly', json_encode($state), 'block_le_dashboard');
+    }
+
+    /**
+     * The courses the last index run did.
+     *
+     * @Then /^the (?:last index run|first fill) should have done (?P<courses>"[^"]*"(?:(?:, | and )"[^"]*")*) only$/
+     * @param string $courses
+     */
+    public function the_last_run_should_have_done(string $courses): void {
+        $this->assert_courses($this->lastrun, $courses, 'The last index run');
+    }
+
+    /**
+     * The courses the nightly check has done in this scenario so far.
+     *
+     * @Then /^the nightly check should have done (?P<courses>no courses|"[^"]*"(?:(?:, | and )"[^"]*")*) so far$/
+     * @param string $courses
+     */
+    public function the_nightly_check_should_have_done(string $courses): void {
+        $this->assert_courses($this->nightlydone, $courses === 'no courses' ? '' : $courses, 'The nightly check');
+    }
+
+    /**
+     * Compares course ids with a list of quoted short names.
+     *
+     * @param int[] $ids
+     * @param string $courses Such as '"M1", "M2" and "M3"', or empty for none.
+     * @param string $what
+     */
+    protected function assert_courses(array $ids, string $courses, string $what): void {
+        preg_match_all('/"([^"]*)"/', $courses, $m);
+        $expected = array_map(fn($name) => $this->course_id($name), $m[1]);
+        if ($ids !== $expected) {
+            global $DB;
+            $names = array_map(fn($id) => $DB->get_field('course', 'shortname', ['id' => $id]), $ids);
+            throw new ExpectationException("$what did " . (implode(', ', $names) ?: 'nothing'), $this->getSession());
+        }
+    }
+
+    /**
+     * A course's id by its short name.
+     *
+     * @param string $shortname
+     * @return int
+     */
+    protected function course_id(string $shortname): int {
+        global $DB;
+        return (int)$DB->get_field('course', 'id', ['shortname' => $shortname], MUST_EXIST);
+    }
+
+    /**
+     * The Index admin page's text, as an admin sees it.
+     *
+     * @Then /^the Index page should say "(?P<text>[^"]*)"$/
+     * @param string $text
+     */
+    public function the_index_page_should_say(string $text): void {
+        $this->execute('behat_auth::i_log_in_as', ['admin']);
+        $this->getSession()->visit($this->locate_path('/blocks/le_dashboard/admin/index.php'));
+        $this->execute('behat_general::assert_page_contains_text', [$text]);
+    }
+
+    /**
+     * Runs the command-line rebuild's work, as cli/rebuild.php does.
+     *
+     * @When /^I run the command-line rebuild$/
+     */
+    public function i_run_the_command_line_rebuild(): void {
+        $done = $this->traced(fn($trace) => \block_le_dashboard\task\backfill::rebuild_now($trace));
+        if (!$done) {
+            throw new ExpectationException('The command-line rebuild did not finish', $this->getSession());
+        }
+    }
+
+    /**
+     * Every course with a tagged assessment is in the index.
+     *
+     * @Then /^it should finish with every course done$/
+     */
+    public function it_should_finish_with_every_course_done(): void {
+        global $DB;
+        $tagged = (int)$DB->count_records_sql("SELECT COUNT(DISTINCT cm.course)
+                                                 FROM {tag_instance} ti
+                                                 JOIN {course_modules} cm ON cm.id = ti.itemid
+                                                WHERE ti.component = 'core' AND ti.itemtype = 'course_modules'");
+        $indexed = (int)$DB->count_records_sql("SELECT COUNT(DISTINCT courseid) FROM {block_le_dashboard_cm}");
+        if ($indexed !== $tagged || !\block_le_dashboard\local\index\pass::complete(\block_le_dashboard\local\index\pass::FILL)) {
+            throw new ExpectationException("$indexed of $tagged courses are indexed", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a first fill (backfill ad hoc task) is queued, and "Preparing" pending.
+     *
+     * @Then /^no first fill should be queued$/
+     */
+    public function no_first_fill_should_be_queued(): void {
+        global $DB;
+        if (
+            $DB->record_exists('task_adhoc', ['classname' => '\\' . \block_le_dashboard\task\backfill::class])
+                || get_config('block_le_dashboard', 'backfillpending')
+        ) {
+            throw new ExpectationException('A first fill is still queued or pending', $this->getSession());
+        }
+    }
+
+    // Beta27: a greyed Self-certify never looks available (Pierre's UAT, 2026-10-19).
+
+    /**
+     * Keeps the pointer over a Mitigate menu item for a while.
+     *
+     * @When /^I pass the pointer over "(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" for "(?P<ms>\d+)" milliseconds$/
+     * @param string $text
+     * @param string $name
+     * @param int $ms
+     */
+    public function i_pass_over_the_mitigate_item(string $text, string $name, int $ms): void {
+        $this->mitigate_item($name, $text)->mouseOver();
+        usleep($ms * 1000);
+    }
+
+    /**
+     * A greyed Mitigate item looks unavailable: muted text on no fill, whatever the pointer or focus.
+     *
+     * @Then /^"(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" should look greyed$/
+     * @param string $text
+     * @param string $name
+     */
+    public function the_mitigate_item_should_look_greyed(string $text, string $name): void {
+        $xpath = json_encode($this->mitigate_item($name, $text)->getXpath());
+        $result = $this->evaluate_script("return (function() {
+            const item = document.evaluate($xpath, document, null, 9, null).singleNodeValue;
+            const probe = document.createElement('span');
+            probe.style.color = 'var(--ma-text-muted)';
+            item.parentNode.appendChild(probe);
+            const muted = getComputedStyle(probe).color;
+            probe.remove();
+            const style = getComputedStyle(item);
+            const clear = style.backgroundColor === 'transparent' || /, 0\)$/.test(style.backgroundColor);
+            return style.color === muted && clear ? '' : style.color + ' on ' + style.backgroundColor + ', muted is ' + muted;
+        })();");
+        if ($result !== '') {
+            throw new ExpectationException(
+                "'$text' in the Mitigate menu of '$name' doesn't look greyed: $result",
+                $this->getSession()
+            );
+        }
+    }
+
+    /**
+     * A Mitigate menu item has the keyboard focus and shows it with an outline.
+     *
+     * @Then /^"(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" should have a visible focus outline$/
+     * @param string $text
+     * @param string $name
+     */
+    public function the_mitigate_item_should_have_focus_outline(string $text, string $name): void {
+        $xpath = json_encode($this->mitigate_item($name, $text)->getXpath());
+        $result = $this->evaluate_script("return (function() {
+            const item = document.evaluate($xpath, document, null, 9, null).singleNodeValue;
+            if (document.activeElement !== item) {
+                return 'it is not focused';
+            }
+            const style = getComputedStyle(item);
+            const outline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
+            return outline || style.boxShadow !== 'none' ? '' : 'no outline';
+        })();");
+        if ($result !== '') {
+            throw new ExpectationException(
+                "'$text' in the Mitigate menu of '$name' has no visible focus: $result",
+                $this->getSession()
+            );
+        }
     }
 }

@@ -16,6 +16,7 @@
 
 namespace block_le_dashboard\local\output;
 
+use block_le_dashboard\local\config;
 use block_le_dashboard\local\guidance;
 
 /**
@@ -26,17 +27,6 @@ use block_le_dashboard\local\guidance;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class format {
-    /** Font Awesome icon per activity type. Add a line here for a new adapter. */
-    const ICONS = [
-        'assign' => 'fa-file-arrow-up',
-        'quiz' => 'fa-clipboard-question',
-        'coursework' => 'fa-file-pen',
-        'peerwork' => 'fa-people-group',
-    ];
-
-    /** Icon for any other activity type. */
-    const ICON_FALLBACK = 'fa-file-lines';
-
     /** Font Awesome icon per row action (Show markers has none, as in rc6). */
     const ACTION_ICONS = [
         'submit' => 'fa-upload',
@@ -273,16 +263,17 @@ class format {
     ];
 
     /**
-     * A hint's icon. The missing brief is a half-dashed file where Moodle's Font Awesome has one (6.6 and later,
-     * so Moodle 5.0 and later): 4.5's 6.5.2 would draw a blank square (Pierre, 2026-10-17).
+     * A hint's icon. The missing brief is a half-dashed file (Pierre, 2026-10-17). Moodle's Font Awesome has it
+     * from 6.6, so Moodle 5.0 and later; on 4.5 (6.5.2) the plugin draws its own copy, pix/file-half-dashed.svg,
+     * in styles.css (Pierre, 2026-10-19: "UNTIL WE MOVE TO 5.3"). Remove both then.
      *
      * @param string $key
      * @return string
      */
     public static function hint_icon(string $key): string {
         global $CFG;
-        if ($key === 'brief' && (int)$CFG->branch >= 500) {
-            return 'fa-file-half-dashed';
+        if ($key === 'brief') {
+            return (int)$CFG->branch >= 500 ? 'fa-file-half-dashed' : 'ma-icon-file-half-dashed';
         }
         return self::HINT_ICONS[$key];
     }
@@ -290,6 +281,7 @@ class format {
     /** Each hint's icon (the Flag icons mockup). */
     const HINT_ICONS = [
         'brief' => 'fa-file-circle-exclamation',
+        'defaultmarkingdue' => 'fa-calendar-day',
         'genericname' => 'fa-signature',
         'hidden' => 'fa-eye-slash',
         'unallocated' => 'fa-user-slash',
@@ -306,6 +298,7 @@ class format {
     /** Each hint's tone. Attention is for staff and convenors only, never on a student's row. */
     const HINT_TONES = [
         'brief' => 'info',
+        'defaultmarkingdue' => 'info',
         'genericname' => 'info',
         'hidden' => 'grey',
         'unallocated' => 'attention',
@@ -517,7 +510,7 @@ class format {
             'courseurl' => (new \moodle_url('/course/view.php', ['id' => $cm->courseid]))->out(false),
             'modname' => $cm->modname,
             'modlabel' => $modname,
-            'faicon' => self::ICONS[$cm->modname] ?? self::ICON_FALLBACK,
+            'modicon' => self::modicon($cm->modname),
             'assesstype' => $cm->assesstype,
             'typelabel' => get_string($cm->assesstype, 'block_le_dashboard'),
             'typeline' => get_string('rowtype', 'block_le_dashboard', [
@@ -525,11 +518,55 @@ class format {
                 'type' => get_string($cm->assesstype, 'block_le_dashboard'),
             ]),
             // The first flag on staff rows; students never see hidden work.
-            'hiddenhint' => empty($cm->hiddenfromstudents) ? null
+            'hiddenhint' => empty($cm->hiddenfromstudents) || !config::shown('hint_hidden') ? null
                 : self::hint($id, 'hidden', get_string('hint_hidden_text', 'block_le_dashboard')),
             'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_le_dashboard')] : []),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),
         ];
+    }
+
+    /**
+     * An activity type's icon as the course page draws it (core_courseformat cmicon): the module's own
+     * monologo, which a theme can override, in its purpose colour (Pierre's UAT, 2026-10-19: "Activity icons
+     * in the dash don't match the course view"). Per type, not per activity: no assessment module sets its
+     * own icon per activity, and this needs no course modinfo.
+     *
+     * @param string $modname
+     * @return array url, filter (whether the theme colours it), purpose, branded
+     */
+    public static function modicon(string $modname): array {
+        global $OUTPUT;
+        static $icons = [];
+        if (!isset($icons[$modname])) {
+            $icons[$modname] = [
+                'url' => $OUTPUT->image_url('monologo', $modname)->out(false),
+                'filter' => \core_component::has_monologo_icon('mod', $modname),
+                'purpose' => plugin_supports('mod', $modname, FEATURE_MOD_PURPOSE, MOD_PURPOSE_OTHER),
+                'branded' => (bool)component_callback('mod_' . $modname, 'is_branded', [], false),
+            ];
+        }
+        return $icons[$modname];
+    }
+
+    /**
+     * A staff row's Marking deadline date, the assessment's own or the default (config::markingdue()), with a hint
+     * when it is the default.
+     *
+     * @param array $row The row, for its id.
+     * @param \stdClass $cm Index record.
+     * @return array [date or null, hint or null]
+     */
+    public static function markingdue(array $row, \stdClass $cm): array {
+        [$deadline, $default] = config::markingdue($cm);
+        if ($deadline === null) {
+            return [null, null];
+        }
+        $hint = $default ? self::hint($row['id'], 'defaultmarkingdue', get_string(
+            'hint_defaultmarkingdue_text',
+            'block_le_dashboard',
+            config::number('defaultmarkingdays')
+        )) : null;
+        return [self::date('markingdue', $deadline), $hint];
     }
 
     /**

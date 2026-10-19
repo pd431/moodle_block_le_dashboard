@@ -39,13 +39,12 @@ class genericname {
     const ROMAN = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
     /**
-     * Whether the hint is on (the genericnames setting, on unless an admin turned it off).
+     * Whether the hint is on (the genericnames setting, config::HINTS).
      *
      * @return bool
      */
     public static function enabled(): bool {
-        $value = get_config('block_le_dashboard', 'genericnames');
-        return $value === false || (bool)$value;
+        return config::shown('genericnames');
     }
 
     /**

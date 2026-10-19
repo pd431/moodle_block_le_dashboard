@@ -66,11 +66,14 @@ final class genericname_test extends \advanced_testcase {
     }
 
     /**
-     * The settings: off, other terms, other text.
+     * The settings: off on a new site (beta27), other terms, other text.
      */
     public function test_settings(): void {
         $this->resetAfterTest();
         $course = $this->getDataGenerator()->create_course(['fullname' => 'Law and Society', 'shortname' => 'LAW1001']);
+        $this->assertFalse(genericname::enabled());
+        $this->assertNull(genericname::hint('row1', 'Law Essay', (int)$course->id));
+        set_config('genericnames', 1, 'block_le_dashboard');
         $this->assertTrue(genericname::enabled());
         $hint = genericname::hint('row1', 'Law Essay', (int)$course->id);
         $this->assertSame('genericname', $hint['key']);

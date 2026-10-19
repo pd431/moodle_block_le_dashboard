@@ -29,6 +29,19 @@ final class guidance {
     const KEYS = ['latepenalty', 'feedbacklate', 'nosubmission', 'finalised', 'attempts', 'brief', 'untagged', 'setup',
         'unallocated', 'plagiarism', 'loaderror'];
 
+    /**
+     * The defaults before beta27, where they differ from today's: a site that never saved a box keeps them on
+     * upgrade (beta27 hints audit). New sites start neutral.
+     */
+    const LEGACY = [
+        'latepenalty' => '<p>Work up to 10 minutes late may have 10% taken off its mark. Work up to a day late is capped at the'
+            . ' pass mark.</p>',
+        'finalised' => '<p>If you need to resubmit, contact your Info Point to unfinalise it.</p>',
+        'unallocated' => '<p>Unallocated work falls to the module convenor until it is allocated.</p>',
+        'nosubmission' => '<p>Attend or complete this in person; your grade will appear here.</p>',
+        'loaderror' => '<p>A site administrator can see the error on the My assessments Activity types page.</p>',
+    ];
+
     /** @var array Formatted guidance by key and language, for this request. */
     protected static $cache = [];
 
@@ -88,7 +101,8 @@ final class guidance {
 
         $note = $old('latenote');
         if ($note !== false || $url('latenoteurl') !== '') {
-            $note = $note === false ? strip_tags(self::default('latepenalty')) : trim($note);
+            // Sites this old had the pre-beta27 default.
+            $note = $note === false ? strip_tags(self::LEGACY['latepenalty']) : trim($note);
             $html = $note !== '' ? '<p>' . s($note) . '</p>' : '';
             if ($url('latenoteurl') !== '') {
                 $html .= '<p>Read more about ' . $link($url('latenoteurl'), 'late penalties') . '.</p>';
