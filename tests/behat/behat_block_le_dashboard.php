@@ -2581,6 +2581,67 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A theme with rounder corners than Bootstrap's default, as Boost Union can set (raw SCSS on Boost).
+     *
+     * @Given /^the theme sets its border radius to "(?P<radius>[0-9.]+rem)"$/
+     * @param string $radius
+     */
+    public function the_theme_sets_its_border_radius(string $radius): void {
+        set_config('scss', ":root { --bs-border-radius: $radius; }", 'theme_boost');
+        theme_reset_all_caches();
+        self::$themeradius = $radius;
+    }
+
+    /** @var string|null The radius the theme was given, in rem. */
+    protected static ?string $themeradius = null;
+
+    /**
+     * The type filter's outer corners against the search box's.
+     *
+     * @Then /^the outer corners of the type filter should have the same radius as the search box$/
+     */
+    public function the_type_filter_outer_corners(): void {
+        $js = "(function() {
+            var root = document.querySelector('" . self::BLOCK . "');
+            var r = function(el, corner) { return getComputedStyle(el)['border' + corner + 'Radius']; };
+            var buttons = root.querySelectorAll('.ma-type-filter > .ma-filter-btn');
+            var search = root.querySelector('.ma-search .input-group-text');
+            return JSON.stringify({search: r(search, 'TopLeft'), first: [r(buttons[0], 'TopLeft'), r(buttons[0], 'BottomLeft')],
+                last: [r(buttons[buttons.length - 1], 'TopRight'), r(buttons[buttons.length - 1], 'BottomRight')]});
+        })()";
+        $got = json_decode($this->evaluate_script($js), true);
+        $corners = array_merge($got['first'], $got['last']);
+        // The theme's radius must have reached the page, or the check proves nothing.
+        $expected = self::$themeradius === null ? null : round((float)self::$themeradius * 16) . 'px';
+        if (($expected !== null && $got['search'] !== $expected) || array_unique($corners) !== [$got['search']]) {
+            throw new ExpectationException('The type filter has corners ' . implode(', ', $corners) . ' and the search box '
+                . $got['search'], $this->getSession());
+        }
+    }
+
+    /**
+     * The joins between the type filter's buttons.
+     *
+     * @Then /^the inner corners of the type filter should be square$/
+     */
+    public function the_type_filter_inner_corners(): void {
+        $js = "(function() {
+            var buttons = document.querySelectorAll('" . self::BLOCK . " .ma-type-filter > .ma-filter-btn');
+            var out = [];
+            buttons.forEach(function(b, i) {
+                var cs = getComputedStyle(b);
+                if (i > 0) { out.push(cs.borderTopLeftRadius, cs.borderBottomLeftRadius); }
+                if (i < buttons.length - 1) { out.push(cs.borderTopRightRadius, cs.borderBottomRightRadius); }
+            });
+            return JSON.stringify(out);
+        })()";
+        $corners = json_decode($this->evaluate_script($js), true);
+        if (array_unique($corners) !== ['0px']) {
+            throw new ExpectationException('Inner corners: ' . implode(', ', $corners), $this->getSession());
+        }
+    }
+
+    /**
      * Picks a summary box's window, as the user's own preference, then reloads the page (with or without JavaScript).
      *
      * @When /^I set the "(?P<label>[^"]*)" summary box window to "(?P<option>[^"]*)"$/
