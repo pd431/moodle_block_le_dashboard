@@ -595,8 +595,10 @@ class staff extends base {
             $sections[classifier::UNDATED][] = $row + ['sortkey' => 0];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
-        foreach ($sections as &$rows) {
-            usort($rows, fn($a, $b) => ($a['sortkey'] <=> $b['sortkey']) ?: strcmp($a['search'], $b['search']));
+        // Soonest first while there's marking to do, latest first once done, undated by name (Pierre, 2026-10-21).
+        foreach ($sections as $key => &$rows) {
+            $order = $key === classifier::COMPLETED ? -1 : 1;
+            usort($rows, fn($a, $b) => $order * ($a['sortkey'] <=> $b['sortkey']) ?: strcmp($a['search'], $b['search']));
         }
         unset($rows);
 

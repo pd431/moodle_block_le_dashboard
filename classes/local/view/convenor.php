@@ -312,14 +312,18 @@ class convenor extends base {
                 $row['grading'] = format::grading($units, $released, (int)($unmarked[$cmid] ?? 0), !empty($cm->norelease));
                 $row = format::marking_detail($row, get_string('marking_all', 'block_le_dashboard'));
             }
-            $row['sortkey'] = [$markingdue ?? PHP_INT_MAX, (int)$cm->due];
+            // Upcoming by submission deadline, the rest by marking deadline, else deadline (Pierre, 2026-10-21).
+            $row['sortkey'] = $upcoming ? (int)$cm->due : (int)($markingdue ?? $cm->due);
             $sections[$section][] = $row;
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
-        $sections[classifier::CONVENOR_PAST] = array_reverse($sections[classifier::CONVENOR_PAST]);
-        usort($sections[classifier::UNDATED], fn($a, $b) => strcmp($a['search'], $b['search']));
-        // In progress by marking deadline, then deadline.
-        usort($sections[classifier::INPROGRESS], fn($a, $b) => $a['sortkey'] <=> $b['sortkey']);
+        // Soonest first while there's work, latest first once done, undated by name; ties by name (Pierre, 2026-10-21).
+        foreach ($sections as $key => &$rows) {
+            $order = $key === classifier::CONVENOR_PAST ? -1 : 1;
+            usort($rows, fn($a, $b) => ($key === classifier::UNDATED ? 0 : $order * ($a['sortkey'] <=> $b['sortkey']))
+                ?: strcmp($a['search'], $b['search']));
+        }
+        unset($rows);
         return $this->sections_context($sections, $oldest, $extra);
     }
 
