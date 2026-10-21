@@ -190,8 +190,9 @@ class classifier {
     /**
      * Where an assessment goes in a marker's view.
      *
-     * Past the deadline with nothing to mark and extensions still to come, an assessment
-     * stays in Upcoming deadlines (G9).
+     * Past the deadline with nothing to mark and extensions still to come, an assessment stays in
+     * Upcoming deadlines (G9) only while none of my marking is done: with my share marked, it goes to
+     * Completed marking with its Extensions hint (Pierre, 2026-10-21), and late work brings it back (G6).
      *
      * @param int $tomark My units ready and not marked.
      * @param int $mine My units in total.
@@ -209,7 +210,7 @@ class classifier {
             // work may still arrive (EC2).
             return $mine > 0 ? self::COMPLETED : self::UNDATED;
         }
-        if ($pending && $due !== null && $due < $now) {
+        if ($pending && $mine === 0 && $due < $now) {
             return self::STAFF_UPCOMING;
         }
         if ($mine > 0 && $due < $now) {
