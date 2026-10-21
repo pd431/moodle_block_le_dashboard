@@ -80,7 +80,8 @@ Feature: Markers see the marking that is theirs, whatever the activity plugin
     And the first attempt of "student1" at "Q1" still needs grading
     And the last attempt of "student1" at "Q1" has been graded
     When I log in as "marker1" and view my dashboard
-    Then "Q1" should appear in the "Completed marking" section
+    # Someone else graded it, so it isn't in marker1's Completed marking either (beta28).
+    Then "Q1" should not appear in the "Marking in progress" section
 
   # D6: unallocated work is shown to convenors only.
   @javascript

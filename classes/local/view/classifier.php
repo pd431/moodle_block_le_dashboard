@@ -194,21 +194,22 @@ class classifier {
      * nowhere before that; late work brings it back to Marking in progress (G6).
      *
      * @param int $tomark My units ready and not marked.
-     * @param int $mine My units in total.
+     * @param int $own My own units: allocated to me or marked by me. Work without allocation that colleagues
+     *                 marked counts as mine to mark, but isn't my own once done (Pierre, 2026-10-21).
      * @param int|null $due
      * @param int $now
      * @return string|null Section, or null when it isn't shown in the marking sections.
      */
-    public static function staff(int $tomark, int $mine, ?int $due, int $now): ?string {
+    public static function staff(int $tomark, int $own, ?int $due, int $now): ?string {
         if ($tomark > 0) {
             return self::TOMARK;
         }
         if ($due === null) {
             // No deadline: all my marking done is finished (Pierre, 2026-10-04); with none yet,
             // work may still arrive (EC2).
-            return $mine > 0 ? self::COMPLETED : self::UNDATED;
+            return $own > 0 ? self::COMPLETED : self::UNDATED;
         }
-        return $mine > 0 && $due < $now ? self::COMPLETED : null;
+        return $own > 0 && $due < $now ? self::COMPLETED : null;
     }
 
     /**

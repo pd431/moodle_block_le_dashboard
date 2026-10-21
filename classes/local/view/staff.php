@@ -74,7 +74,8 @@ class staff extends base {
     }
 
     /**
-     * My marking per assessment and stage: tomark, mine, marked, unallocated (units counted
+     * My marking per assessment and stage: tomark, mine, marked, own (units allocated to me or that I marked, my own
+     * workload for Completed marking), unallocated (units counted
      * because they fall to me as convenor), isgroup (units are groups), firstready (earliest
      * time an unmarked unit became ready) and lastmarked (my latest mark here).
      *
@@ -95,7 +96,7 @@ class staff extends base {
         }
         [$where, $params] = $this->mine_sql(false);
         $shared = $staff ? $this->shared_marking($staff) : [];
-        $params += ['me2' => $this->userid];
+        $params += ['me2' => $this->userid, 'me3' => $this->userid];
         $ready = self::ready_sql($this->now);
         // Work still to mark whose marking deadline falls within each summary window, or has passed (UAT, beta27).
         $deadline = self::marking_deadline_sql();
@@ -109,6 +110,8 @@ class staff extends base {
                                             SUM(CASE WHEN $ready AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
                                             SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS mine,
                                             SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
+                                            SUM(CASE WHEN $ready AND " . self::MARKER_SQL . " = :me3 THEN 1 ELSE 0 END)
+                                                AS own,
                                             SUM(CASE WHEN $ready AND m.allocatedto IS NULL AND c.hasallocation = 1
                                                      THEN 1 ELSE 0 END) AS unallocated,
                                             MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
@@ -373,10 +376,12 @@ class staff extends base {
                     $key = $cmid . '-' . $r->stage;
                     // The array is complete before the cast: object + array is a PHP error (beta27).
                     $o = $out[$key] ??= (object)(['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
-                        'mine' => 0, 'marked' => 0, 'unallocated' => 0, 'isgroup' => 0,
+                        'mine' => 0, 'marked' => 0, 'own' => 0, 'unallocated' => 0, 'isgroup' => 0,
                         'firstready' => null, 'lastmarked' => null]
                         + array_fill_keys(array_map(fn($d) => 'dueby' . $d, self::WINDOWS), 0));
                     $o->mine++;
+                    // Agreement others did isn't my workload (Pierre, 2026-10-21).
+                    $o->own += !$r->marked || (int)$r->markedby === $this->userid ? 1 : 0;
                     if ($r->marked) {
                         $o->marked++;
                     } else {
@@ -468,13 +473,14 @@ class staff extends base {
         $inyear = array_flip($this->courses()[1]);
         foreach ($bycm as $cmid => $stages) {
             $cm = $cms[$cmid];
-            $tomark = $mine = $unallocated = 0;
+            $tomark = $own = $unallocated = 0;
             foreach ($stages as $s) {
                 $tomark += (int)$s->tomark;
-                $mine += (int)$s->mine;
+                $own += (int)$s->own;
                 $unallocated += (int)$s->unallocated;
             }
-            $section = classifier::staff($tomark, $mine, $cm->due === null ? null : (int)$cm->due, $this->now);
+            // Completed marking holds only my own workload: work allocated to me, or that I marked (Pierre, 2026-10-21).
+            $section = classifier::staff($tomark, $own, $cm->due === null ? null : (int)$cm->due, $this->now);
             $otheryear = !isset($inyear[(int)$cm->courseid]);
             // Undated rows come from undated_cms(), for every assessment in my staff courses.
             if (!$section || $section === classifier::UNDATED || ($otheryear && $section !== classifier::TOMARK)) {

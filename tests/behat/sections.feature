@@ -49,3 +49,24 @@ Feature: Each view has the sections its users work in
     Then the sections should be in the order "Marking in progress, Undated, Completed marking"
     And "A1" should not appear in the "Marking in progress" section
     And "A2" should appear in the "Undated" section
+
+  Scenario: Completed marking holds only work I marked, where nothing is allocated
+    Given a summative "assign" "A1" in "M1" was due "3 days ago"
+    And "student1" has submitted "A1"
+    And "marker2" marks the submission of "student1" for "A1"
+    And the My assessments index is up to date
+    When I log in as "marker1" and view the "My marking"
+    Then "A1" should not appear in the "Completed marking" section
+    When I log in as "marker2" and view the "My marking"
+    Then "A1" should appear in the "Completed marking" section
+
+  # Moodle 5.0+ only (the "2 markers" option skips the scenario on 4.5).
+  Scenario: Completed marking holds only work I marked, with 2 markers and nothing allocated
+    Given a summative "assign" "A1" in "M1" with 2 markers was due "3 days ago"
+    And "student1" has submitted "A1"
+    And "marker2" marks the submission of "student1" for "A1"
+    And the My assessments index is up to date
+    When I log in as "marker1" and view the "My marking"
+    Then "A1" should not appear in the "Completed marking" section
+    When I log in as "marker2" and view the "My marking"
+    Then "A1" should appear in the "Completed marking" section
