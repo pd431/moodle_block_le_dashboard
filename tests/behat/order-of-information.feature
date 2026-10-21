@@ -78,3 +78,23 @@ Feature: Every row reads in the same order, in every view
     And the My assessments index is up to date
     When I log in as "student1" and view my dashboard
     Then the date labels of "A1" should be on their own lines
+
+  # ---------- Type before activity in every view ----------
+
+  Scenario: Students read the type before the activity, as before
+    Given a summative "assign" "A1" in "M1" is due "in 10 days"
+    And the My assessments index is up to date
+    When I log in as "student1" and view my dashboard
+    Then "A1" should show "Summative assignment"
+
+  Scenario Outline: Staff and convenors read the type before the activity too
+    Given a summative "assign" "A1" in "M1" with no due date exists
+    And the My assessments index is up to date
+    When I log in as "<user>" and view the "<view>"
+    Then "A1" should show "Summative · Assignment"
+    And "A1" should not show "Assignment · Summative"
+
+    Examples:
+      | user     | view          |
+      | marker1  | My marking    |
+      | convenor | Convenor view |
