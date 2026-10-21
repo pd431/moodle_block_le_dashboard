@@ -82,3 +82,29 @@ Feature: Each view has the sections its users work in
     And the My assessments index is up to date
     And I log in as "convenor" and view the "Convenor view"
     Then "A1" should appear in the "In progress" section
+
+  # ---------- Student view ----------
+
+  Scenario: A student's sections hold work by its deadline
+    Given a summative "assign" "A1" in "M1" is due "in 5 days"
+    And a summative "assign" "A2" in "M1" is due "in 3 days"
+    And a summative "assign" "A3" in "M1" was due "2 days ago"
+    And a summative "assign" "A4" in "M1" was due "4 days ago"
+    And "student1" has submitted "A2"
+    And "student1" has submitted "A4"
+    And the My assessments index is up to date
+    When I log in as "student1" and view my dashboard
+    Then "A1" should appear in the "Upcoming" section
+    And "A2" should appear in the "Upcoming" section
+    And "A3" should appear in the "Overdue" section
+    And "A4" should appear in the "Past" section
+
+  Scenario: A quiz with every attempt used and none handed in stays in Upcoming until its deadline
+    Given a summative "quiz" "Q1" in "M1" with 1 attempt allowed is due "next week"
+    And "student1" has abandoned an attempt at "Q1"
+    And the My assessments index is up to date
+    When I log in as "student1" and view my dashboard
+    Then "Q1" should appear in the "Upcoming" section
+    And "Q1" should not have a "Submit" button
+    And "Q1" should have a "Can't submit" button
+    And the "Can't resubmit" popover of "Q1" should say "You've used all your attempts, so you can't submit."

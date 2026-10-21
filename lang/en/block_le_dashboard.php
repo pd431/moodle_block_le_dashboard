@@ -203,6 +203,7 @@ $string['le_dashboard:addinstance'] = 'Add a new Le Dashboard block';
 $string['le_dashboard:myaddinstance'] = 'Add a new Le Dashboard block to the Dashboard';
 $string['loading'] = 'Loading…';
 $string['locked_attempts'] = 'You\'ve used all your attempts.';
+$string['locked_attemptsnosubmit'] = 'You\'ve used all your attempts, so you can\'t submit.';
 $string['locked_finalised'] = 'Your submission is finalised, so you can\'t change it.';
 $string['locked_teacher'] = 'Your teacher has locked your submission, so you can\'t change it.';
 $string['locked_teachernosubmit'] = 'Your teacher has locked submissions for you, so you can\'t submit.';

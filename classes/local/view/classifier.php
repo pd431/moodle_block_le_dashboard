@@ -72,7 +72,8 @@ class classifier {
      * - Nothing to hand in online (attendance, in person, mark-only): Upcoming until the date, then Past,
      *   "Awaiting feedback" until the grade is out. Never Overdue.
      * - Work the student can no longer hand in (past the cut-off or a quiz's close, or every quiz
-     *   attempt used with none finished): Past at once, whatever the deadline.
+     *   attempt used with none finished): Past once the deadline has passed; before it, Upcoming with
+     *   "Can't submit", as work a teacher locked (Pierre, 2026-10-21).
      * - Submitted: Upcoming until the deadline, then Past (in marking, or released). A final submission
      *   (finalised, locked by a teacher, every quiz attempt used) too (Pierre, 2026-10-09).
      * - A reopened attempt not yet resubmitted: Upcoming, with no pill (G13).
@@ -125,8 +126,9 @@ class classifier {
             return [($due !== null && $due >= $now) ? self::UPCOMING : self::PAST, $done];
         }
         if (!self::submittable($row, $now)) {
-            // Locked by a teacher before the deadline: Upcoming, saying why there's no Submit (B1).
-            if (self::teacher_locked($row) && $due !== null && $due >= $now) {
+            // Can't be handed in before the deadline (locked by a teacher, B1, or every quiz attempt used with none
+            // finished): Upcoming, saying why there's no Submit (Pierre, 2026-10-21).
+            if ($due !== null && $due >= $now) {
                 return [self::UPCOMING, self::STATUS_PENDING];
             }
             // Nothing can be handed in any more: Past, with Mitigate while its window is open.

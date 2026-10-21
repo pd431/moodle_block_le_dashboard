@@ -1112,6 +1112,26 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A quiz attempt the student never submitted, left to expire: it uses up an attempt but hands nothing in.
+     *
+     * @Given /^"(?P<user>[^"]*)" has abandoned an attempt at "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     */
+    public function has_abandoned_attempt(string $username, string $name): void {
+        global $DB, $USER;
+        $cm = $this->cm($name);
+        $userid = self::userid($username);
+        $saved = $USER;
+        \core\session\manager::set_user(core_user::get_user($userid));
+        $attempt = testing_util::get_data_generator()->get_plugin_generator('mod_quiz')->create_attempt($cm->instance, $userid);
+        \core\session\manager::set_user($saved);
+        $DB->update_record('quiz_attempts', (object)['id' => $attempt->id, 'state' => 'abandoned',
+            'timefinish' => 0, 'timemodified' => time() - 60]);
+        self::queue($cm);
+    }
+
+    /**
      * Grades or leaves ungraded one attempt.
      *
      * @Given /^the (?P<which>first|last) attempt of "(?P<user>[^"]*)" at "(?P<name>[^"]*)" (?P<state>still needs grading|has been graded)$/
