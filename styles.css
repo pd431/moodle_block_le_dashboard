@@ -709,6 +709,9 @@
 .block_le_dashboard_dashboard .ma-view--convenor .ma-row .ma-row-date-label {
     display: block;
 }
+.block_le_dashboard_dashboard .ma-row-dates--stacked .ma-row-date-label {
+    display: block;
+}
 
 /* stylelint-disable-next-line csstree/validator */
 @container ma (width < 62rem) {

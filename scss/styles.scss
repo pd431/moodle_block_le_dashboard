@@ -954,6 +954,11 @@ $ma-glyph-tones: ("attention");
         }
     }
 
+    // A student row with two dates or more puts each label on its own line, so its dates line up (beta28).
+    .ma-row-dates--stacked .ma-row-date-label {
+        display: block;
+    }
+
     // Narrower blocks, by the block's own width. Student rows first put the
     // pill over the dates so the name keeps its width (the dates row takes the
     // spare height, so the dates sit right under the pill), then split into

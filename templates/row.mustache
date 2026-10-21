@@ -80,7 +80,7 @@
         {{/hasflags}}
     </div>
 </div>
-<div class="ma-row-dates">
+<div class="ma-row-dates{{#stackdates}} ma-row-dates--stacked{{/stackdates}}">
     {{#dates}}
     <div class="ma-row-date ma-row-date--{{key}}" data-date="{{key}}">
         {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}

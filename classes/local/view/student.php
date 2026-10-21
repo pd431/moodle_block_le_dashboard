@@ -362,6 +362,8 @@ class student extends base {
             $dates[] = $date;
         }
         $row['dates'] = $dates;
+        // With two dates or more, every label on its own line so the dates line up (Pierre, 2026-10-20).
+        $row['stackdates'] = count($dates) > 1;
         $row['notes'] = $this->notes($r, $section, $status);
         // Late work: the clock beside the grade once there is one, else beside the status pill.
         if (self::is_late($r) && config::shown('hint_late')) {

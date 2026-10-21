@@ -224,6 +224,30 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Whether every date label of a row sits on its own line, above its date.
+     *
+     * @Then /^the date labels of "(?P<name>[^"]*)" should (?P<not>not )?be on their own lines$/
+     * @param string $name
+     * @param string $not
+     */
+    public function the_date_labels_should_be_on_their_own_lines(string $name, string $not = ''): void {
+        $this->row($name);
+        $displays = $this->evaluate_script("return Array.from(document.querySelectorAll(
+            '.block_le_dashboard li[data-region=\"ma-row\"]')).filter((li) => {
+                const a = li.querySelector('.ma-row-name');
+                return a && a.textContent.trim() === " . json_encode($name) . ";
+            }).flatMap((li) => Array.from(li.querySelectorAll('.ma-row-dates [data-date] .ma-row-date-label')))
+            .map((e) => getComputedStyle(e).display);");
+        if (!$displays) {
+            throw new ExpectationException("'$name' has no date labels", $this->getSession());
+        }
+        $own = array_unique(array_map(fn($d) => $d === 'block', $displays));
+        if ($own !== [!$not]) {
+            throw new ExpectationException("'$name' date labels display as " . implode(', ', $displays), $this->getSession());
+        }
+    }
+
+    /**
      * A row's progress bar.
      *
      * @param string $name
