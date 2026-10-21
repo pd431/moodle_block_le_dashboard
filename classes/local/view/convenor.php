@@ -221,9 +221,9 @@ class convenor extends base {
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
-                // Release is outstanding until some is released: what is held back after that is withheld on
-                // purpose, so the assessment can go to Past (Pierre, 2026-10-07).
-                $outstanding += $released > 0 ? 0 : $units;
+                // Release is outstanding until every marked unit is released (Pierre, 2026-10-21, reversing
+                // 2026-10-07): a partly released assessment stays In progress.
+                $outstanding += $units - $released;
             }
             $section = classifier::convenor(
                 $cm->due === null ? null : (int)$cm->due,

@@ -108,3 +108,19 @@ Feature: Each view has the sections its users work in
     And "Q1" should not have a "Submit" button
     And "Q1" should have a "Can't submit" button
     And the "Can't resubmit" popover of "Q1" should say "You've used all your attempts, so you can't submit."
+
+  Scenario: A partly released assessment stays In progress for the convenor until the rest is released
+    # With marking workflow, so a grade is released only when the step says so.
+    Given a summative "assign" "A1" in "M1" with marking workflow was due "5 days ago"
+    And "student1" and "student2" have submitted "A1"
+    And "marker1" marks the submission of "student1" for "A1"
+    And "marker1" marks the submission of "student2" for "A1"
+    And the grade of "student1" for "A1" is released
+    And the My assessments index is up to date
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "In progress" section
+    When the grade of "student2" for "A1" is released
+    And the My assessments index is up to date
+    And I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "Past" section
+    And "A1" should show the grading status "Released to students"
