@@ -2768,6 +2768,40 @@ class behat_block_le_dashboard extends behat_base {
         'default marking deadline' => 'defaultmarkingdue'];
 
     /**
+     * The flags under a row's name, in order (hints beside a date, pill or grade aren't flags).
+     *
+     * @Then /^the hints of "(?P<name>[^"]*)" should be "(?P<hints>[^"]*)" in that order$/
+     * @param string $name
+     * @param string $hints Comma-separated hint names, as in HINTS.
+     */
+    public function the_hints_should_be(string $name, string $hints): void {
+        $actual = array_map(fn($e) => $e->getAttribute('data-hint'), $this->row($name)->findAll('css', '.ma-flags [data-hint]'));
+        $expected = array_map(fn($h) => self::HINTS[trim($h)], explode(',', $hints));
+        if ($actual !== $expected) {
+            throw new ExpectationException("'$name' has the hints " . implode(', ', $actual), $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a hint sits beside one of a row's dates.
+     *
+     * @Then /^the (?P<hint>[a-z ]+?) hint of "(?P<name>[^"]*)" should sit beside its "(?P<label>[^"]*)" date$/
+     * @param string $hint
+     * @param string $name
+     * @param string $label
+     */
+    public function the_hint_should_sit_beside_its_date(string $hint, string $name, string $label): void {
+        $xpath = ".//div[@data-date][span[contains(@class, 'ma-row-date-label')][normalize-space(.) = " .
+            behat_context_helper::escape($label) . "]]//*[@data-hint=" . behat_context_helper::escape(self::HINTS[$hint]) . "]";
+        if (!$this->row($name)->find('xpath', $xpath)) {
+            throw new ExpectationException("'$name' has no $hint hint beside its '$label' date", $this->getSession());
+        }
+        if ($this->row($name)->find('css', '.ma-flags [data-hint="' . self::HINTS[$hint] . '"]')) {
+            throw new ExpectationException("'$name' also has the $hint hint in its flags", $this->getSession());
+        }
+    }
+
+    /**
      * Clicks a row's hint.
      *
      * @When /^I click on the (?P<hint>[a-z ]+?) hint of "(?P<name>[^"]*)"$/

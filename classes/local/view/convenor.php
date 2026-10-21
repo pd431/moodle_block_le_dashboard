@@ -240,7 +240,7 @@ class convenor extends base {
             if ($otheryear) {
                 $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
             }
-            [$markingdate, $defaulthint] = format::markingdue($row, $cm);
+            $markingdate = format::markingdue($row, $cm);
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
                 $markingdate,
@@ -285,9 +285,6 @@ class convenor extends base {
             }
             if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
                 $row['hints'][] = $generic;
-            }
-            if ($defaulthint) {
-                $row['hints'][] = $defaulthint;
             }
             // Work that arrived after marking was finished brought this back to In progress (G6).
             if (

@@ -490,7 +490,7 @@ class staff extends base {
             if ($otheryear) {
                 $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
             }
-            [$markingdate, $defaulthint] = format::markingdue($row, $cm);
+            $markingdate = format::markingdue($row, $cm);
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
                 $markingdate,
@@ -499,9 +499,6 @@ class staff extends base {
             $row['bars'] = $this->stage_bars($stages);
             $row['hints'] = !empty($cm->nosubmission) && config::shown('hint_nosubmission')
                 ? [format::nosubmission_hint($row['id'], true)] : [];
-            if ($defaulthint) {
-                $row['hints'][] = $defaulthint;
-            }
             if (config::shown('hint_setup') && $setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
                 $row['hints'][] = $setup;
             }

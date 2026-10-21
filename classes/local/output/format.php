@@ -549,24 +549,28 @@ class format {
     }
 
     /**
-     * A staff row's Marking deadline date, the assessment's own or the default (config::markingdue()), with a hint
-     * when it is the default.
+     * The marking deadline date of a staff or convenor row: the assessment's own, or the default one (config::markingdue())
+     * with its hint beside the date it explains (Pierre, 2026-10-20), as "Waiting for feedback?" sits beside a
+     * student's "Feedback expected".
      *
      * @param array $row The row, for its id.
      * @param \stdClass $cm Index record.
-     * @return array [date or null, hint or null]
+     * @return array|null The date, or null with no marking deadline.
      */
-    public static function markingdue(array $row, \stdClass $cm): array {
+    public static function markingdue(array $row, \stdClass $cm): ?array {
         [$deadline, $default] = config::markingdue($cm);
         if ($deadline === null) {
-            return [null, null];
+            return null;
         }
-        $hint = $default ? self::hint($row['id'], 'defaultmarkingdue', get_string(
-            'hint_defaultmarkingdue_text',
-            'block_le_dashboard',
-            config::number('defaultmarkingdays')
-        )) : null;
-        return [self::date('markingdue', $deadline), $hint];
+        $date = self::date('markingdue', $deadline);
+        if ($default) {
+            $date['hint'] = self::hint($row['id'], 'defaultmarkingdue', get_string(
+                'hint_defaultmarkingdue_text',
+                'block_le_dashboard',
+                config::number('defaultmarkingdays')
+            ));
+        }
+        return $date;
     }
 
     /**

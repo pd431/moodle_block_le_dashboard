@@ -98,3 +98,35 @@ Feature: Every row reads in the same order, in every view
       | user     | view          |
       | marker1  | My marking    |
       | convenor | Convenor view |
+
+  # ---------- One order of flags; the default marking hint beside its date ----------
+
+  Scenario Outline: The default marking deadline hint sits beside the date it explains
+    Given a summative "quiz" "Q1" in "M1" with an essay question was due "3 days ago"
+    And "student1" has finished "Q1"
+    And the My assessments index is up to date
+    When I log in as "<user>" and view the "<view>"
+    Then the default marking deadline hint of "Q1" should sit beside its "Marking deadline" date
+
+    Examples:
+      | user     | view          |
+      | marker1  | My marking    |
+      | convenor | Convenor view |
+
+  Scenario Outline: Flags come in the same order on My marking and the Convenor view
+    # "Essay 1" is a generic name. It has no marking deadline, so it gets the default one: that hint is now
+    # beside the date, so it's not in the flags.
+    Given the following config values are set as admin:
+      | genericnames | 1 | block_le_dashboard |
+    And a summative "assign" "Essay 1" in "M1" was due "3 days ago"
+    And "Essay 1" is hidden from students
+    And "student1" has submitted "Essay 1"
+    And "student2" has an extension on "Essay 1" to "tomorrow"
+    And the My assessments index is up to date
+    When I log in as "<user>" and view the "<view>"
+    Then the hints of "Essay 1" should be "<hints>" in that order
+
+    Examples:
+      | user     | view          | hints                            |
+      | marker1  | My marking    | hidden, generic name, extensions |
+      | convenor | Convenor view | hidden, generic name, extensions |
