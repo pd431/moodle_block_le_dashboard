@@ -81,7 +81,7 @@ Feature: Activity icons say what the activity is and what applies to me
     Given a summative "assign" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
     And I click on the activity icon of "A1"
-    And I click on "My assessments" "block"
+    And I click on "My Assessments" "block"
     Then the activity icon tooltip of "A1" should not be visible
 
   @javascript

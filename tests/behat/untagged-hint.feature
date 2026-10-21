@@ -75,15 +75,15 @@ Feature: Module convenors see which compatible activities are not tagged
     Given the My assessments tagging guidance link is "https://example.com/tagging"
     When I log in as "convenor1" and view the "Module convenor view" for academic year "2026/27"
     Then the untagged activities list should be collapsed
-    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My assessments" "block"
+    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My Assessments" "block"
     Then I should see "Guidance on tagging activities" linking to "https://example.com/tagging"
     And I should see "Module 1 (2)" in the untagged activities list
     And I should see "Module 2 (1)" in the untagged activities list
     And the untagged activities of "Module 1" should be collapsed
-    When I click on "Module 1 (2)" "text" in the "My assessments" "block"
+    When I click on "Module 1 (2)" "text" in the "My Assessments" "block"
     Then I should see "Essay" linking to the page of "Essay"
     And I should see "Practice" linking to the page of "Practice"
-    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My assessments" "block"
+    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My Assessments" "block"
     Then the untagged activities list should be collapsed
 
   Scenario: Hidden activities are listed and flagged as hidden

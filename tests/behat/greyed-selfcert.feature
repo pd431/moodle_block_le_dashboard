@@ -49,5 +49,5 @@ Feature: A greyed Self-certify never looks available
     And I pass the pointer over "Self-certify an extension" in the Mitigate menu of "A1" for "200" milliseconds
     Then "Self-certify an extension" in the Mitigate menu of "A1" should look greyed
     And I click on "Self-certify an extension" in the Mitigate menu of "A1"
-    And I should see "My assessments"
+    And I should see "My Assessments"
     And "Request formal mitigation" should be in the Mitigate menu of "A1"

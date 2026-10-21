@@ -43,7 +43,7 @@ Feature: The search box and the bottom of each section are drawn cleanly
   Scenario: Focus rings the whole search box
     Given a summative "assign" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard
-    And I click on "Search assessments" "field" in the "My assessments" "block"
+    And I click on "Search assessments" "field" in the "My Assessments" "block"
     Then the search box should show its focus ring around the icon and the input
 
   Scenario: With no Show more row, the last row has the section's rounded bottom corners

@@ -154,7 +154,7 @@ Feature: The Mitigate menu explains self-certification
     And I press the down key
     Then the focused element is "Self-certify an extension" "button"
     And I press the enter key
-    And I should see "My assessments"
+    And I should see "My Assessments"
 
   @mod_coursework
   Scenario Outline: The summary box counts down
@@ -223,7 +223,7 @@ Feature: The Mitigate menu explains self-certification
     And I press the down key
     And the focused element is "Self-certify an extension" "button"
     And I press the enter key
-    And I should see "My assessments"
+    And I should see "My Assessments"
 
   Scenario: Without mod_coursework: an unreadable self-cert link shows block_rhb's own HTML
     Given a summative "assign" "A1" in "M1" is due "in 4 days"

@@ -105,8 +105,8 @@ Feature: Staff are told when a tagged assessment is missing a setting
     When I log in as "convenor1" and view the "Module convenor view" for academic year "All years"
     Then I should see "2 tagged activities need their settings checked across your courses." in the "My assessments" block
     And the settings check list should be collapsed
-    When I click on "2 tagged activities need their settings checked across your courses." "text" in the "My assessments" "block"
-    And I click on "Module 1 (2)" "text" in the "My assessments" "block"
+    When I click on "2 tagged activities need their settings checked across your courses." "text" in the "My Assessments" "block"
+    And I click on "Module 1 (2)" "text" in the "My Assessments" "block"
     Then I should see "No due date" in the settings check list
     And I should see "Not shown on dashboards: Workshop is not enabled in Le Dashboard" in the settings check list
 
