@@ -135,9 +135,10 @@ final class views_test extends \advanced_testcase {
         $this->assertArrayHasKey('Overdue essay', $tomark);
         $this->assertSame(1, $tomark['Overdue essay']['tomark']);
         $this->assertSame(['marked'], array_column($tomark['Overdue essay']['bars'], 'key'), 'one bar per kind of work');
-        $this->assertSame(['tomark', 'upcoming', 'completed'], array_column($marker['sections'], 'key'));
+        // No Upcoming section (Pierre, 2026-10-21): an early submission isn't marking until the deadline (G9).
+        $this->assertSame(['tomark', 'completed'], array_column($marker['sections'], 'key'));
         $this->assertArrayNotHasKey('Upcoming report', $tomark, 'an early submission waits for the deadline (G9)');
-        $this->assertArrayHasKey('Upcoming report', self::rows($marker, 'upcoming'));
+        $this->assertArrayNotHasKey('Upcoming report', self::rows($marker, 'completed'));
 
         $other = (new staff($this->u['other']->id))->export();
         $this->assertArrayNotHasKey('Overdue essay', self::rows($other, 'tomark'));
@@ -145,19 +146,19 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
-     * Staff Upcoming rows name their course even in a course with no marking rows yet (R1, beta22 audit: the
+     * Staff Undated rows name their course even in a course with no marking rows yet (R1, beta22 audit: the
      * course link was empty).
      */
-    public function test_staff_upcoming_names_course(): void {
+    public function test_staff_undated_names_course(): void {
         $gen = $this->getDataGenerator();
         $course = $gen->create_course(['shortname' => 'M2']);
         $gen->enrol_user($this->u['marker']->id, $course->id, 'teacher');
         $gen->enrol_user($this->u['s1']->id, $course->id, 'student');
         $cm = $gen->get_plugin_generator('mod_assign')->create_instance(['course' => $course->id, 'name' => 'Essay 2',
-            'duedate' => time() + 10 * DAYSECS, 'assignsubmission_onlinetext_enabled' => 1]);
+            'duedate' => 0, 'assignsubmission_onlinetext_enabled' => 1]);
         $gen->get_plugin_generator('block_le_dashboard')->tag($cm->cmid, 'summative');
 
-        $row = self::rows((new staff($this->u['marker']->id))->export(), 'upcoming')['Essay 2'];
+        $row = self::rows((new staff($this->u['marker']->id))->export(), 'undated')['Essay 2'];
         $this->assertSame('M2', $row['course']);
     }
 

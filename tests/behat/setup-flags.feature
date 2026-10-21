@@ -69,13 +69,14 @@ Feature: Staff are told when a tagged assessment is missing a setting
   Scenario: A quiz whose marks are never shown is flagged
     Given a summative "quiz" "Q1" in "M1" with marks never shown is due "tomorrow"
     And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
+    # In the Convenor view: My marking has no Upcoming section since beta28.
+    When I log in as "convenor1" and view the "Convenor view"
     Then "Q1" should have a "setup" hint
 
   Scenario: A formative quiz whose marks are never shown is not flagged
     Given a formative "quiz" "F1" in "M1" with marks never shown is due "tomorrow"
     And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
+    When I log in as "convenor1" and view the "Convenor view"
     Then "F1" should not have a "setup" hint
 
   Scenario: An activity tagged both summative and formative is flagged

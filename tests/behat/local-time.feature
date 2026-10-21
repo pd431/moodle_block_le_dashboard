@@ -108,10 +108,12 @@ Feature: Dates show in the viewer's own time zone
     And the following "course enrolments" exist:
       | user     | course | role           |
       | teacher1 | M1     | editingteacher |
-    # A1's date is fixed and Marking leaves out past work with nothing to mark, so draw the dashboard before it.
+      | teacher1 | M1     | moduleconvenor |
+    # A1's date is fixed, so draw the dashboard before it: the Convenor view lists it in Upcoming (My marking has no
+    # Upcoming section since beta28).
     And it is now "Mon 12 October 2026 09:00" in "Europe/London"
     And my browser's time zone is "America/New_York"
-    When I log in as "teacher1" and view my dashboard
+    When I log in as "teacher1" and view the "Convenor view"
     Then the "Submission deadline" date of "A1" should read "14 Oct 2026, 08:30"
     And the time zone icon of "A1" should be "earth-americas"
 

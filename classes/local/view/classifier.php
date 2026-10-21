@@ -180,7 +180,7 @@ class classifier {
     const TOMARK = 'tomark';
     /** Staff section: all my units marked. */
     const COMPLETED = 'completed';
-    /** Staff and convenor section: deadline ahead. */
+    /** Convenor section: deadline ahead. */
     const STAFF_UPCOMING = 'upcoming';
     /** Convenor section: deadline passed, marking or release outstanding. */
     const INPROGRESS = 'inprogress';
@@ -188,20 +188,18 @@ class classifier {
     const CONVENOR_PAST = 'past';
 
     /**
-     * Where an assessment goes in a marker's view.
-     *
-     * Past the deadline with nothing to mark and extensions still to come, an assessment stays in
-     * Upcoming deadlines (G9) only while none of my marking is done: with my share marked, it goes to
-     * Completed marking with its Extensions hint (Pierre, 2026-10-21), and late work brings it back (G6).
+     * Where an assessment goes in a marker's view. There is no Upcoming section (Pierre, 2026-10-21): work
+     * before its deadline isn't marking yet. Past the deadline with nothing of mine to mark, an assessment
+     * goes to Completed marking once my share is marked, with its Extensions hint while extensions run, and
+     * nowhere before that; late work brings it back to Marking in progress (G6).
      *
      * @param int $tomark My units ready and not marked.
      * @param int $mine My units in total.
      * @param int|null $due
      * @param int $now
-     * @param bool $pending Students whose marking is mine have extensions still to come.
      * @return string|null Section, or null when it isn't shown in the marking sections.
      */
-    public static function staff(int $tomark, int $mine, ?int $due, int $now, bool $pending = false): ?string {
+    public static function staff(int $tomark, int $mine, ?int $due, int $now): ?string {
         if ($tomark > 0) {
             return self::TOMARK;
         }
@@ -210,13 +208,7 @@ class classifier {
             // work may still arrive (EC2).
             return $mine > 0 ? self::COMPLETED : self::UNDATED;
         }
-        if ($pending && $mine === 0 && $due < $now) {
-            return self::STAFF_UPCOMING;
-        }
-        if ($mine > 0 && $due < $now) {
-            return self::COMPLETED;
-        }
-        return null;
+        return $mine > 0 && $due < $now ? self::COMPLETED : null;
     }
 
     /**

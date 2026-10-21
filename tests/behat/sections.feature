@@ -37,3 +37,15 @@ Feature: Each view has the sections its users work in
     When I log in as "marker1" and view the "My marking"
     Then "A1" should appear in the "Completed marking" section
     And "A1" should have an extensions hint
+
+  @javascript
+  Scenario: My marking has no Upcoming deadlines section, and keeps Undated
+    Given a summative "assign" "A1" in "M1" is due "in 5 days"
+    And a summative "assign" "A2" in "M1" with no due date exists
+    And a summative "assign" "A3" in "M1" was due "3 days ago"
+    And "student1" has submitted "A3"
+    And the My assessments index is up to date
+    When I log in as "marker1" and view the "My marking"
+    Then the sections should be in the order "Marking in progress, Undated, Completed marking"
+    And "A1" should not appear in the "Marking in progress" section
+    And "A2" should appear in the "Undated" section

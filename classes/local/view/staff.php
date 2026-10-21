@@ -399,30 +399,17 @@ class staff extends base {
     }
 
     /**
-     * Assessments in my staff courses whose deadline is ahead or unset (EC2), and those past it
-     * whose only work still to come is extensions (G9). Students who left are not counted (EC4).
+     * Assessments in my staff courses with no deadline (EC2), for Undated. Students who left are not counted (EC4).
      *
-     * @param int[] $later Cmids past their deadline that stay in Upcoming deadlines.
      * @return \stdClass[] Keyed by cmid.
      */
-    protected function upcoming(array $later): array {
+    protected function undated_cms(): array {
         global $DB;
         [$staff] = $this->courses();
-        if (!$staff && !$later) {
+        if (!$staff) {
             return [];
         }
-        $where = [];
-        $params = ['now' => $this->now];
-        if ($staff) {
-            [$insql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
-            $where[] = "(c.courseid $insql AND (c.due >= :now OR c.due IS NULL))";
-            $params += $staffparams;
-        }
-        if ($later) {
-            [$latersql, $laterparams] = $DB->get_in_or_equal($later, SQL_PARAMS_NAMED, 'lt');
-            $where[] = "c.cmid $latersql";
-            $params += $laterparams;
-        }
+        [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
         $records = $DB->get_records_sql("SELECT c.*,
                                             (SELECT COUNT(1) FROM {block_le_dashboard_stu} s
                                               WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1) AS students,
@@ -431,8 +418,7 @@ class staff extends base {
                                                     AND s.submitted = 1) AS submissions
                                        FROM {block_le_dashboard_cm} c
                                        " . base::LIVE . "
-                                      WHERE " . implode(' OR ', $where) . "
-                                   ORDER BY c.due ASC", $params);
+                                      WHERE c.courseid $insql AND c.due IS NULL", $params);
         return array_column(array_values($records), null, 'cmid');
     }
 
@@ -462,7 +448,7 @@ class staff extends base {
         $pending = $this->extensions();
         // Off means the query isn't run either (beta27 hints audit).
         $flagged = config::shown('hint_plagiarism') ? $this->flagged() : [];
-        $cmids = array_unique(array_merge(array_keys($bycm), array_keys($pending)));
+        $cmids = array_keys($bycm);
         $cms = [];
         if ($cmids) {
             [$insql, $params] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED);
@@ -471,8 +457,7 @@ class staff extends base {
         }
         $names = format::course_names(array_column($cms, 'courseid'));
 
-        $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::STAFF_UPCOMING => [],
-            classifier::UNDATED => []];
+        $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::UNDATED => []];
         $tomarkcounts = format::zero_counts();
         $windowcounts = [];
         foreach (self::WINDOWS as $days) {
@@ -489,19 +474,10 @@ class staff extends base {
                 $mine += (int)$s->mine;
                 $unallocated += (int)$s->unallocated;
             }
-            $section = classifier::staff(
-                $tomark,
-                $mine,
-                $cm->due === null ? null : (int)$cm->due,
-                $this->now,
-                isset($pending[$cmid])
-            );
+            $section = classifier::staff($tomark, $mine, $cm->due === null ? null : (int)$cm->due, $this->now);
             $otheryear = !isset($inyear[(int)$cm->courseid]);
-            // Upcoming and Undated rows come from upcoming(), for every assessment in my staff courses.
-            if (
-                !$section || in_array($section, [classifier::STAFF_UPCOMING, classifier::UNDATED])
-                    || ($otheryear && $section !== classifier::TOMARK)
-            ) {
+            // Undated rows come from undated_cms(), for every assessment in my staff courses.
+            if (!$section || $section === classifier::UNDATED || ($otheryear && $section !== classifier::TOMARK)) {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
@@ -580,34 +556,19 @@ class staff extends base {
         }
         unset($row);
 
-        // Upcoming leaves out what is already listed, and adds what is past its deadline with
-        // only extensions to come (G9).
+        // Undated leaves out what is already listed: My marking has no Upcoming section (Pierre, 2026-10-21).
         $listed = array_flip(array_merge(
             array_column($sections[classifier::TOMARK], 'cmid'),
             array_column($sections[classifier::COMPLETED], 'cmid')
         ));
-        $later = [];
-        foreach (array_keys($pending) as $cmid) {
-            if (
-                !isset($listed[$cmid]) && isset($cms[$cmid]) && (int)$cms[$cmid]->due < $this->now
-                    && isset($inyear[(int)$cms[$cmid]->courseid])
-            ) {
-                $later[] = $cmid;
-            }
-        }
-        $upcoming = $this->upcoming($later);
-        // Upcoming covers every assessment in the staff courses, not only those with marking rows (R1, beta22 audit).
-        $names += format::course_names(array_diff(array_unique(array_column($upcoming, 'courseid')), array_keys($names)));
-        foreach ($upcoming as $cmid => $cm) {
+        $undated = $this->undated_cms();
+        $names += format::course_names(array_diff(array_unique(array_column($undated, 'courseid')), array_keys($names)));
+        foreach ($undated as $cmid => $cm) {
             if (isset($listed[$cmid])) {
                 continue;
             }
             $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            $row['dates'] = $cm->due === null ? [] : [format::date('submissiondeadline', (int)$cm->due)];
-            // Held here past its deadline by extensions: say when the last one ends (D10).
-            if ((int)$cm->due < $this->now && isset($pending[$cmid])) {
-                $row['dates'][] = format::date('extendeddeadline', (int)$pending[$cmid]->latest);
-            }
+            $row['dates'] = [];
             // Generic types can't know about submissions (R5).
             $row['bars'] = $cm->adapter === 'generic' ? [] : [format::bar(
                 'submitted',
@@ -623,16 +584,12 @@ class staff extends base {
             if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
                 $row['hints'][] = $generic;
             }
-            if (isset($pending[$cmid]) && config::shown('hint_extensions')) {
-                $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
-            }
             if (!empty($flagged[$cmid])) {
                 $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
             }
             $row['actions'] = [format::view_action($row['url'])];
             $row = format::load_error($row, $cm, (int)$cm->students === 0);
-            $section = $cm->due === null ? classifier::UNDATED : classifier::STAFF_UPCOMING;
-            $sections[$section][] = $row + ['sortkey' => (int)$cm->due];
+            $sections[classifier::UNDATED][] = $row + ['sortkey' => 0];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
         foreach ($sections as &$rows) {
@@ -660,9 +617,8 @@ class staff extends base {
             $this->box('marked', $this->marked_counts(), $rangeoptions, $range),
         ];
         return $this->context($summary, array_filter([
-            // What needs action, then what is coming, then what has no date, then what is done.
+            // What needs action, then what has no date, then what is done.
             $this->section(classifier::TOMARK, $sections[classifier::TOMARK]),
-            $this->section(classifier::STAFF_UPCOMING, $sections[classifier::STAFF_UPCOMING]),
             $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::COMPLETED, $sections[classifier::COMPLETED]),
         ]), $oldest, ['hasyears' => true, 'years' => $this->years()]);
