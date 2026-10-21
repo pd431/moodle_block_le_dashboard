@@ -206,6 +206,24 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The labels of a row's dates, in the order the row shows them.
+     *
+     * @Then /^the dates of "(?P<name>[^"]*)" should be "(?P<labels>[^"]*)" in that order$/
+     * @param string $name
+     * @param string $labels Comma-separated date labels.
+     */
+    public function the_dates_should_be(string $name, string $labels): void {
+        $actual = array_map(
+            fn($e) => trim($e->getText()),
+            $this->row($name)->findAll('css', '.ma-row-dates [data-date] .ma-row-date-label')
+        );
+        $expected = array_map('trim', explode(',', $labels));
+        if ($actual !== $expected) {
+            throw new ExpectationException("'$name' shows its dates as \"" . implode(', ', $actual) . '"', $this->getSession());
+        }
+    }
+
+    /**
      * A row's progress bar.
      *
      * @param string $name

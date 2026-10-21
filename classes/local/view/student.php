@@ -347,8 +347,8 @@ class student extends base {
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
-            // First, under the Feedback released pill, so it never reads as the student's own deadline (D6).
-            array_unshift($dates, format::date('released', (int)$r->timereleased));
+            // After the deadline, in the order things happen: its label says what it is (Pierre, 2026-10-20, replacing D6).
+            $dates[] = format::date('released', (int)$r->timereleased);
             if ($r->gradedisplay !== null && $r->gradedisplay !== '') {
                 $row['grade'] = ['text' => $r->gradedisplay];
             }
