@@ -90,8 +90,10 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
   # D4: released means the agreed or final grade has been published to the student.
 
   # beta1 review M7: no "Marked 0 of 0" before anything is submitted.
+  # A1 stays In progress for an extension: with nothing to come it would go to Past at once (beta28).
   Scenario: Marking bars appear only once something is submitted
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
+    And "student2" has an extension on "A1" to "tomorrow"
     And a summative "assign" "A2" in "M1" was due "3 days ago"
     And "student1" has submitted "A2"
     When I log in as "convenor" and view the "Convenor view"

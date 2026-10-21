@@ -106,9 +106,7 @@ class convenor extends base {
         $students = $DB->get_records_sql("SELECT s.cmid,
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
-                                                          THEN 1 ELSE 0 END) AS submitted,
-                                                 SUM(CASE WHEN s.cutoff IS NULL THEN 1 ELSE 0 END) AS uncut,
-                                                 MAX(s.cutoff) AS lastcutoff
+                                                          THEN 1 ELSE 0 END) AS submitted
                                             FROM {block_le_dashboard_stu} s
                                             JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            WHERE c.courseid $insql
@@ -178,7 +176,6 @@ class convenor extends base {
         $pending = staff::pending_extensions("c.courseid $insql", $params, $this->now);
 
         $names = format::course_names(array_column($cms, 'courseid'));
-        $threshold = config::overdue_threshold_days();
         $oldest = null;
         $active = [];
         foreach ($cms as $cmid => $cm) {
@@ -228,18 +225,11 @@ class convenor extends base {
                 // purpose, so the assessment can go to Past (Pierre, 2026-10-07).
                 $outstanding += $released > 0 ? 0 : $units;
             }
-            // Nothing more can be handed in: a generic type, or every student's cut-off has passed (F3).
-            $closed = $cm->adapter === 'generic'
-                || ($s && (int)$s->uncut === 0 && $s->lastcutoff !== null && (int)$s->lastcutoff < $this->now);
-
             $section = classifier::convenor(
                 $cm->due === null ? null : (int)$cm->due,
                 $this->now,
                 $units,
-                $outstanding + (int)($pending[$cmid]->students ?? 0),
-                $threshold,
-                (int)($s->total ?? 0),
-                $closed
+                $outstanding + (int)($pending[$cmid]->students ?? 0)
             );
             $otheryear = !isset($inyear[(int)$cm->courseid]);
             // Only with marking or release actually outstanding: that is the work needing action.

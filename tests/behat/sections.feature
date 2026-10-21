@@ -70,3 +70,15 @@ Feature: Each view has the sections its users work in
     Then "A1" should not appear in the "Completed marking" section
     When I log in as "marker2" and view the "My marking"
     Then "A1" should appear in the "Completed marking" section
+
+  # ---------- Convenor view ----------
+
+  Scenario: An assessment with no submissions goes to Past at its deadline, and back if late work arrives
+    Given a summative "assign" "A1" in "M1" was due "2 days ago"
+    And the My assessments index is up to date
+    When I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "Past" section
+    When "student1" has submitted "A1"
+    And the My assessments index is up to date
+    And I log in as "convenor" and view the "Convenor view"
+    Then "A1" should appear in the "In progress" section

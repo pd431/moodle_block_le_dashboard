@@ -163,22 +163,16 @@ final class classifier_test extends \basic_testcase {
      * Convenor sections.
      */
     public function test_convenor(): void {
-        $this->assertSame(c::STAFF_UPCOMING, c::convenor(self::NOW + DAYSECS, self::NOW, 5, 5, 90));
-        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 5, 1, 90));
-        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - DAYSECS, self::NOW, 5, 0, 90));
-        // Nothing submitted yet: still in progress for the threshold, then past.
-        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90));
-        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - 91 * DAYSECS, self::NOW, 0, 0, 90));
-        // EC4: with every student gone, nothing more can arrive.
-        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90, 0));
-        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90, 2));
-        // EC2: no deadline is Undated unless something is outstanding.
-        $this->assertSame(c::UNDATED, c::convenor(null, self::NOW, 0, 0, 90, 2));
-        $this->assertSame(c::CONVENOR_PAST, c::convenor(null, self::NOW, 2, 0, 90, 2), 'finished work goes to Past');
-        $this->assertSame(c::INPROGRESS, c::convenor(null, self::NOW, 2, 1, 90, 2));
-        // F3: once nothing more can be handed in, nothing submitted and nothing outstanding is Past.
-        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0, 90, 2, true));
-        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 1, 90, 2, true));
+        $this->assertSame(c::STAFF_UPCOMING, c::convenor(self::NOW + DAYSECS, self::NOW, 5, 5));
+        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 5, 1));
+        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - DAYSECS, self::NOW, 5, 0));
+        // Nothing submitted: Past at the deadline (Pierre, 2026-10-21); late work makes it outstanding again.
+        $this->assertSame(c::CONVENOR_PAST, c::convenor(self::NOW - DAYSECS, self::NOW, 0, 0));
+        $this->assertSame(c::INPROGRESS, c::convenor(self::NOW - DAYSECS, self::NOW, 1, 1));
+        // EC2: no deadline.
+        $this->assertSame(c::UNDATED, c::convenor(null, self::NOW, 0, 0));
+        $this->assertSame(c::CONVENOR_PAST, c::convenor(null, self::NOW, 2, 0), 'finished work goes to Past');
+        $this->assertSame(c::INPROGRESS, c::convenor(null, self::NOW, 2, 1));
     }
 
     /**

@@ -213,26 +213,16 @@ class classifier {
     }
 
     /**
-     * Where an assessment goes in the convenor view.
+     * Where an assessment goes in the convenor view. Past its deadline with nothing to mark or release, it goes to
+     * Past at once, and late work brings it back to In progress (Pierre, 2026-10-21).
      *
      * @param int|null $due
      * @param int $now
      * @param int $submitted Submitted units.
-     * @param int $outstanding Ready units not marked at some stage, plus marked units not released.
-     * @param int $thresholddays Days after the deadline an assessment with no submissions stays in progress.
-     * @param int|null $students Students who can take it now, if known: with none left, nothing more can arrive (EC4).
-     * @param bool $closed Nothing more can be handed in: a generic type, or every cut-off has passed (F3).
+     * @param int $outstanding Ready units not marked at some stage, marked units not released, and extensions to come.
      * @return string
      */
-    public static function convenor(
-        ?int $due,
-        int $now,
-        int $submitted,
-        int $outstanding,
-        int $thresholddays,
-        ?int $students = null,
-        bool $closed = false
-    ): string {
+    public static function convenor(?int $due, int $now, int $submitted, int $outstanding): string {
         if ($due !== null && $due >= $now) {
             return self::STAFF_UPCOMING;
         }
@@ -242,9 +232,6 @@ class classifier {
         if ($due === null) {
             // Finished work goes to Past whatever its date (Pierre, 2026-10-04).
             return $submitted > 0 ? self::CONVENOR_PAST : self::UNDATED;
-        }
-        if ($submitted === 0 && $students !== 0 && !$closed && $due >= $now - $thresholddays * DAYSECS) {
-            return self::INPROGRESS;
         }
         return self::CONVENOR_PAST;
     }
