@@ -1,4 +1,4 @@
-# My assessments (block_le_dashboard) 5.0.0-beta10
+# My assessments (block_le_dashboard) 5.0.0-beta29
 
 A dashboard block for Moodle 4.5 and 5.2. It shows students their assessments, markers their marking and
 module convenors the marking across their modules. This version is the plugin-agnostic remake: it
@@ -13,7 +13,8 @@ works without mod_coursework and reads each activity type through its own adapte
 - No other plugins are required. Assignment and Quiz have full support. Peer work and Coursework
   get full support when they are installed. Any other activity type with grade items can be
   switched on to show its due date and grade.
-- Cron must run. Indexing happens in ad hoc tasks and a nightly reconcile.
+- Cron must run. Indexing happens in ad hoc tasks and an hourly index task, which does its full check of
+  live courses between 02:00 and 06:00.
 
 ## Install
 
@@ -35,9 +36,15 @@ dashboard says it is being prepared.
   assessment (`_stu`) and marking units per stage (`_mark`). Each type's adapter fills them through
   that plugin's own rules (`classes/local/adapter/`).
 - The index is updated by events, by the Refresh button (inline for small scopes, queued for large
-  ones) and by a nightly reconcile that catches anything events missed. Refresh also looks for
-  tagged activities in the viewer's courses that the index doesn't have yet. One re-index of an
-  activity runs at a time (a lock per activity), and one failing activity doesn't stop the others.
+  ones) and by the hourly index task: it carries on an unfinished first fill at any hour, and between
+  02:00 and 06:00 re-indexes live courses, which catches anything events missed. Each run stops at a
+  time limit and the next carries on where it stopped. Refresh also looks for tagged activities in the
+  viewer's courses that the index doesn't have yet. One re-index of an activity runs at a time (a lock
+  per activity), and one failing activity doesn't stop the others.
+- `classes/local/index/indexer.php` is the entry point: `enrolment` says who is in a course, `writer`
+  fills an activity's rows from its adapter, `queue` holds the background re-indexes. The marking rules
+  the staff and convenor views share are in `classes/local/view/marking_rules.php`, each in an SQL and a
+  PHP form that a test keeps in step; `staff_row` builds the rows of both views.
 - Indexing failures are printed in the task log and shown, one per activity type with a count, in
   Activity types.
 - Sections are worked out on page load from the stored dates and the time, so an assessment becomes
@@ -52,19 +59,37 @@ dashboard says it is being prepared.
 
 Write a class in `classes/local/adapter/` that extends `base`, add it to `registry::OWN`, list the
 plugin's events in its `events()` and add them to `db/events.php`. Give it a Font Awesome icon in
-`format::ICONS` (`classes/local/output/format.php`); without one it gets the fallback icon. `tests/events_test.php` fails if
-an adapter's events are not observed.
+`format::ICONS` (`classes/local/output/format.php`); without one it gets the fallback icon.
+`tests/events_test.php` fails if an adapter's events are not observed.
+
+Everything the dashboard knows about a type comes from its adapter; no other code may name the type
+(`tests/adapter_contract_test.php` checks). Besides the rows, an adapter says:
+
+- `events_for_related_user()`: events about the student they name (a teacher's lock), whose rows are
+  updated at once.
+- `brief_areas()`: the file areas a brief can sit in, besides the intro.
+- `takes_submissions()`: whether students hand work in online (`null` asks the activity).
+- `takes_selfcert()`, `selfcert_subject()`, `selfcert_used()`: self-certified extensions through
+  block_rhb, for types that take them (coursework).
+
+`DECISIONS.md` says what the finding codes in comments (`EC4`, `G9`, `PR2`...) stand for.
 
 ## Styling
 
 Edit `scss/styles.scss`, then compile it to `styles.css` with Dart Sass. The palette and tones are
 custom properties at the top of the file. Which state gets which colour is one map,
 `$ma-state-tones`; PHP and templates only emit state names. Do not edit `styles.css` by hand.
-`stylelint` with the rules in the rc6 handover (no duplicate selectors) passes on the compiled CSS.
+`moodle-plugin-ci grunt` runs Moodle's own stylelint rules (no duplicate selectors, no invalid or
+vendor-prefixed properties, Moodle's ordering and formatting) on the compiled CSS, with no warnings
+allowed.
 
 ## Tests
 
-- PHPUnit: `vendor/bin/phpunit --filter block_le_dashboard`.
+- PHPUnit: `vendor/bin/phpunit --testsuite block_le_dashboard_testsuite`. `tests/golden_master_test.php`
+  compares every view's export for a sample course at a fixed time with `tests/fixtures/golden_master.json`;
+  a change that means to alter what a view shows rewrites it with `GOLDEN_MASTER_WRITE=1`.
+- The test seams (fault points, the Behat clock, the block_rhb stand-in) are all in
+  `classes/local/testing.php`; outside a test run they do nothing.
 - CI: `.github/workflows/ci.yml` runs moodle-plugin-ci on Moodle 4.5 and 5.2 with PostgreSQL and
   MariaDB.
 - Behat: `--tags @block_le_dashboard`. Scenarios that need mod_coursework skip on sites without
