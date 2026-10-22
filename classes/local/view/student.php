@@ -36,7 +36,7 @@ use block_le_dashboard\local\scope;
 class student extends base {
     /**
      * Overlay state => icon, for the unusual case only: nothing marks work handed in on time
-     * (Pierre, 2026-10-04). Late is a clock, so due soon is an hourglass. Tones come from the
+     *. Late is a clock, so due soon is an hourglass. Tones come from the
      * state map in scss/styles.scss.
      */
     const OVERLAY_ICONS = [
@@ -48,7 +48,7 @@ class student extends base {
         student_row::MITIGATION_EXTENSION => 'fa-calendar-plus',
     ];
 
-    /** Assessment types offered Mitigate: summative only (D8, Pierre 2026-10-04). */
+    /** Assessment types offered Mitigate: summative only (D8). */
     const MITIGATION_TYPES = ['summative'];
 
     /** @var array|null Self-certified extensions used and allowed, once loaded. */
@@ -151,7 +151,7 @@ class student extends base {
             [$section, $status] = classifier::student($r, $this->now, $threshold, $grace);
             $row = $this->row($r, $section, $status);
             $hasgrades = $hasgrades || !empty($row['grade']);
-            // Undated work in Past sorts by when feedback was given (Pierre, 2026-10-04).
+            // Undated work in Past sorts by when feedback was given.
             $sortkey = $r->due === null && $section === classifier::PAST ? (int)$r->timereleased : (int)$r->due;
             $sections[$section][] = $row + ['sortkey' => $sortkey];
             if (isset($counts[$section])) {
@@ -180,7 +180,7 @@ class student extends base {
                 $box = $this->box('selfcert', ['both' => $selfcert['used']] + format::zero_counts());
                 $box['subnote'] = get_string('selfcertnolimit', 'block_le_dashboard');
             } else {
-                // Counting down, as the Mitigate menu does (Pierre, 2026-10-09).
+                // Counting down, as the Mitigate menu does.
                 $left = max(0, $selfcert['max'] - $selfcert['used']);
                 $box = $this->box(
                     'selfcert',
@@ -198,7 +198,7 @@ class student extends base {
         }
 
         // A student's Refresh rewrites only their own rows and leaves each assessment's index time alone,
-        // so the line also counts this view's last Refresh that finished (Pierre's screenshot, 2026-10-09).
+        // so the line also counts this view's last Refresh that finished (Pierre's screenshot).
         if ($oldest !== null) {
             $last = json_decode((string)get_user_preferences('block_le_dashboard_lastrefresh', '', $this->userid), true);
             $oldest = max($oldest, is_array($last) ? (int)($last[scope::STUDENT] ?? 0) : 0);
@@ -257,7 +257,7 @@ class student extends base {
     /**
      * Whether the activity hasn't opened for submissions yet (quiz open, assignment "allow submissions from",
      * coursework start, peer work from): the student can't hand anything in, so it isn't due soon and has no
-     * Submit (Pierre's UAT, 2026-10-19).
+     * Submit (Pierre's UAT).
      *
      * @param \stdClass $r
      * @return bool
@@ -293,7 +293,7 @@ class student extends base {
         $notes = [];
         $due = $r->due ? (int)$r->due : null;
         // Time left: to the cut-off (a quiz's close is its cut-off). Without one Moodle keeps taking the work, so
-        // there's no countdown (B9, support map beta22 re-run).
+        // there's no countdown (B9).
         $until = $r->cutoff ? (int)$r->cutoff : null;
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
             $notes[] = format::countdown('stillsubmit', $until, $this->now);
@@ -332,22 +332,22 @@ class student extends base {
         [$row['overlay'], $row['mitigationoverlay'], $parts] = $this->modifiers($r, $section, $status);
         $row['hasmodifiers'] = $row['overlay'] || $row['mitigationoverlay'];
         $row['tip'] = format::tip($row['modlabel'], $parts);
-        // Nothing to hand in online: say so while the date is ahead (Pierre, 2026-10-06).
+        // Nothing to hand in online: say so while the date is ahead.
         $row['hints'] = !empty($r->nosubmission) && $section !== classifier::PAST && config::shown('hint_nosubmission')
             ? [format::nosubmission_hint($row['id'], false)] : [];
 
         $dates = [];
         if ($this->not_yet_open($r)) {
-            // Said first, so the row reads "Opens ..., Due ..." (Pierre's UAT, 2026-10-19).
+            // Said first, so the row reads "Opens ..., Due ..." (Pierre's UAT).
             $dates[] = format::date('opens', (int)$r->opens);
         }
         if ($r->due) {
-            // An extension is ordinary upcoming work: no note (Pierre, 2026-10-06).
+            // An extension is ordinary upcoming work: no note.
             $dates[] = format::date('due', (int)$r->due);
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
-            // After the deadline, in the order things happen: its label says what it is (Pierre, 2026-10-20, replacing D6).
+            // After the deadline, in the order things happen: its label says what it is (replacing D6).
             $dates[] = format::date('released', (int)$r->timereleased);
             if ($r->gradedisplay !== null && $r->gradedisplay !== '') {
                 $row['grade'] = ['text' => $r->gradedisplay];
@@ -362,7 +362,7 @@ class student extends base {
             $dates[] = $date;
         }
         $row['dates'] = $dates;
-        // With two dates or more, every label on its own line so the dates line up (Pierre, 2026-10-20).
+        // With two dates or more, every label on its own line so the dates line up.
         $row['stackdates'] = count($dates) > 1;
         $row['notes'] = $this->notes($r, $section, $status);
         // Late work: the clock beside the grade once there is one, else beside the status pill.
@@ -378,11 +378,11 @@ class student extends base {
         $actions = [];
         $open = [classifier::STATUS_PENDING, classifier::STATUS_NOTSUBMITTED, classifier::STATUS_REOPENED];
         if ($status === classifier::STATUS_SUBMITTED && $section !== classifier::PAST && $r->lockreason) {
-            // Final before the deadline: say why instead of offering Submit (Pierre, 2026-10-09).
+            // Final before the deadline: say why instead of offering Submit.
             $row['locked'] = $this->lock_control($row['id'], $r->lockreason);
         } else if ($section !== classifier::PAST && !classifier::submittable($r, $this->now)) {
             // Nothing can be handed in before the deadline: a teacher's lock (B1), or every quiz attempt used with
-            // none finished (Pierre, 2026-10-21).
+            // none finished.
             if ($r->lockreason) {
                 $row['locked'] = $this->lock_control($row['id'], $r->lockreason, false);
             } else {
@@ -431,7 +431,7 @@ class student extends base {
     }
 
     /**
-     * Mitigate (Pierre, 2026-10-09): on every summative row (D8) where block_rhb gives a real link
+     * Mitigate: on every summative row (D8) where block_rhb gives a real link
      * (mitigation::links()), from the start until the hours set after the student's own deadline, whatever
      * was handed in or released. Work with no deadline keeps it.
      *

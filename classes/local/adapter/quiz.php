@@ -29,7 +29,7 @@ use block_le_dashboard\local\index\student_row;
  * close, so it is also the cut-off. Attempt limits follow the same override
  * rules (no limit beats any number). Once a student has used every attempt and
  * none is still open, the cut-off is when the last one ended: the quiz can't be
- * attempted any more, so it goes to Past (Pierre, 2026-10-06: Upcoming and
+ * attempted any more, so it goes to Past (F2: Upcoming and
  * Overdue hold only work that can still be submitted).
  *
  * Release follows quiz_grade_item_update(): marks shown later while open
@@ -370,7 +370,7 @@ class quiz extends base {
                 continue;
             }
             $row = $rows[$userid];
-            // Shown in Upcoming as "Can't resubmit" once an attempt was finished (Pierre, 2026-10-09).
+            // Shown in Upcoming as "Can't resubmit" once an attempt was finished.
             $row->lockreason = student_row::LOCK_ATTEMPTS;
             // Closed from the moment the last attempt ended: a cut-off is inclusive, so one second before, or
             // the student's view in that same second still offers the quiz (MariaDB lane, beta18 and beta19).

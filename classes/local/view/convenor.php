@@ -76,10 +76,10 @@ class convenor extends base {
     public function export(): array {
         global $DB;
         $extra = ['hasyears' => true, 'years' => $this->years(),
-            // Compatible activities nobody tagged, in the selected year's courses (Pierre, 2026-10-06).
-            // Each line has an admin switch (Pierre, 2026-10-19); off skips its queries too.
+            // Compatible activities nobody tagged, in the selected year's courses.
+            // Each line has an admin switch; off skips its queries too.
             'untagged' => config::shown('showuntagged') ? untagged::hint($this->userid, $this->year(), $this->courses()) : null,
-            // Tagged activities missing a setting, or of a type no dashboard shows (Pierre, 2026-10-07).
+            // Tagged activities missing a setting, or of a type no dashboard shows.
             'setupchecks' => config::shown('showsetupchecks')
                 ? setupchecks::hint($this->userid, $this->year(), $this->courses()) : null];
         $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::UNDATED => [],
@@ -220,8 +220,8 @@ class convenor extends base {
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
-                // Release is outstanding until every marked unit is released (Pierre, 2026-10-21, reversing
-                // 2026-10-07): a partly released assessment stays In progress.
+                // Release is outstanding until every marked unit is released (reversing the earlier rule):
+                // a partly released assessment stays In progress.
                 $outstanding += $units - $released;
             }
             $section = classifier::convenor(
@@ -263,7 +263,7 @@ class convenor extends base {
                 foreach ($bystage as $stage => $r) {
                     $markerbars[] = format::bar($stage, format::stage($stage), (int)$r->marked, (int)$r->ready);
                 }
-                // Each name links to the marker's email (Pierre, 2026-10-09), where Moodle would show it to me.
+                // Each name links to the marker's email, where Moodle would show it to me.
                 $email = $person && config::shown('hint_markeremail') && $this->can_see_email($person, (int)$cm->courseid)
                     ? $person->email : null;
                 $row['markers'][] = ['name' => $name, 'bars' => $markerbars, 'mailto' => $email ? 'mailto:' . $email : null];
@@ -280,16 +280,16 @@ class convenor extends base {
                 $row['alert'] = get_string('unmarkedafterdeadline', 'block_le_dashboard', $late);
             }
             if ($section === classifier::CONVENOR_PAST) {
-                // Where it stands at a glance; the bars and markers behind Show marking (Pierre, 2026-10-07).
+                // Where it stands at a glance; the bars and markers behind Show marking.
                 $row['grading'] = format::grading($units, $released, (int)($unmarked[$cmid] ?? 0), !empty($cm->norelease));
                 $row = format::marking_detail($row, get_string('marking_all', 'block_le_dashboard'));
             }
-            // Upcoming by submission deadline, the rest by marking deadline, else deadline (Pierre, 2026-10-21).
+            // Upcoming by submission deadline, the rest by marking deadline, else deadline.
             $row['sortkey'] = $upcoming ? (int)$cm->due : (int)($markingdue ?? $cm->due);
             $sections[$section][] = $row;
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
-        // Soonest first while there's work, latest first once done, undated by name; ties by name (Pierre, 2026-10-21).
+        // Soonest first while there's work, latest first once done, undated by name; ties by name.
         foreach ($sections as $key => &$rows) {
             $order = $key === classifier::CONVENOR_PAST ? -1 : 1;
             usort($rows, fn($a, $b) => ($key === classifier::UNDATED ? 0 : $order * ($a['sortkey'] <=> $b['sortkey']))

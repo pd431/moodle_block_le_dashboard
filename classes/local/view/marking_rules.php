@@ -211,7 +211,7 @@ final class marking_rules {
     }
 
     /**
-     * Whether a unit of mine is my own workload (Completed marking holds only that, Pierre 2026-10-21): marked by
+     * Whether a unit of mine is my own workload (Completed marking holds only that): marked by
      * me, or still to mark where I am the marker it falls to. Marking a colleague did, or agreement others did,
      * isn't mine.
      *

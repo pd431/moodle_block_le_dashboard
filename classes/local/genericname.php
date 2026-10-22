@@ -19,7 +19,7 @@ namespace block_le_dashboard\local;
 use block_le_dashboard\local\output\format;
 
 /**
- * The generic name hint (Pierre, 2026-10-17): an assessment named only with generic words ("Essay 1",
+ * The generic name hint: an assessment named only with generic words ("Essay 1",
  * "CW2 - Summative", the module's own name) gets a hint for staff suggesting a descriptive name.
  *
  * A name is generic when every word in it is a listed term, a number, a roman numeral up to x, or a word of the

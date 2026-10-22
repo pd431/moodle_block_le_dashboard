@@ -280,7 +280,7 @@ class indexer {
 
     /**
      * The courses a reconcile goes through, in course id order so a pass can carry on where it stopped
-     * (pass, Pierre 2026-10-19). Rows of deleted activities and courses are removed on the way.
+     * (pass). Rows of deleted activities and courses are removed on the way.
      *
      * @param bool $all Every course, whatever the live window.
      * @return int[]

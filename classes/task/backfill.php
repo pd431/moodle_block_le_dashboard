@@ -46,7 +46,7 @@ class backfill extends \core\task\adhoc_task {
             self::mark_done();
         } else if ($result === pass::LIMIT && !self::waiting((int)$this->get_id())) {
             // Let other background tasks run, then carry on. The hourly task carries on too, where ad hoc
-            // tasks don't run (Pierre, 2026-10-19).
+            // tasks don't run.
             \core\task\manager::queue_adhoc_task(new self());
         }
         // Locked or restarted: the run holding the lock, a queued fill or the hourly task carries on.
@@ -111,7 +111,7 @@ class backfill extends \core\task\adhoc_task {
 
     /**
      * Empties the index and fills it again in this process, with no time limit: cli/rebuild.php. It takes the
-     * queued fill's place, so it works where ad hoc tasks don't run (Pierre, 2026-10-19). A run in progress
+     * queued fill's place, so it works where ad hoc tasks don't run. A run in progress
      * stops after the course it is on, and this one waits up to 15 minutes for its lock.
      *
      * @param callable|null $trace Receives progress lines.

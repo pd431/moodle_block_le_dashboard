@@ -52,11 +52,11 @@ class mitigation {
 
     /** Menu item kinds; each is also the mitigate_<kind> label. */
     const KIND_SELFCERT = 'selfcert';
-    /** The request form: formal mitigation (Pierre, 2026-10-09). */
+    /** The request form: formal mitigation. */
     const KIND_REQUEST = 'request';
 
     /**
-     * The Mitigate menu of one row (option A of the Mitigate options, Pierre 2026-10-09): block_rhb's links
+     * The Mitigate menu of one row (option A of the Mitigate options): block_rhb's links
      * under our labels, and where the type takes self-certified extensions (adapter::takes_selfcert(), coursework)
      * "Self-certify an extension" with how many are left, or a line saying why it can't be used.
      *
@@ -117,7 +117,7 @@ class mitigation {
      * - Self-certification (coursework only): a link is live, with "N of M left" when the block's count has some
      *   left; block_rhb decides, so a link stays live whatever the count says. A delete link means it was used
      *   here: a line says so and "Delete mitigation" follows it. No link: a line with the reason, and no item
-     *   (Pierre, 2026-10-22: no greyed item).
+     *   (no greyed item).
      * - Formal mitigation: block_rhb's request form link, after a divider when self-certification is listed.
      * There is no menu without at least one live link.
      *
@@ -159,7 +159,7 @@ class mitigation {
             }
             $items[] = $item;
             if ($delete) {
-                // Its own red item with a bin, confirmed by a second click in place (Pierre, 2026-10-09).
+                // Its own red item with a bin, confirmed by a second click in place.
                 $item = self::item('delete', $selfcert);
                 $items[] = isset($item['url']) ? ['delete' => true, 'live' => false] + $item
                     : ['html' => self::delete_label($selfcert)];

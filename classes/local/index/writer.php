@@ -113,7 +113,7 @@ class writer {
             }
             // A first index lists the assessment before reading any student, marked as not loaded, so a
             // failure, or a process that dies part way (memory, time limit), leaves it listed for staff
-            // with an honest note rather than missing (Pierre, 2026-10-08).
+            // with an honest note rather than missing.
             if (!$DB->record_exists(indexer::CM, ['cmid' => $cmid])) {
                 $DB->insert_record(indexer::CM, $this->cm_record($cm, $adapter, $courseid, $types[$cmid], $cmrow, true));
             }
@@ -193,7 +193,7 @@ class writer {
         [$groupdues, $shutout] = $this->group_dues($markrows, $dues, $cmrow->due, $students);
         // Work of a student an access restriction now shuts out (moved to an extension copy) no longer
         // counts here; a group's counts while any member can access it. Nothing in the activity changes,
-        // so lifting the restriction brings it back at the next index (Pierre, 2026-10-09).
+        // so lifting the restriction brings it back at the next index.
         $isout = fn($unit) => $unit->unittype === marking_row::UNIT_GROUP ? isset($shutout[$unit->unitid])
             : array_key_exists($unit->unitid, $students) && !$students[$unit->unitid];
         foreach (array_keys($markrows) as $i) {
@@ -424,7 +424,7 @@ class writer {
     /**
      * Where students hand nothing in online, there is no submission state to show. A lock counts only on
      * work handed in and not reopened: the row then stays in Upcoming until the deadline with a "Can't
-     * resubmit" control (Pierre, 2026-10-09, reversing the 2026-10-06 rule that moved it to Past at once).
+     * resubmit" control (reversing the earlier rule that moved it to Past at once).
      *
      * @param cm_row $cmrow
      * @param student_row[] $rows Changed in place.
@@ -481,7 +481,7 @@ class writer {
     }
 
     /**
-     * Settings a tagged assessment is missing, for the staff "Check settings" flag (Pierre, 2026-10-07).
+     * Settings a tagged assessment is missing, for the staff "Check settings" flag.
      * The grade checks are for summative work only: formative quizzes often hide marks on purpose.
      *
      * @param \cm_info $cm

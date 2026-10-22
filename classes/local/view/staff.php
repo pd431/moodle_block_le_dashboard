@@ -97,7 +97,7 @@ class staff extends base {
         $shared = $staff ? $this->shared_marking($staff) : [];
         $params += ['me2' => $this->userid, 'me3' => $this->userid];
         // In modules I convene, work without allocation that no one marked by hand (an auto-marked quiz) is mine too;
-        // a colleague's marking isn't (Pierre, 2026-10-22).
+        // a colleague's marking isn't.
         $automarked = '';
         if ($convenor) {
             [$autosql, $autoparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'am');
@@ -300,7 +300,7 @@ class staff extends base {
                 $own += (int)$s->own;
                 $unallocated += (int)$s->unallocated;
             }
-            // Completed marking holds only my own workload: work allocated to me, or that I marked (Pierre, 2026-10-21).
+            // Completed marking holds only my own workload: work allocated to me, or that I marked.
             $section = classifier::staff($tomark, $own, $cm->due === null ? null : (int)$cm->due, $this->now);
             $otheryear = !isset($inyear[(int)$cm->courseid]);
             // Undated rows come from undated_cms(), for every assessment in my staff courses.
@@ -330,7 +330,7 @@ class staff extends base {
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
 
-        // Finished marking: where the whole assessment stands, with my bars behind Show marking (Pierre, 2026-10-07).
+        // Finished marking: where the whole assessment stands, with my bars behind Show marking.
         $grading = self::grading_counts(array_column($sections[classifier::COMPLETED], 'cmid'), $this->now);
         foreach ($sections[classifier::COMPLETED] as &$row) {
             $g = $grading[$row['cmid']] ?? null;
@@ -344,7 +344,7 @@ class staff extends base {
         }
         unset($row);
 
-        // Undated leaves out what is already listed: My marking has no Upcoming section (Pierre, 2026-10-21).
+        // Undated leaves out what is already listed: My marking has no Upcoming section.
         $listed = array_flip(array_merge(
             array_column($sections[classifier::TOMARK], 'cmid'),
             array_column($sections[classifier::COMPLETED], 'cmid')
@@ -370,7 +370,7 @@ class staff extends base {
             $sections[classifier::UNDATED][] = $row + ['sortkey' => 0];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
-        // Soonest first while there's marking to do, latest first once done, undated by name (Pierre, 2026-10-21).
+        // Soonest first while there's marking to do, latest first once done, undated by name.
         foreach ($sections as $key => &$rows) {
             $order = $key === classifier::COMPLETED ? -1 : 1;
             usort($rows, fn($a, $b) => $order * ($a['sortkey'] <=> $b['sortkey']) ?: strcmp($a['search'], $b['search']));

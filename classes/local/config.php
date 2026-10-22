@@ -38,7 +38,7 @@ class config {
 
     /**
      * The optional hints' on/off settings, in the order the Hints and guidance page lists them, each with its default
-     * on a new site and its guidance boxes (beta27 hints audit, Pierre, 2026-10-19). An upgrade turns
+     * on a new site and its guidance boxes (beta27 hints audit). An upgrade turns
      * each one on, so a site sees no change until an admin changes it.
      */
     const HINTS = [
@@ -63,7 +63,7 @@ class config {
     const FEEDBACK_MODES = ['asset', 'delayed', 'none'];
 
     /**
-     * The Feedback expected date a student sees (Pierre, 2026-10-19: "Site admin can choose whether to expose
+     * The Feedback expected date a student sees (Pierre: "Site admin can choose whether to expose
      * internal marking deadlines to students as is, with a specified delay, or not at all"): the marking deadline,
      * the assessment's own or the default marking period after the student's own deadline, as set, plus the delay,
      * or none. A new site shows none; an upgrade keeps "as set".
@@ -126,7 +126,7 @@ class config {
 
     /**
      * An assessment's marking deadline: its own, or else its deadline plus the default marking period, whether its
-     * type has no such setting (quiz, peer work) or it was left empty (Pierre, 2026-10-19). None without a deadline,
+     * type has no such setting (quiz, peer work) or it was left empty. None without a deadline,
      * or with the period set to 0.
      *
      * @param \stdClass $cm Index record (markingdue, due).

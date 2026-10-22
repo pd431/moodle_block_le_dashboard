@@ -18,7 +18,7 @@ namespace block_le_dashboard\local;
 
 /**
  * The guidance and support text popovers show under their factual line, edited as rich text in the
- * "Guidance and support" settings (Pierre, 2026-10-09).
+ * "Guidance and support" settings.
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard

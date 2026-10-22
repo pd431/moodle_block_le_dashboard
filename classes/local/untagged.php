@@ -19,7 +19,7 @@ namespace block_le_dashboard\local;
 use block_le_dashboard\local\adapter\registry;
 
 /**
- * Compatible activities nobody has tagged, for the module convenor's hint (Pierre, 2026-10-06).
+ * Compatible activities nobody has tagged, for the module convenor's hint.
  *
  * Compatible: an activity type ticked in Activity types, with a grade item, not tagged summative
  * or formative, and not being deleted. Untagged activities aren't in the index, so this reads
@@ -160,7 +160,7 @@ class untagged {
             $total += count($activities);
             $context = \context_course::instance($courseid);
             $courses[] = [
-                // The course name links to the course (Pierre, 2026-10-09); the rest of the heading opens the list.
+                // The course name links to the course; the rest of the heading opens the list.
                 'course' => format_string($modinfo->get_course()->fullname, true, ['context' => $context, 'escape' => false]),
                 'courseurl' => (new \moodle_url('/course/view.php', ['id' => $courseid]))->out(false),
                 'count' => count($activities),
