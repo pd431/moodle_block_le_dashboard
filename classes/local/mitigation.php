@@ -60,8 +60,8 @@ class mitigation {
 
     /**
      * The Mitigate menu of one row (option A of the Mitigate options, Pierre 2026-10-09): block_rhb's links
-     * under our labels, and for coursework "Self-certify an extension" always listed, with how many are left
-     * or, greyed, why it can't be used. Only coursework takes self-certified extensions.
+     * under our labels, and for coursework "Self-certify an extension" with how many are left, or a line saying
+     * why it can't be used. Only coursework takes self-certified extensions.
      *
      * @param string $modname
      * @param int $instanceid
@@ -120,8 +120,9 @@ class mitigation {
      * Builds the Mitigate menu from block_rhb's answers.
      * - Self-certification (coursework only): a link is live, with "N of M left" when the block's count has some
      *   left; block_rhb decides, so a link stays live whatever the count says. A delete link means it was used
-     *   here: the item is greyed and "Delete mitigation" follows it. No link: greyed, with the reason.
-     * - Formal mitigation: block_rhb's request form link.
+     *   here: a line says so and "Delete mitigation" follows it. No link: a line with the reason, and no item
+     *   (Pierre, 2026-10-22: no greyed item).
+     * - Formal mitigation: block_rhb's request form link, after a divider when self-certification is listed.
      * There is no menu without at least one live link.
      *
      * @param bool $takesselfcert Whether the activity takes self-certified extensions (coursework).
@@ -129,8 +130,8 @@ class mitigation {
      * @param string $srm block_rhb's request form HTML.
      * @param array|null $count used and max (max null: no limit), or null when unknown.
      * @param int|null $here The new deadline when the student self-certified on this one.
-     * @return array|null items (each url and label, delete too for Delete mitigation, html, or greyed with a reason),
-     *     or null for no Mitigate
+     * @return array|null items (each url and label, delete too for Delete mitigation, html, info with a reason,
+     *     or divider), or null for no Mitigate
      */
     public static function menu(bool $takesselfcert, string $selfcert, string $srm, ?array $count, ?int $here): ?array {
         $request = self::item(self::KIND_REQUEST, $srm);
@@ -158,13 +159,7 @@ class mitigation {
                         $reason .= ' ' . get_string('mitigate_stillrequest', 'block_le_dashboard');
                     }
                 }
-                $item = [
-                    'greyed' => true,
-                    'live' => false,
-                    'label' => get_string('mitigate_' . self::KIND_SELFCERT, 'block_le_dashboard'),
-                    'reason' => $reason,
-                    'reasondated' => $dated,
-                ];
+                $item = ['info' => true, 'live' => false, 'reason' => $reason, 'reasondated' => $dated];
             }
             $items[] = $item;
             if ($delete) {
@@ -176,7 +171,20 @@ class mitigation {
             }
         }
         if ($request) {
+            if ($items) {
+                $items[] = ['divider' => true, 'live' => false];
+            }
             $items[] = $request;
+        }
+        // The keyboard skips the line, so the first link after it reads it out.
+        $info = array_key_first(array_filter($items, fn($item) => !empty($item['info'])));
+        if ($info !== null) {
+            foreach (array_slice($items, $info + 1, null, true) as $i => $item) {
+                if (isset($item['url'])) {
+                    $items[$i]['describedby'] = true;
+                    break;
+                }
+            }
         }
         return $live ? ['items' => $items] : null;
     }

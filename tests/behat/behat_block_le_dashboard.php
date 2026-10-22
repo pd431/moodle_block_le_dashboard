@@ -4841,8 +4841,8 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * The items of a row's Mitigate menu, in order: live (a link), greyed (with its reason starting with the
-     * note) or html (block_rhb's own), with a live item's count as its note.
+     * The items of a row's Mitigate menu, in order: live (a link, with its count as the note), info (a line
+     * starting with the item text, which the next link reads out), html (block_rhb's own) or divider ("---").
      *
      * @Then /^the Mitigate menu of "(?P<name>[^"]*)" should list:$/
      * @param string $name
@@ -4850,12 +4850,13 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_mitigate_menu_should_list(string $name, TableNode $table): void {
         $menu = $this->mitigate_menu($name);
-        $items = $menu->findAll('css', '.ma-mitigate-item');
+        $items = $menu->findAll('css', '.ma-mitigate-item, .ma-mitigate-divider');
         $rows = $table->getHash();
         if (count($items) !== count($rows)) {
             throw new ExpectationException("The Mitigate menu of '$name' has " . count($items) . ' items: ' .
                 $menu->getText(), $this->getSession());
         }
+        $info = null;
         foreach ($rows as $i => $row) {
             $item = $items[$i];
             $note = trim($row['note']);
@@ -4864,13 +4865,19 @@ class behat_block_le_dashboard extends behat_base {
             if ($left) {
                 $label = trim(substr($label, 0, -strlen(trim($left->getText()))));
             }
-            if ($row['state'] === 'greyed') {
-                $reason = $menu->find('css', '#' . $item->getAttribute('aria-describedby'));
-                $ok = $item->getAttribute('aria-disabled') === 'true' && $label === $row['item']
-                    && $reason && str_starts_with(trim($reason->getText()), $note);
+            if ($row['state'] === 'divider') {
+                $ok = $item->hasClass('dropdown-divider') && $row['item'] === '---';
+            } else if ($row['state'] === 'info') {
+                $ok = $item->hasClass('ma-mitigate-note') && str_starts_with($label, $row['item'])
+                    && !$item->find('css', 'a, button');
+                $info = $item->getAttribute('id');
             } else {
                 $ok = $item->getAttribute('aria-disabled') !== 'true' && $label === $row['item']
                     && ($note === '' ? !$left : $left && trim($left->getText()) === $note);
+                if ($ok && $info !== null && $item->getAttribute('href') !== null) {
+                    $ok = $item->getAttribute('aria-describedby') === $info;
+                    $info = null;
+                }
             }
             if (!$ok) {
                 throw new ExpectationException("Item " . ($i + 1) . " of the Mitigate menu of '$name' is '" .
@@ -5319,75 +5326,6 @@ class behat_block_le_dashboard extends behat_base {
                 || get_config('block_le_dashboard', 'backfillpending')
         ) {
             throw new ExpectationException('A first fill is still queued or pending', $this->getSession());
-        }
-    }
-
-    // Beta27: a greyed Self-certify never looks available (Pierre's UAT, 2026-10-19).
-
-    /**
-     * Keeps the pointer over a Mitigate menu item for a while.
-     *
-     * @When /^I pass the pointer over "(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" for "(?P<ms>\d+)" milliseconds$/
-     * @param string $text
-     * @param string $name
-     * @param int $ms
-     */
-    public function i_pass_over_the_mitigate_item(string $text, string $name, int $ms): void {
-        $this->mitigate_item($name, $text)->mouseOver();
-        usleep($ms * 1000);
-    }
-
-    /**
-     * A greyed Mitigate item looks unavailable: muted text on no fill, whatever the pointer or focus.
-     *
-     * @Then /^"(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" should look greyed$/
-     * @param string $text
-     * @param string $name
-     */
-    public function the_mitigate_item_should_look_greyed(string $text, string $name): void {
-        $xpath = json_encode($this->mitigate_item($name, $text)->getXpath());
-        $result = $this->evaluate_script("return (function() {
-            const item = document.evaluate($xpath, document, null, 9, null).singleNodeValue;
-            const probe = document.createElement('span');
-            probe.style.color = 'var(--ma-text-muted)';
-            item.parentNode.appendChild(probe);
-            const muted = getComputedStyle(probe).color;
-            probe.remove();
-            const style = getComputedStyle(item);
-            const clear = style.backgroundColor === 'transparent' || /, 0\)$/.test(style.backgroundColor);
-            return style.color === muted && clear ? '' : style.color + ' on ' + style.backgroundColor + ', muted is ' + muted;
-        })();");
-        if ($result !== '') {
-            throw new ExpectationException(
-                "'$text' in the Mitigate menu of '$name' doesn't look greyed: $result",
-                $this->getSession()
-            );
-        }
-    }
-
-    /**
-     * A Mitigate menu item has the keyboard focus and shows it with an outline.
-     *
-     * @Then /^"(?P<text>[^"]*)" in the Mitigate menu of "(?P<name>[^"]*)" should have a visible focus outline$/
-     * @param string $text
-     * @param string $name
-     */
-    public function the_mitigate_item_should_have_focus_outline(string $text, string $name): void {
-        $xpath = json_encode($this->mitigate_item($name, $text)->getXpath());
-        $result = $this->evaluate_script("return (function() {
-            const item = document.evaluate($xpath, document, null, 9, null).singleNodeValue;
-            if (document.activeElement !== item) {
-                return 'it is not focused';
-            }
-            const style = getComputedStyle(item);
-            const outline = style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
-            return outline || style.boxShadow !== 'none' ? '' : 'no outline';
-        })();");
-        if ($result !== '') {
-            throw new ExpectationException(
-                "'$text' in the Mitigate menu of '$name' has no visible focus: $result",
-                $this->getSession()
-            );
         }
     }
 }
