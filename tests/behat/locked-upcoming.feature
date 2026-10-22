@@ -16,7 +16,7 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
   # Submitted work the student can still change keeps Submit, which takes them back to it.
   # Work that can't be submitted for any other reason (past its cut-off, quiz closed) still goes to Past at once.
   # The "Resubmission contact" setting the scope proposed is replaced by the guidance_finalised box (coordinator,
-  # 2026-10-09). Mitigate's new rule is in mitigate-rc6.feature.
+  # 2026-10-09). Mitigate's new rule is in mitigate-window.feature.
 
   Background:
     Given the following "courses" exist:

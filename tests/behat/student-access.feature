@@ -185,7 +185,7 @@ Feature: Students see only assessments they can actually access
     Then "A1" should show "Feedback expected"
     And "A1" should not have a feedback contact hint
 
-  # G4 (Pierre, 2026-10-03), as rc6 again from beta18 (mitigate-rc6.feature): Past work the student didn't hand
+  # G4 (Pierre, 2026-10-03), as rc6 again from beta18 (mitigate-window.feature): Past work the student didn't hand
   # in keeps Mitigate for the hours set after their own deadline, extensions included.
   @block_rhb
   Scenario: Past work keeps Mitigate for the hours set after the student's own deadline
@@ -271,7 +271,7 @@ Feature: Students see only assessments they can actually access
     And "A1" should not show "early"
     And "A1" should not show "late"
 
-  # Pierre, 2026-10-04: the late note is now the late penalties popover (student-polish.feature).
+  # Pierre, 2026-10-04: the late note is now the late penalties popover (student-rows-say-only-the-unusual.feature).
   Scenario: Late summative work says late penalties may apply, late formative work only says it was late
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And a formative "assign" "F1" in "M1" was due "2 days ago"

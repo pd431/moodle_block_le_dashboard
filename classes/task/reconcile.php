@@ -21,7 +21,7 @@ use block_le_dashboard\local\config;
 use block_le_dashboard\local\index\pass;
 
 /**
- * The hourly index task (Pierre, 2026-10-19). It carries on an unfinished first fill at any hour, so the
+ * The hourly index task. It carries on an unfinished first fill at any hour, so the
  * index fills even where ad hoc tasks don't run, and otherwise does the nightly check between 02:00 and
  * 06:00, which re-indexes live courses and catches missed events and direct database edits. Each run stops
  * at the time limit and the next one carries on (pass).

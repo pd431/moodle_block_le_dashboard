@@ -17,10 +17,11 @@
 namespace block_le_dashboard\local\index;
 
 use block_le_dashboard\local\config;
+use block_le_dashboard\local\testing;
 
 /**
  * A pass of the index over its courses that stops at a time limit and carries on where it stopped
- * (Pierre, 2026-10-19: "gracefully fail after a while, and pickup where it left off").
+ * (Pierre: "gracefully fail after a while, and pickup where it left off").
  *
  * Two kinds: the first fill (every course, after install, Rebuild or a setting change) and the nightly
  * check (live courses, catching missed events). Each saves how far it has got after every course, so a
@@ -223,8 +224,7 @@ class pass {
      * @return int 0 for no such limit.
      */
     protected static function course_limit(): int {
-        $testing = defined('BEHAT_SITE_RUNNING') || (defined('PHPUNIT_TEST') && PHPUNIT_TEST);
-        return $testing ? (int)get_config('block_le_dashboard', 'behatindexcourses') : 0;
+        return testing::course_limit();
     }
 
     /**

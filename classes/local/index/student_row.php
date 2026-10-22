@@ -58,7 +58,7 @@ final class student_row {
      * @param int[] $allocatedto Markers allocated to the student, on activities with allocation.
      * @param string|null $lockreason Why the student's submission is final and can't be changed (a LOCK_
      *                     constant), or null. The row stays in Upcoming with a "Can't resubmit" control
-     *                     saying why (Pierre, 2026-10-09).
+     *                     saying why.
      */
     public function __construct(
         /** @var int The student. */

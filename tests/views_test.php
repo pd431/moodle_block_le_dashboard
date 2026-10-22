@@ -17,6 +17,7 @@
 namespace block_le_dashboard;
 
 use block_le_dashboard\local\view\convenor;
+use block_le_dashboard\local\view\marking_rules;
 use block_le_dashboard\local\view\staff;
 use block_le_dashboard\local\view\student;
 
@@ -388,11 +389,11 @@ final class views_test extends \advanced_testcase {
     public function test_returned(): void {
         $due = 1000;
         $stage = fn(?int $firstready, int $lastmarked) => (object)['firstready' => $firstready, 'lastmarked' => $lastmarked];
-        $this->assertTrue(staff::returned([$stage(1600, 1500)], $due), 'work arrived after marking finished');
-        $this->assertFalse(staff::returned([$stage(1400, 1500)], $due), 'unmarked work older than the last mark');
-        $this->assertFalse(staff::returned([$stage(1600, 900)], $due), 'marked early, before the deadline');
-        $this->assertFalse(staff::returned([$stage(null, 1500)], $due), 'nothing left to mark');
-        $this->assertTrue(staff::returned([$stage(1600, 1500)], null), 'no deadline');
+        $this->assertTrue(marking_rules::returned([$stage(1600, 1500)], $due), 'work arrived after marking finished');
+        $this->assertFalse(marking_rules::returned([$stage(1400, 1500)], $due), 'unmarked work older than the last mark');
+        $this->assertFalse(marking_rules::returned([$stage(1600, 900)], $due), 'marked early, before the deadline');
+        $this->assertFalse(marking_rules::returned([$stage(null, 1500)], $due), 'nothing left to mark');
+        $this->assertTrue(marking_rules::returned([$stage(1600, 1500)], null), 'no deadline');
     }
 
     /**

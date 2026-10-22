@@ -47,7 +47,7 @@ class format {
 
     /**
      * A string with a date in it, split around the date so a template can mark it up as a time element and the
-     * page can show it in the viewer's own time zone, like the row dates (Pierre, 2026-10-09: "all times ...
+     * page can show it in the viewer's own time zone, like the row dates (Pierre: "all times ...
      * should look like the server was in china").
      *
      * @param string $identifier A block string whose only placeholder is the date.
@@ -215,7 +215,7 @@ class format {
 
     /**
      * A hint on a row: one icon (with its count) that opens a popover with its title and
-     * description on a click, keyboard focus or a short hover (Pierre, 2026-10-06). The same
+     * description on a click, keyboard focus or a short hover. The same
      * component for every hint, in the row's meta line or beside a date, pill or grade.
      *
      * @param string $rowid
@@ -250,7 +250,7 @@ class format {
         ];
     }
 
-    /** The guidance box each hint shows under its factual line (Pierre, 2026-10-09). */
+    /** The guidance box each hint shows under its factual line. */
     const HINT_GUIDANCE = [
         'late' => 'latepenalty',
         'feedbackcontact' => 'feedbacklate',
@@ -263,9 +263,9 @@ class format {
     ];
 
     /**
-     * A hint's icon. The missing brief is a half-dashed file (Pierre, 2026-10-17). Moodle's Font Awesome has it
+     * A hint's icon. The missing brief is a half-dashed file. Moodle's Font Awesome has it
      * from 6.6, so Moodle 5.0 and later; on 4.5 (6.5.2) the plugin draws its own copy, pix/file-half-dashed.svg,
-     * in styles.css (Pierre, 2026-10-19: "UNTIL WE MOVE TO 5.3"). Remove both then.
+     * in styles.css (Pierre: "UNTIL WE MOVE TO 5.3"). Remove both then.
      *
      * @param string $key
      * @return string
@@ -313,7 +313,7 @@ class format {
     ];
 
     /**
-     * Where a finished assessment stands, for staff Past rows (Pierre, 2026-10-07): one status over the whole
+     * Where a finished assessment stands, for staff Past rows: one status over the whole
      * assessment, every marker's share included. Still being marked first, then release.
      *
      * @param int $units Work ready to mark.
@@ -342,7 +342,7 @@ class format {
 
     /**
      * Moves a finished row's bars behind its Show marking button, first in the list under the row, above any
-     * markers: at a glance the row shows its grading status only (Pierre, 2026-10-07).
+     * markers: at a glance the row shows its grading status only.
      *
      * @param array $row
      * @param string $label The name beside the row's own bars.
@@ -388,7 +388,7 @@ class format {
     const SETUP_PROBLEMS = ['nodue', 'nograde', 'nomarks', 'bothtags'];
 
     /**
-     * Staff flag on a tagged assessment missing a setting (Pierre, 2026-10-07): each problem on its
+     * Staff flag on a tagged assessment missing a setting: each problem on its
      * own, then a link to the activity's settings.
      *
      * @param string $rowid
@@ -416,7 +416,7 @@ class format {
 
     /**
      * Staff rows of an assessment whose last index couldn't read all student data: a flag, and with no
-     * student data at all, a note in place of the bars that would read 0 of 0 (Pierre, 2026-10-08).
+     * student data at all, a note in place of the bars that would read 0 of 0.
      *
      * @param array $row
      * @param \stdClass $cm Index row, with loaderror.
@@ -433,6 +433,29 @@ class format {
             $row['alert'] = get_string('hint_loaderror', 'block_le_dashboard');
         }
         return $row;
+    }
+
+    /**
+     * The hint on a row with extensions still to come (G9), with the count beside its icon.
+     *
+     * @param string $rowid
+     * @param \stdClass $pending students, latest
+     * @return array
+     */
+    public static function extensions_hint(string $rowid, \stdClass $pending): array {
+        $n = (int)$pending->students;
+        $dated = self::dated('hint_extensions_text', (int)$pending->latest);
+        $hint = self::hint(
+            $rowid,
+            'extensions',
+            $dated['text'],
+            null,
+            $n === 1 ? get_string('hint_extensions_one', 'block_le_dashboard')
+                : get_string('hint_extensions_many', 'block_le_dashboard', $n),
+            $n
+        );
+        $hint['dated'] = $dated;
+        return $hint;
     }
 
     /**
@@ -527,7 +550,7 @@ class format {
 
     /**
      * An activity type's icon as the course page draws it (core_courseformat cmicon): the module's own
-     * monologo, which a theme can override, in its purpose colour (Pierre's UAT, 2026-10-19: "Activity icons
+     * monologo, which a theme can override, in its purpose colour (Pierre's UAT: "Activity icons
      * in the dash don't match the course view"). Per type, not per activity: no assessment module sets its
      * own icon per activity, and this needs no course modinfo.
      *
@@ -550,7 +573,7 @@ class format {
 
     /**
      * The marking deadline date of a staff or convenor row: the assessment's own, or the default one (config::markingdue())
-     * with its hint beside the date it explains (Pierre, 2026-10-20), as "Waiting for feedback?" sits beside a
+     * with its hint beside the date it explains, as "Waiting for feedback?" sits beside a
      * student's "Feedback expected".
      *
      * @param array $row The row, for its id.

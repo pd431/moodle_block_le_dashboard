@@ -50,9 +50,17 @@ class generic extends base {
         return $this->modname;
     }
 
+    /** Activity types where students never hand anything in online. */
+    const NOSUBMISSION = ['attendance'];
+
     #[\Override]
     public function support(): string {
         return self::SUPPORT_GENERIC;
+    }
+
+    #[\Override]
+    public function takes_submissions(): ?bool {
+        return in_array($this->modname, self::NOSUBMISSION) ? false : null;
     }
 
     #[\Override]

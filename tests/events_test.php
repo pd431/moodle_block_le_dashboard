@@ -47,6 +47,17 @@ final class events_test extends \advanced_testcase {
     }
 
     /**
+     * The events an adapter says are about the student they name (B4) are among the events it relies on.
+     */
+    public function test_related_user_events_are_adapter_events(): void {
+        foreach (registry::OWN as $modname => $class) {
+            foreach ($class::events_for_related_user() as $event) {
+                $this->assertContains($event, $class::events(), "$modname: $event is not one of its events");
+            }
+        }
+    }
+
+    /**
      * Observed core events exist, and every callback is a real method.
      */
     public function test_observers_resolve(): void {

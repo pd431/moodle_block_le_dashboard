@@ -67,7 +67,7 @@ class dashboard implements \renderable, \templatable {
     }
 
     /**
-     * The admin's notice above the tabs (Pierre, 2026-10-17), formatted, or null when there is none.
+     * The admin's notice above the tabs, formatted, or null when there is none.
      *
      * @return string|null
      */

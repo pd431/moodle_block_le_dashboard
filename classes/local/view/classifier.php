@@ -49,15 +49,15 @@ class classifier {
     /** Status: generic type past its deadline. */
     const STATUS_CLOSED = 'closed';
     /** Status: a new attempt is open (assign "Allow another attempt"), whatever the deadline. Shown with no
-     * pill: it is ordinary upcoming work (Pierre, 2026-10-06). */
+     * pill: it is ordinary upcoming work. */
     const STATUS_REOPENED = 'reopened';
     /** Status: generic type with no deadline (EC2). */
     const STATUS_OPEN = 'open';
-    /** Status: handed in, no deadline, not graded yet: stays in Undated until it is (Pierre, 2026-10-04). */
+    /** Status: handed in, no deadline, not graded yet: stays in Undated until it is. */
     const STATUS_RECEIVED = 'received';
     /** Student status: nothing to hand in online, the date has passed and no grade is out yet. */
     const STATUS_AWAITING = 'awaiting';
-    /** Statuses of the ordinary case, shown with no pill (Pierre, 2026-10-04). */
+    /** Statuses of the ordinary case, shown with no pill. */
     const PLAIN_STATUSES = [self::STATUS_PENDING, self::STATUS_DUE, self::STATUS_OPEN, self::STATUS_REOPENED];
 
     /**
@@ -65,7 +65,7 @@ class classifier {
      *
      * - Generic types (submitted unknown): Upcoming before the deadline, Past after, never Overdue (R5).
      * - Unsubmitted after the cut-off (or a quiz's close): Overdue while the student can still ask for
-     *   mitigation (Mitigate is shown), else Past, "Not submitted" (R2; coordinator, 2026-10-06).
+     *   mitigation (Mitigate is shown), else Past, "Not submitted" (R2).
      * - Unsubmitted after the deadline: Overdue for the threshold, then Past.
      * - Unsubmitted with a released grade (work handed in another way, a 0 for non-submission): as
      *   submitted and released, never Overdue (F1).
@@ -73,9 +73,9 @@ class classifier {
      *   "Awaiting feedback" until the grade is out. Never Overdue.
      * - Work the student can no longer hand in (past the cut-off or a quiz's close, or every quiz
      *   attempt used with none finished): Past once the deadline has passed; before it, Upcoming with
-     *   "Can't submit", as work a teacher locked (Pierre, 2026-10-21).
+     *   "Can't submit", as work a teacher locked.
      * - Submitted: Upcoming until the deadline, then Past (in marking, or released). A final submission
-     *   (finalised, locked by a teacher, every quiz attempt used) too (Pierre, 2026-10-09).
+     *   (finalised, locked by a teacher, every quiz attempt used) too.
      * - A reopened attempt not yet resubmitted: Upcoming, with no pill (G13).
      * - No deadline (EC2): Undated until released ("Received" once handed in), then Past; a reopened
      *   attempt stays in Upcoming.
@@ -114,7 +114,7 @@ class classifier {
             }
             if ($due >= $now) {
                 // Handed in early: Upcoming until the deadline, even when it can't be changed any more
-                // (Pierre, 2026-10-09, reversing 2026-10-06); the row then says why instead of offering Submit.
+                // (reversing the earlier rule); the row then says why instead of offering Submit.
                 return [self::UPCOMING, self::STATUS_SUBMITTED];
             }
             return [self::PAST, self::STATUS_INMARKING];
@@ -127,7 +127,7 @@ class classifier {
         }
         if (!self::submittable($row, $now)) {
             // Can't be handed in before the deadline (locked by a teacher, B1, or every quiz attempt used with none
-            // finished): Upcoming, saying why there's no Submit (Pierre, 2026-10-21).
+            // finished): Upcoming, saying why there's no Submit.
             if ($due !== null && $due >= $now) {
                 return [self::UPCOMING, self::STATUS_PENDING];
             }
@@ -151,7 +151,7 @@ class classifier {
     }
 
     /**
-     * Whether the student can still hand the work in (Pierre, 2026-10-06): Upcoming and Overdue hold only
+     * Whether the student can still hand the work in: Upcoming and Overdue hold only
      * work that is. The adapters fold every technical limit into the student's cut-off: an assignment's
      * cut-off, a quiz's close, overrides and extensions, and a quiz's last allowed attempt. A reopened
      * attempt is always open.
@@ -190,14 +190,14 @@ class classifier {
     const CONVENOR_PAST = 'past';
 
     /**
-     * Where an assessment goes in a marker's view. There is no Upcoming section (Pierre, 2026-10-21): work
+     * Where an assessment goes in a marker's view. There is no Upcoming section: work
      * before its deadline isn't marking yet. Past the deadline with nothing of mine to mark, an assessment
      * goes to Completed marking once my share is marked, with its Extensions hint while extensions run, and
      * nowhere before that; late work brings it back to Marking in progress (G6).
      *
      * @param int $tomark My units ready and not marked.
      * @param int $own My own units: allocated to me or marked by me. Work without allocation that colleagues
-     *                 marked counts as mine to mark, but isn't my own once done (Pierre, 2026-10-21).
+     *                 marked counts as mine to mark, but isn't my own once done.
      * @param int|null $due
      * @param int $now
      * @return string|null Section, or null when it isn't shown in the marking sections.
@@ -207,7 +207,7 @@ class classifier {
             return self::TOMARK;
         }
         if ($due === null) {
-            // No deadline: all my marking done is finished (Pierre, 2026-10-04); with none yet,
+            // No deadline: all my marking done is finished; with none yet,
             // work may still arrive (EC2).
             return $own > 0 ? self::COMPLETED : self::UNDATED;
         }
@@ -216,7 +216,7 @@ class classifier {
 
     /**
      * Where an assessment goes in the convenor view. Past its deadline with nothing to mark or release, it goes to
-     * Past at once, and late work brings it back to In progress (Pierre, 2026-10-21).
+     * Past at once, and late work brings it back to In progress.
      *
      * @param int|null $due
      * @param int $now
@@ -232,7 +232,7 @@ class classifier {
             return self::INPROGRESS;
         }
         if ($due === null) {
-            // Finished work goes to Past whatever its date (Pierre, 2026-10-04).
+            // Finished work goes to Past whatever its date.
             return $submitted > 0 ? self::CONVENOR_PAST : self::UNDATED;
         }
         return self::CONVENOR_PAST;

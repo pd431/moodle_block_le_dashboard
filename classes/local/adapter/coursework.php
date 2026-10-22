@@ -143,7 +143,7 @@ class coursework extends base {
             cutoff: (isset($cw->allowlatesubmissions) && empty($cw->allowlatesubmissions)) ? $due : null,
             markingdue: $markingdue,
             // Allocated only once markers are: allocation on with only moderator pairs (or none yet) would
-            // leave every unit unallocated and all the work with the convenor (Pierre's data, 2026-10-08).
+            // leave every unit unallocated and all the work with the convenor (Pierre's data).
             hasallocation: !empty($cw->allocationenabled) && self::has_assessor_pairs((int)$cw->id),
             stages: array_keys(self::stage_map($cw)),
             submissions: !self::by_attendance($cw),
@@ -155,7 +155,7 @@ class coursework extends base {
 
     /**
      * Whether the coursework is assessed by attendance: nothing is handed in online. Exeter's coursework
-     * keeps this in courseworktype (Pierre's schema, 2026-10-07; the value is unconfirmed); the other
+     * keeps this in courseworktype (Pierre's schema; the value is unconfirmed); the other
      * columns are kept for versions that name it differently.
      *
      * @param \stdClass $cw
@@ -310,7 +310,7 @@ class coursework extends base {
 
     /**
      * Handed-in submissions by allocatable: those with a submission time, and those with a mark. Many
-     * submissions stay unfinalised and are still marked (Pierre's schema, 2026-10-07), so finalised
+     * submissions stay unfinalised and are still marked (Pierre's schema), so finalised
      * only says the student can't change the work any more (locked), not whether it was handed in.
      *
      * @param int $courseworkid
@@ -510,7 +510,7 @@ class coursework extends base {
 
     /**
      * Plagiarism flag statuses that mean a case is open. rc6 counted 0-3; 2 is "cleared", so it isn't
-     * one (Pierre, 2026-10-07, as in his rc7 commit). B42: the others are still inferred from rc6.
+     * one (as in Pierre's rc7 commit). B42: the others are still inferred from rc6.
      */
     const OPEN_FLAG_STATUSES = ['0', '1', '3'];
 
@@ -675,7 +675,7 @@ class coursework extends base {
                     $ready = !in_array(false, $done, true);
                 } else if ($identifier === self::STAGE_MODERATOR) {
                     // Where moderators are allocated, moderation owes only the sample: units with a moderator,
-                    // or already moderated (Pierre's data, 2026-10-08: 12 moderated of 277, not 12 of 277).
+                    // or already moderated (Pierre's data: 12 moderated of 277, not 12 of 277).
                     $ready = (bool)end($done) && (!$sampling || $marked || isset($pairs[$key][self::STAGE_MODERATOR]));
                 } else {
                     $ready = true;
@@ -711,5 +711,46 @@ class coursework extends base {
             }
         }
         return $rows;
+    }
+
+    #[\Override]
+    public function takes_selfcert(): bool {
+        return true;
+    }
+
+    #[\Override]
+    public function selfcert_subject(int $instanceid): ?object {
+        if (!class_exists('\mod_coursework\models\coursework')) {
+            return null;
+        }
+        return \mod_coursework\models\coursework::find($instanceid) ?: null;
+    }
+
+    /**
+     * Self-certified extensions the student has used since a time, from the mitigations table by the same
+     * reading as extensions(): only rows of type extension where the table has a type, and only rows the
+     * selfcert column marks, so a schema without that column has none.
+     *
+     * @param int $userid
+     * @param int $since
+     * @return int|null Null without the table.
+     */
+    #[\Override]
+    public function selfcert_used(int $userid, int $since): ?int {
+        global $DB;
+        if (!self::column('coursework_mitigations', ['id'])) {
+            return null;
+        }
+        if (!self::column('coursework_mitigations', ['selfcert'])) {
+            return 0;
+        }
+        $type = self::column('coursework_mitigations', ['type']) ? "type = 'extension' AND" : '';
+        return $DB->count_records_sql(
+            "SELECT COUNT(1)
+               FROM {coursework_mitigations}
+              WHERE $type selfcert = 1 AND allocatabletype = 'user'
+                AND allocatableid = :userid AND timecreated > :since",
+            ['userid' => $userid, 'since' => $since]
+        );
     }
 }

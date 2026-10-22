@@ -178,4 +178,36 @@ final class mitigation_test extends \advanced_testcase {
                 self::SRM, null, null, [['html', 'Self-certify'], $divider, $request]],
         ];
     }
+
+    /**
+     * C4 (beta29): on a coursework schema whose mitigations table lacks the type and selfcert columns, the
+     * self-certification count copes as the coursework adapter's extensions() rule does, instead of throwing:
+     * without a selfcert column no extension is known to be self-certified, so none is used.
+     */
+    public function test_selfcert_copes_with_older_coursework_schema(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $this->preventResetByRollback();
+        $dbman = $DB->get_manager();
+        if ($dbman->table_exists('coursework_mitigations')) {
+            $this->markTestSkipped('mod_coursework is installed: its own schema applies');
+        }
+        $table = new \xmldb_table('coursework_mitigations');
+        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
+        foreach (['allocatableid', 'extended_deadline', 'timecreated'] as $field) {
+            $table->add_field($field, XMLDB_TYPE_INTEGER, '10');
+        }
+        $table->add_field('allocatabletype', XMLDB_TYPE_CHAR, '100');
+        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
+        $dbman->create_table($table);
+        try {
+            $user = $this->getDataGenerator()->create_user();
+            $DB->insert_record('coursework_mitigations', (object)['allocatableid' => $user->id, 'allocatabletype' => 'user',
+                'extended_deadline' => time() + DAYSECS, 'timecreated' => time()]);
+            set_config('selfcertmax', 3, 'block_rhb');
+            $this->assertSame(['used' => 0, 'max' => 3], mitigation::selfcert((int)$user->id));
+        } finally {
+            $dbman->drop_table($table);
+        }
+    }
 }

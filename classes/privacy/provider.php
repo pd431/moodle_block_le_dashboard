@@ -48,13 +48,17 @@ class provider implements
         $collection->add_database_table('block_le_dashboard_stu', [
             'userid' => 'privacy:metadata:stu:userid',
             'due' => 'privacy:metadata:stu:due',
+            'cutoff' => 'privacy:metadata:stu:cutoff',
+            'individual' => 'privacy:metadata:stu:individual',
             'submitted' => 'privacy:metadata:stu:submitted',
             'timesubmitted' => 'privacy:metadata:stu:timesubmitted',
             'timereleased' => 'privacy:metadata:stu:timereleased',
             'gradedisplay' => 'privacy:metadata:stu:gradedisplay',
             'mitigation' => 'privacy:metadata:stu:mitigation',
             'reopened' => 'privacy:metadata:stu:reopened',
+            'lockreason' => 'privacy:metadata:stu:lockreason',
             'allocatedto' => 'privacy:metadata:stu:allocatedto',
+            'canaccess' => 'privacy:metadata:stu:canaccess',
             'active' => 'privacy:metadata:stu:active',
             'enrolstart' => 'privacy:metadata:stu:enrolstart',
         ], 'privacy:metadata:stu');
@@ -65,6 +69,7 @@ class provider implements
             'timemarked' => 'privacy:metadata:mark:timemarked',
             'timeready' => 'privacy:metadata:mark:timeready',
             'unitdue' => 'privacy:metadata:mark:unitdue',
+            'flagged' => 'privacy:metadata:mark:flagged',
         ], 'privacy:metadata:mark');
         foreach (self::PREFERENCES as $name) {
             $collection->add_user_preference('block_le_dashboard_' . $name, 'privacy:metadata:preference:' . $name);
@@ -139,10 +144,14 @@ class provider implements
                 $rows[] = [
                     'cmid' => $r->cmid,
                     'due' => $r->due ? transform::datetime($r->due) : null,
+                    'cutoff' => $r->cutoff ? transform::datetime($r->cutoff) : null,
+                    'individual' => transform::yesno($r->individual),
                     'submitted' => $r->submitted === null ? null : transform::yesno($r->submitted),
                     'timesubmitted' => $r->timesubmitted ? transform::datetime($r->timesubmitted) : null,
                     'timereleased' => $r->timereleased ? transform::datetime($r->timereleased) : null,
                     'grade' => $r->gradedisplay,
+                    'lockreason' => $r->lockreason,
+                    'canaccess' => transform::yesno($r->canaccess),
                 ];
             }
             $marking = array_values($DB->get_records_select(
@@ -150,7 +159,7 @@ class provider implements
                 "(unitid = :u1 AND unittype = 'user') OR allocatedto = :u2 OR markedby = :u3",
                 ['u1' => $userid, 'u2' => $userid, 'u3' => $userid],
                 '',
-                'id, cmid, stage, allocatedto, marked, markedby, timemarked'
+                'id, cmid, stage, allocatedto, marked, markedby, timemarked, flagged'
             ));
             // Students allocated to this person as marker, counted per assessment.
             $allocated = array_values($DB->get_records_sql(
