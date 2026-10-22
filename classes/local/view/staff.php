@@ -17,7 +17,6 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
-use block_le_dashboard\local\genericname;
 use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
 
@@ -308,54 +307,15 @@ class staff extends base {
             if (!$section || $section === classifier::UNDATED || ($otheryear && $section !== classifier::TOMARK)) {
                 continue;
             }
-            $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            if ($otheryear) {
-                $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
-            }
-            $markingdate = format::markingdue($row, $cm);
-            $row['dates'] = array_values(array_filter([
-                $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
-                $markingdate,
-            ]));
+            $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $this->stage_bars($stages), [
+                'course' => $otheryear ? fn(string $course) => $this->with_year($course, (int)$cm->courseid) : null,
+                'unallocated' => $unallocated,
+                // Work that arrived after I finished marking here: the row came back (G6).
+                'returned' => $tomark && marking_rules::returned($stages, $cm->due === null ? null : (int)$cm->due),
+                'pending' => $pending[$cmid] ?? null,
+                'flagged' => $flagged[$cmid] ?? 0,
+            ]);
             $row['tomark'] = $tomark;
-            $row['bars'] = $this->stage_bars($stages);
-            $row['hints'] = !empty($cm->nosubmission) && config::shown('hint_nosubmission')
-                ? [format::nosubmission_hint($row['id'], true)] : [];
-            if (config::shown('hint_setup') && $setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
-                $row['hints'][] = $setup;
-            }
-            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
-                $row['hints'][] = $generic;
-            }
-            if ($unallocated && config::shown('hint_unallocated')) {
-                $row['hints'][] = format::hint(
-                    $row['id'],
-                    'unallocated',
-                    get_string(
-                        $unallocated === 1 ? 'hint_unallocated_one' : 'hint_unallocated_many',
-                        'block_le_dashboard',
-                        $unallocated
-                    ),
-                    null,
-                    get_string('hint_unallocated', 'block_le_dashboard', $unallocated),
-                    $unallocated
-                );
-            }
-            // Work that arrived after I finished marking here: the row came back (G6).
-            if (
-                $tomark && config::shown('hint_returned')
-                    && marking_rules::returned($stages, $cm->due === null ? null : (int)$cm->due)
-            ) {
-                $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_le_dashboard'));
-            }
-            if (isset($pending[$cmid]) && config::shown('hint_extensions')) {
-                $row['hints'][] = format::extensions_hint($row['id'], $pending[$cmid]);
-            }
-            if (!empty($flagged[$cmid])) {
-                $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
-            }
-            $row['actions'] = [format::view_action($row['url'])];
-            $row = format::load_error($row, $cm, false);
             $sections[$section][] = $row + ['sortkey' => (int)(config::markingdue($cm)[0] ?? $cm->due)];
             if ($section === classifier::TOMARK) {
                 format::count($tomarkcounts, $cm->assesstype, $tomark);
@@ -395,28 +355,18 @@ class staff extends base {
             if (isset($listed[$cmid])) {
                 continue;
             }
-            $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            $row['dates'] = [];
             // Generic types can't know about submissions (R5).
-            $row['bars'] = $cm->adapter === 'generic' ? [] : [format::bar(
+            $bars = $cm->adapter === 'generic' ? [] : [format::bar(
                 'submitted',
                 get_string('bar_submitted', 'block_le_dashboard'),
                 (int)$cm->submissions,
                 (int)$cm->students
             )];
-            $row['hints'] = !empty($cm->nosubmission) && config::shown('hint_nosubmission')
-                ? [format::nosubmission_hint($row['id'], true)] : [];
-            if (config::shown('hint_setup') && $setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
-                $row['hints'][] = $setup;
-            }
-            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
-                $row['hints'][] = $generic;
-            }
-            if (!empty($flagged[$cmid])) {
-                $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
-            }
-            $row['actions'] = [format::view_action($row['url'])];
-            $row = format::load_error($row, $cm, (int)$cm->students === 0);
+            $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $bars, [
+                'undated' => true,
+                'flagged' => $flagged[$cmid] ?? 0,
+                'nostudents' => (int)$cm->students === 0,
+            ]);
             $sections[classifier::UNDATED][] = $row + ['sortkey' => 0];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }

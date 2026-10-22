@@ -17,7 +17,6 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
-use block_le_dashboard\local\genericname;
 use block_le_dashboard\local\index\indexer;
 use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
@@ -236,21 +235,21 @@ class convenor extends base {
             if ($otheryear && ($section !== classifier::INPROGRESS || $outstanding + (int)($pending[$cmid]->students ?? 0) === 0)) {
                 continue;
             }
-            $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            if ($otheryear) {
-                $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
-            }
-            $markingdate = format::markingdue($row, $cm);
-            $row['dates'] = array_values(array_filter([
-                $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
-                $markingdate,
-            ]));
             // Marking starts after the deadline: before it, only submissions and allocation.
             $upcoming = $section === classifier::STAFF_UPCOMING;
             if ($upcoming) {
                 $bars = array_values(array_filter($bars, fn($b) => in_array($b['key'], ['submitted', 'unallocated'])));
             }
-            $row['bars'] = $bars;
+            $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $bars, [
+                'course' => $otheryear ? fn(string $course) => $this->with_year($course, (int)$cm->courseid) : null,
+                'brief' => true,
+                // Work that arrived after marking was finished brought this back to In progress (G6).
+                'returned' => $section === classifier::INPROGRESS
+                    && marking_rules::returned($m, $cm->due === null ? null : (int)$cm->due),
+                'pending' => $pending[$cmid] ?? null,
+                'flagged' => (int)($flagged[$cmid] ?? 0),
+                'nostudents' => (int)($s->total ?? 0) === 0,
+            ]);
             $row['markers'] = [];
             foreach ($upcoming ? [] : $markers[$cmid] ?? [] as $markerid => $bystage) {
                 $person = $people[$markerid] ?? null;
@@ -274,33 +273,6 @@ class convenor extends base {
             $row['markers'] = array_values($row['markers']);
             $row['hasmarkers'] = !empty($row['markers']);
             $row['markersid'] = $row['id'] . '-markers';
-            $row['actions'] = [format::view_action($row['url'])];
-            $row['hints'] = !empty($cm->nosubmission) && config::shown('hint_nosubmission')
-                ? [format::nosubmission_hint($row['id'], true)] : [];
-            if (config::shown('hint_setup') && $setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
-                $row['hints'][] = $setup;
-            }
-            if (empty($cm->hasbrief) && config::shown('hint_brief')) {
-                $row['hints'][] = $this->brief_hint($row['id']);
-            }
-            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
-                $row['hints'][] = $generic;
-            }
-            // Work that arrived after marking was finished brought this back to In progress (G6).
-            if (
-                $section === classifier::INPROGRESS && config::shown('hint_returned')
-                    && marking_rules::returned($m, $cm->due === null ? null : (int)$cm->due)
-            ) {
-                $text = get_string('hint_returned_convenor', 'block_le_dashboard');
-                $row['hints'][] = format::hint($row['id'], 'returned', $text);
-            }
-            if (isset($pending[$cmid]) && config::shown('hint_extensions')) {
-                $row['hints'][] = format::extensions_hint($row['id'], $pending[$cmid]);
-            }
-            if (!empty($flagged[$cmid])) {
-                $row['hints'][] = format::plagiarism_hint($row['id'], (int)$flagged[$cmid]);
-            }
-            $row = format::load_error($row, $cm, (int)($s->total ?? 0) === 0);
             // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
             $late = (int)($unmarked[$cmid] ?? 0);
             [$markingdue] = config::markingdue($cm);
@@ -353,16 +325,6 @@ class convenor extends base {
         return has_capability('moodle/course:useremail', $context, $this->userid)
             || (in_array('email', \core_user\fields::get_identity_fields($context, false))
                 && has_capability('moodle/site:viewuseridentity', $context, $this->userid));
-    }
-
-    /**
-     * The hint shown on an assessment with no brief or description.
-     *
-     * @param string $rowid
-     * @return array
-     */
-    protected function brief_hint(string $rowid): array {
-        return format::hint($rowid, 'brief', get_string('briefhint_text', 'block_le_dashboard'));
     }
 
     /**
