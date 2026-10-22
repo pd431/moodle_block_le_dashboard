@@ -262,10 +262,7 @@ class config {
      * @return int
      */
     public static function now(): int {
-        if (defined('BEHAT_SITE_RUNNING') && ($now = (int)get_config('block_le_dashboard', 'behatnow'))) {
-            return $now;
-        }
-        return time();
+        return testing::now() ?? time();
     }
 
     /**

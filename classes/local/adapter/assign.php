@@ -19,6 +19,7 @@ namespace block_le_dashboard\local\adapter;
 use block_le_dashboard\local\index\cm_row;
 use block_le_dashboard\local\index\marking_row;
 use block_le_dashboard\local\index\student_row;
+use block_le_dashboard\local\testing;
 
 /**
  * Adapter for mod_assign.
@@ -139,7 +140,7 @@ class assign extends base {
     protected static function allocation_table(): bool {
         global $DB;
         static $exists = null;
-        if ($exists === null || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+        if ($exists === null || testing::enabled()) {
             $exists = $DB->get_manager()->table_exists('assign_allocated_marker');
         }
         return $exists;

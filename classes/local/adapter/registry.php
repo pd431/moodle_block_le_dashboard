@@ -16,6 +16,8 @@
 
 namespace block_le_dashboard\local\adapter;
 
+use block_le_dashboard\local\testing;
+
 /**
  * Which adapter serves which activity type, and which types the site has enabled (R5).
  *
@@ -121,84 +123,6 @@ class registry {
         return $types;
     }
 
-    /**
-     * Throws when tests asked this type to fail (the "indexing fails" scenario).
-     *
-     * @param string $modname
-     */
-    public static function check_test_failure(string $modname): void {
-        if ((defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
-            $failing = explode(',', (string)get_config('block_le_dashboard', 'testfailtypes'));
-            if (in_array($modname, $failing)) {
-                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', $modname);
-            }
-        }
-    }
-
-    /**
-     * Behat and PHPUnit only: fails reading student rows, or marking rows, that include the student
-     * the testfailstudent, or testfailmarking, setting names.
-     *
-     * @param string $part 'student' or 'marking'
-     * @param int[] $userids
-     */
-    public static function check_test_part_failure(string $part, array $userids): void {
-        if ((defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
-            $student = (int)get_config('block_le_dashboard', 'testfailstudent');
-            // Minus one fails every student.
-            if ($part === 'student' && $student && ($student === -1 || in_array($student, $userids))) {
-                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'student ' . $student);
-            }
-            $marking = (int)get_config('block_le_dashboard', 'testfailmarking');
-            if ($part === 'marking' && $marking && in_array($marking, $userids)) {
-                throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'marking ' . $marking);
-            }
-        }
-    }
-
-    /**
-     * Behat and PHPUnit only: whether writing the index for this assessment should fail, once,
-     * because the testfailwrite setting names it. The setting is cleared here, outside the write's
-     * transaction, so the rollback doesn't bring it back.
-     *
-     * @param int $cmid
-     * @return bool
-     */
-    public static function take_test_write_failure(int $cmid): bool {
-        $testing = (defined('BEHAT_SITE_RUNNING') && BEHAT_SITE_RUNNING) || (defined('BEHAT_TEST') && BEHAT_TEST)
-            || (defined('PHPUNIT_TEST') && PHPUNIT_TEST);
-        if ($testing && (int)get_config('block_le_dashboard', 'testfailwrite') === $cmid) {
-            unset_config('testfailwrite', 'block_le_dashboard');
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * For tests: whether writing an activity's rows should now meet a deadlock. The config testdeadlock is
-     * "cmid:n", for the next n writes. Counted in memory, as the write's rollback undoes config changes.
-     *
-     * @param int $cmid
-     * @return bool
-     */
-    public static function take_test_deadlock(int $cmid): bool {
-        if (!defined('PHPUNIT_TEST') || !PHPUNIT_TEST) {
-            return false;
-        }
-        $config = (string)get_config('block_le_dashboard', 'testdeadlock');
-        if ($config !== self::$testdeadlock[0]) {
-            self::$testdeadlock = [$config, (int)(explode(':', $config)[1] ?? 0)];
-        }
-        if ((int)explode(':', $config)[0] !== $cmid || self::$testdeadlock[1] < 1) {
-            return false;
-        }
-        self::$testdeadlock[1]--;
-        return true;
-    }
-
-    /** @var array The testdeadlock config last read, and deadlocks left to meet. */
-    protected static $testdeadlock = ['', 0];
-
     /** @var array Errors recorded in this run, by activity type, written once when the run ends (PR14). */
     protected static $errors = [];
 
@@ -219,7 +143,7 @@ class registry {
             'message' => $e->getMessage(),
             'count' => (self::$errors[$modname]->count ?? 0) + 1,
         ];
-        if (CLI_SCRIPT && !(defined('PHPUNIT_TEST') && PHPUNIT_TEST)) {
+        if (CLI_SCRIPT && !testing::enabled()) {
             mtrace("block_le_dashboard: indexing $modname failed: " . $e->getMessage());
         }
     }

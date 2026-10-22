@@ -21,6 +21,7 @@ use block_le_dashboard\local\adapter\registry;
 use block_le_dashboard\local\config;
 use block_le_dashboard\local\memo;
 use block_le_dashboard\local\tags;
+use block_le_dashboard\local\testing;
 
 /**
  * Writes one assessment's rows to the three index tables from its adapter: the re-index itself.
@@ -96,7 +97,7 @@ class writer {
         }
 
         try {
-            registry::check_test_failure($cm->modname);
+            testing::fail_type($cm->modname);
             $cmrow = $adapter->cm_row($cm);
             if (!$cmrow) {
                 $this->drop_rows($cmid);
@@ -238,7 +239,7 @@ class writer {
             }
         }
 
-        $failwrite = registry::take_test_write_failure($cmid);
+        $failwrite = testing::fail_write($cmid);
         // Re-indexes of different assessments can deadlock in the database (MariaDB's gap locks, seen in the
         // deadline rush load test): the loser tries again, unless this is part of a larger transaction, which
         // the database has already undone.
@@ -255,7 +256,7 @@ class writer {
                 if ($failwrite) {
                     throw new \moodle_exception('testfailure', 'block_le_dashboard', '', 'cm ' . $cmid);
                 }
-                if (registry::take_test_deadlock($cmid)) {
+                if (testing::deadlock($cmid)) {
                     throw new \dml_write_exception('Deadlock found when trying to get lock (test)');
                 }
                 if ($stu) {
@@ -402,7 +403,7 @@ class writer {
      */
     protected function student_rows($adapter, \cm_info $cm, cm_row $cmrow, array $userids): array {
         try {
-            registry::check_test_part_failure('student', $userids);
+            testing::fail_part('student', $userids);
             return [self::without_submissions($cmrow, $adapter->student_rows($cm, $cmrow, $userids)), []];
         } catch (\Throwable $e) {
             registry::record_error($cm->modname, $e);
@@ -411,7 +412,7 @@ class writer {
         $failed = [];
         foreach ($userids as $userid) {
             try {
-                registry::check_test_part_failure('student', [$userid]);
+                testing::fail_part('student', [$userid]);
                 $rows += self::without_submissions($cmrow, $adapter->student_rows($cm, $cmrow, [$userid]));
             } catch (\Throwable $e) {
                 $failed[$userid] = true;
@@ -461,7 +462,7 @@ class writer {
             ? fn(array $ids) => $adapter->marking_rows($cm, $cmrow, $ids)
             : fn(array $ids) => \block_le_dashboard\local\adapter\base::no_submission_units($cm, $ids);
         try {
-            registry::check_test_part_failure('marking', $userids);
+            testing::fail_part('marking', $userids);
             return [$read($userids), []];
         } catch (\Throwable $e) {
             registry::record_error($cm->modname, $e);
@@ -470,7 +471,7 @@ class writer {
         $failed = [];
         foreach ($userids as $userid) {
             try {
-                registry::check_test_part_failure('marking', [$userid]);
+                testing::fail_part('marking', [$userid]);
                 array_push($rows, ...$read([$userid]));
             } catch (\Throwable $e) {
                 $failed[$userid] = true;

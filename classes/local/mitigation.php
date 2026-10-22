@@ -39,15 +39,11 @@ class mitigation {
     protected static function available(): bool {
         global $CFG;
         $lib = $CFG->dirroot . '/blocks/rhb/lib.php';
-        if (!file_exists($lib) && defined('BEHAT_SITE_RUNNING') && get_config('block_le_dashboard', 'behatrhbstub')) {
-            // Scenarios tagged @block_rhb on a site without it.
-            $lib = $CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/rhb_stub.php';
-            if (!class_exists('\mod_coursework\models\coursework')) {
-                // Activities the scenario has the stand-in treat as coursework, on sites without mod_coursework.
-                require_once($CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/coursework_stub.php');
-            }
-        }
         if (!file_exists($lib)) {
+            // Scenarios tagged @block_rhb on a site without it.
+            $lib = testing::rhb_stub();
+        }
+        if (!$lib || !file_exists($lib)) {
             return false;
         }
         require_once($lib);
@@ -113,10 +109,7 @@ class mitigation {
      * @return bool
      */
     protected static function stub_coursework(string $modname, int $instanceid): bool {
-        if (!defined('BEHAT_SITE_RUNNING') || !get_config('block_le_dashboard', 'behatrhbstub')) {
-            return false;
-        }
-        return in_array("$modname:$instanceid", explode(',', (string)get_config('block_le_dashboard', 'behatcoursework')));
+        return testing::rhb_stub_coursework($modname, $instanceid);
     }
 
     /**

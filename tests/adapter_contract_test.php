@@ -34,8 +34,9 @@ final class adapter_contract_test extends \advanced_testcase {
      */
     const EXEMPT = [
         'classes/local/genericname.php' => 'the generic names list holds the words assignment, coursework, quiz',
-        'classes/local/mitigation.php' => 'the Behat stand-in for coursework on sites without it (moves in R5)',
+        'classes/local/mitigation.php' => 'the block_rhb stand-in asks the coursework adapter on sites without it',
         'db/events.php' => 'the observers list names each adapter\'s events',
+        'classes/local/testing.php' => 'stands in for mod_coursework\'s model on Behat sites without it',
     ];
 
     /**
