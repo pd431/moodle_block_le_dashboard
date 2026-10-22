@@ -52,4 +52,4 @@ Feature: Module convenors see unallocated marking in My marking
     And the My assessments index is up to date
     When I log in as "convenor1" and view the "My marking"
     Then "Q1" should not appear in the "Marking in progress" section
-    And "Q1" should appear in the "Upcoming deadlines" section
+    And "Q1" should not appear in the "Completed marking" section

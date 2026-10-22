@@ -103,9 +103,9 @@ class Dashboard {
                 this.disarm(toggle.closest(SELECTORS.mitigate));
             }
         }, true);
-        // A greyed Mitigate item does nothing, and the menu stays open on its reason (Pierre's UAT, 2026-10-19).
+        // Clicking the Mitigate menu's reason line or divider leaves the menu open on it.
         root.addEventListener('click', e => {
-            if (e.target.closest && e.target.closest('.ma-mitigate-item--greyed')) {
+            if (e.target.closest && e.target.closest('.ma-mitigate-note, .ma-mitigate-divider')) {
                 e.preventDefault();
                 e.stopPropagation();
             }

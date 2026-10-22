@@ -46,7 +46,7 @@ Feature: Convenors are nudged to attach a brief or description
     And a summative "assign" "A1" in "M1" with no description is due "tomorrow"
     When I log in as "convenor" and view the "Convenor view"
     And I click on the brief hint of "A1"
-    Then "guidance" "link" should exist in the "My assessments" "block"
+    Then "guidance" "link" should exist in the "My Assessments" "block"
 
   @javascript
   Scenario: Without a guidance link the hint has no link sentence

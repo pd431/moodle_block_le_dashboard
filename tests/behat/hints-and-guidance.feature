@@ -131,7 +131,8 @@ Feature: Admins can turn each optional hint off, on a Hints and guidance page wi
     And the My assessments index is up to date
     When I log in as "student1" and view my dashboard
     Then "P1" should not have a "nosubmission" hint
-    And I log in as "marker1" and view the "My marking"
+    # In the Convenor view: My marking has no Upcoming section since beta28.
+    And I log in as "convenor1" and view the "Convenor view"
     And "P1" should not have a "nosubmission" hint
 
   Scenario: Turning the unmarked after the marking deadline line off

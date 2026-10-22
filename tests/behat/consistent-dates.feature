@@ -81,7 +81,9 @@ Feature: Day counts and dates agree, in the viewer's own time zone
     And the My assessments index is up to date
     And it is now "Tue 13 October 2026 09:00" in "Europe/London"
     And my browser's time zone is "America/New_York"
-    When I log in as "teacher1" and view my dashboard
+    And "teacher1" is enrolled in "M1" as "moduleconvenor"
+    # In the Convenor view: My marking has no Upcoming section since beta28.
+    When I log in as "teacher1" and view the "Convenor view"
     And I click on the extension hint of "A1"
     Then the "extensions" popover of "A1" should say "1 student has an extension" then "The latest extended deadline is 21 Oct 2026, 07:00."
 

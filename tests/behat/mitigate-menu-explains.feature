@@ -12,12 +12,16 @@ Feature: The Mitigate menu explains self-certification
   # - The menu items use our labels again, "Self-certify an extension" and "Request formal mitigation", with only the
   #   address taken from block_rhb (as beta17 did). If the address can't be read, block_rhb's HTML shows as it is.
   # - Coursework without a self-certification link still offers Mitigate when the request form has a link.
-  #   Self-certification is then listed greyed, with the reason.
-  # - The "No self-certified extension is allowed" note goes. A reason under the greyed item replaces it.
+  #   Self-certification is then listed greyed, with the reason (since beta28: a line with the reason).
+  # - The "No self-certified extension is allowed" note goes. A reason line replaces it.
   #
   # What stays: Mitigate shows on summative rows only, while the window is open (until 24 hours after the
   # student's own deadline, whatever was handed in or released). "Delete mitigation" behaves as now.
   # Mitigate still needs at least one live link: with no request link and no self-cert link there is no button.
+  #
+  # Pierre, 2026-10-22 (scope beta28-feedback.feature): no greyed "Self-certify an extension" item any more. Its
+  # reason stays as a plain line, read out by the next link, and a divider sets self-certification apart from
+  # "Request formal mitigation".
   #
   # Approved by Pierre, 2026-10-09 ("yes"), with his changes below. Coursework scenarios need mod_coursework
   # (@mod_coursework); mitigation_test covers every menu rule without it.
@@ -59,13 +63,14 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "C1" row
     Then the Mitigate menu of "C1" should list:
-      | item                       | state | note        |
-      | Self-certify an extension  | live  | 2 of 3 left |
-      | Request formal mitigation         | live  |             |
+      | item                      | state   | note        |
+      | Self-certify an extension | live    | 2 of 3 left |
+      | ---                       | divider |             |
+      | Request formal mitigation | live    |             |
     And "Self-certify an extension" in the Mitigate menu of "C1" should go to block_rhb's self-certification address
 
   @mod_coursework
-  Scenario: All self-certs used: greyed, with the reason and what's still possible
+  Scenario: All self-certs used: the reason and what's still possible
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "nothing" for self-certification
     And "student1" has used 3 self-certified extensions
@@ -73,12 +78,13 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "C1" row
     Then the Mitigate menu of "C1" should list:
-      | item                       | state   | note                                                                                       |
-      | Self-certify an extension  | greyed  | You have used all 3 of your self-certified extensions. You can still request formal mitigation. |
-      | Request formal mitigation         | live    |                                                                                            |
+      | item                                                                                            | state   | note |
+      | You have used all 3 of your self-certified extensions. You can still request formal mitigation. | info    |      |
+      | ---                                                                                             | divider |      |
+      | Request formal mitigation                                                                       | live    |      |
 
   @mod_coursework
-  Scenario: Already self-certified here: greyed, with the new deadline, and Delete mitigation stays
+  Scenario: Already self-certified here: the new deadline, and Delete mitigation stays
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And "student1" self-certified "C1" to "in 11 days"
     And block_rhb offers "a delete link" for self-certification
@@ -86,10 +92,11 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "C1" row
     Then the Mitigate menu of "C1" should list:
-      | item                       | state  | note                                                                              |
-      | Self-certify an extension  | greyed | You already self-certified an extension for this assessment. Your deadline is now |
-      | Delete mitigation          | live   |                                                                                   |
-      | Request formal mitigation         | live   |                                                                                   |
+      | item                                                                              | state   | note |
+      | You already self-certified an extension for this assessment. Your deadline is now | info    |      |
+      | Delete mitigation                                                                 | live    |      |
+      | ---                                                                               | divider |      |
+      | Request formal mitigation                                                         | live    |      |
 
   Scenario: A quiz offers formal mitigation only
     Given a summative "quiz" "Q1" in "M1" is due "in 4 days"
@@ -108,9 +115,10 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "C1" row
     Then the Mitigate menu of "C1" should list:
-      | item                       | state  | note                                                                                  |
-      | Self-certify an extension  | greyed | Self-certification isn't available for this coursework. You can still request formal mitigation. |
-      | Request formal mitigation         | live   |                                                                                       |
+      | item                                                                                             | state   | note |
+      | Self-certification isn't available for this coursework. You can still request formal mitigation. | info    |      |
+      | ---                                                                                              | divider |      |
+      | Request formal mitigation                                                                        | live    |      |
 
   @mod_coursework
   Scenario: rhb's answer wins over the block's own count
@@ -121,9 +129,10 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "C1" row
     Then the Mitigate menu of "C1" should list:
-      | item                       | state | note |
-      | Self-certify an extension  | live  |      |
-      | Request formal mitigation         | live  |      |
+      | item                      | state   | note |
+      | Self-certify an extension | live    |      |
+      | ---                       | divider |      |
+      | Request formal mitigation | live    |      |
 
   @mod_coursework
   Scenario: No live link at all means no Mitigate
@@ -144,7 +153,7 @@ Feature: The Mitigate menu explains self-certification
     Then the Mitigate menu of "C1" should show block_rhb's self-certification HTML
 
   @mod_coursework
-  Scenario: The greyed item is reachable from the keyboard and reads its reason
+  Scenario: The keyboard skips the reason line, and formal mitigation reads it out
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "nothing" for self-certification
     And "student1" has used 3 self-certified extensions
@@ -152,9 +161,12 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "C1" row
     And I press the down key
-    Then the focused element is "Self-certify an extension" "button"
-    And I press the enter key
-    And I should see "My assessments"
+    Then the focused element is "Request formal mitigation" "link"
+    And the Mitigate menu of "C1" should list:
+      | item                                                   | state   | note |
+      | You have used all 3 of your self-certified extensions. | info    |      |
+      | ---                                                    | divider |      |
+      | Request formal mitigation                              | live    |      |
 
   @mod_coursework
   Scenario Outline: The summary box counts down
@@ -205,25 +217,26 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "A1" row
     Then the Mitigate menu of "A1" should list:
-      | item                      | state | note |
-      | Self-certify an extension | live  |      |
-      | Request formal mitigation | live  |      |
+      | item                      | state   | note |
+      | Self-certify an extension | live    |      |
+      | ---                       | divider |      |
+      | Request formal mitigation | live    |      |
     And "Self-certify an extension" in the Mitigate menu of "A1" should go to block_rhb's self-certification address
 
-  Scenario: Without mod_coursework: no self-cert link greys it, and the keyboard reaches it
+  Scenario: Without mod_coursework: no self-cert link says why, and the keyboard goes to formal mitigation
     Given a summative "assign" "A1" in "M1" is due "in 4 days"
     And the block_rhb stand-in treats "A1" as a coursework
     And block_rhb offers "a message only" for self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "A1" row
     Then the Mitigate menu of "A1" should list:
-      | item                      | state  | note                                                                                       |
-      | Self-certify an extension | greyed | Self-certification isn't available for this coursework. You can still request formal mitigation. |
-      | Request formal mitigation | live   |                                                                                            |
+      | item                                                                                             | state   | note |
+      | Self-certification isn't available for this coursework. You can still request formal mitigation. | info    |      |
+      | ---                                                                                              | divider |      |
+      | Request formal mitigation                                                                        | live    |      |
+    And I should not see "Self-certify an extension"
     And I press the down key
-    And the focused element is "Self-certify an extension" "button"
-    And I press the enter key
-    And I should see "My assessments"
+    And the focused element is "Request formal mitigation" "link"
 
   Scenario: Without mod_coursework: an unreadable self-cert link shows block_rhb's own HTML
     Given a summative "assign" "A1" in "M1" is due "in 4 days"
@@ -240,10 +253,11 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     And I press "Mitigate" in the "A1" row
     Then the Mitigate menu of "A1" should list:
-      | item                      | state  | note                                                          |
-      | Self-certify an extension | greyed | You already self-certified an extension for this assessment. |
-      | Delete mitigation         | live   |                                                               |
-      | Request formal mitigation | live   |                                                               |
+      | item                                                         | state   | note |
+      | You already self-certified an extension for this assessment. | info    |      |
+      | Delete mitigation                                            | live    |      |
+      | ---                                                          | divider |      |
+      | Request formal mitigation                                    | live    |      |
     And "Delete mitigation" in the Mitigate menu of "A1" should be a destructive item with a bin icon
     When I click on "Delete mitigation" in the Mitigate menu of "A1"
     Then the Mitigate menu of "A1" should still be open

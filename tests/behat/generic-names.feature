@@ -26,8 +26,9 @@ Feature: Assessments with generic names get a hint for staff
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
     And the My assessments block keeps its hints and guidance from before beta27
 
+  # Undated, so it's listed: My marking has no Upcoming section since beta28.
   Scenario Outline: A name made only of generic words gets a hint for staff
-    Given a summative "assign" "<name>" in "LAW1001" is due "in 3 days"
+    Given a summative "assign" "<name>" in "LAW1001" with no due date exists
     When I log in as "teacher1" and view my dashboard
     Then "<name>" should <have> a "generic name" hint
 
@@ -49,8 +50,8 @@ Feature: Assessments with generic names get a hint for staff
     And the following "course enrolments" exist:
       | user     | course       | role           |
       | teacher1 | CSM1056_B_23 | editingteacher |
-    And a summative "assign" "Computing in History Essay" in "CSM1056_B_23" is due "in 3 days"
-    And a summative "assign" "Computing the Census, 1841-1911" in "CSM1056_B_23" is due "in 4 days"
+    And a summative "assign" "Computing in History Essay" in "CSM1056_B_23" with no due date exists
+    And a summative "assign" "Computing the Census, 1841-1911" in "CSM1056_B_23" with no due date exists
     When I log in as "teacher1" and view my dashboard
     Then "Computing in History Essay" should have a "generic name" hint
     And "Computing the Census, 1841-1911" should not have a "generic name" hint
@@ -62,7 +63,7 @@ Feature: Assessments with generic names get a hint for staff
 
   @javascript
   Scenario: The hint says why and gives an example
-    Given a summative "assign" "Essay 1" in "LAW1001" is due "in 3 days"
+    Given a summative "assign" "Essay 1" in "LAW1001" with no due date exists
     When I log in as "teacher1" and view my dashboard
     And I click on the generic name hint of "Essay 1"
     Then the "genericname" popover of "Essay 1" should say "Generic name" then "Students benefit from descriptive names for their assessments."
@@ -75,7 +76,7 @@ Feature: Assessments with generic names get a hint for staff
   Scenario: An admin can turn the hint off
     Given the following config values are set as admin:
       | genericnames | 0 | block_le_dashboard |
-    And a summative "assign" "Essay 1" in "LAW1001" is due "in 3 days"
+    And a summative "assign" "Essay 1" in "LAW1001" with no due date exists
     When I log in as "teacher1" and view my dashboard
     Then "Essay 1" should not have a "generic name" hint
 
@@ -84,8 +85,8 @@ Feature: Assessments with generic names get a hint for staff
     Given the following config values are set as admin:
       | genericterms    | essay resit                      | block_le_dashboard |
       | genericnametext | Please give this a proper title. | block_le_dashboard |
-    And a summative "assign" "Resit Essay" in "LAW1001" is due "in 3 days"
-    And a summative "assign" "Coursework 1" in "LAW1001" is due "in 4 days"
+    And a summative "assign" "Resit Essay" in "LAW1001" with no due date exists
+    And a summative "assign" "Coursework 1" in "LAW1001" with no due date exists
     When I log in as "teacher1" and view my dashboard
     Then "Coursework 1" should not have a "generic name" hint
     When I click on the generic name hint of "Resit Essay"

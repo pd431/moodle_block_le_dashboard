@@ -677,28 +677,6 @@ $ma-glyph-tones: ("attention");
         }
     }
 
-    // Self-certification the student can't use: greyed but focusable
-    // (aria-disabled), with its reason under it. Never red.
-    .ma-mitigate-item--greyed {
-        color: var(--ma-text-muted);
-        cursor: default;
-
-        &:hover,
-        &:active,
-        &:focus,
-        &.active {
-            background-color: transparent;
-            color: var(--ma-text-muted);
-        }
-
-        // Reached by keyboard, it shows focus with an outline only: the selected-item fill made it look available
-        // (Pierre's UAT, 2026-10-19).
-        &:focus-visible {
-            outline: 2px solid var(--ma-text-muted);
-            outline-offset: -2px;
-        }
-    }
-
     .ma-status-wrap {
         display: inline-flex;
         align-items: center;
@@ -952,6 +930,11 @@ $ma-glyph-tones: ("attention");
         .ma-row-date-label {
             display: block;
         }
+    }
+
+    // A student row with two dates or more puts each label on its own line, so its dates line up (beta28).
+    .ma-row-dates--stacked .ma-row-date-label {
+        display: block;
     }
 
     // Narrower blocks, by the block's own width. Student rows first put the

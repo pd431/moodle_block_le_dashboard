@@ -347,8 +347,8 @@ class student extends base {
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
-            // First, under the Feedback released pill, so it never reads as the student's own deadline (D6).
-            array_unshift($dates, format::date('released', (int)$r->timereleased));
+            // After the deadline, in the order things happen: its label says what it is (Pierre, 2026-10-20, replacing D6).
+            $dates[] = format::date('released', (int)$r->timereleased);
             if ($r->gradedisplay !== null && $r->gradedisplay !== '') {
                 $row['grade'] = ['text' => $r->gradedisplay];
             }
@@ -362,6 +362,8 @@ class student extends base {
             $dates[] = $date;
         }
         $row['dates'] = $dates;
+        // With two dates or more, every label on its own line so the dates line up (Pierre, 2026-10-20).
+        $row['stackdates'] = count($dates) > 1;
         $row['notes'] = $this->notes($r, $section, $status);
         // Late work: the clock beside the grade once there is one, else beside the status pill.
         if (self::is_late($r) && config::shown('hint_late')) {
@@ -378,9 +380,14 @@ class student extends base {
         if ($status === classifier::STATUS_SUBMITTED && $section !== classifier::PAST && $r->lockreason) {
             // Final before the deadline: say why instead of offering Submit (Pierre, 2026-10-09).
             $row['locked'] = $this->lock_control($row['id'], $r->lockreason);
-        } else if ($section !== classifier::PAST && classifier::teacher_locked($r)) {
-            // Locked before anything was handed in (B1).
-            $row['locked'] = $this->lock_control($row['id'], $r->lockreason, false);
+        } else if ($section !== classifier::PAST && !classifier::submittable($r, $this->now)) {
+            // Nothing can be handed in before the deadline: a teacher's lock (B1), or every quiz attempt used with
+            // none finished (Pierre, 2026-10-21).
+            if ($r->lockreason) {
+                $row['locked'] = $this->lock_control($row['id'], $r->lockreason, false);
+            } else {
+                $actions[] = format::view_action($row['url']);
+            }
         } else if ($this->not_yet_open($r)) {
             // Nothing can be handed in yet: View, not Submit.
             $actions[] = format::view_action($row['url']);

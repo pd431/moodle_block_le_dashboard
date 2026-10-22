@@ -84,5 +84,13 @@ Feature: Staff see only the staff views, everyone else sees the student view
     Examples:
       | role           | view          | order                                                      |
       | student        | Student view  | Overdue, Upcoming, Past                                    |
-      | editingteacher | My marking    | Marking in progress, Upcoming deadlines, Completed marking |
       | moduleconvenor | Convenor view | In progress, Upcoming, Past                                |
+
+  # My marking has no Upcoming section (Pierre, 2026-10-21), so an undated assessment gives it a row.
+  @javascript
+  Scenario: My marking's sections are ordered by what needs action first
+    Given "staff1" is enrolled in "M1" as "editingteacher"
+    And a summative "assign" "A1" in "M1" with no due date exists
+    When I log in as "staff1" and view my dashboard
+    Then the "My marking" should be open
+    And the sections should be in the order "Marking in progress, Undated, Completed marking"

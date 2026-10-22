@@ -72,7 +72,8 @@ class classifier {
      * - Nothing to hand in online (attendance, in person, mark-only): Upcoming until the date, then Past,
      *   "Awaiting feedback" until the grade is out. Never Overdue.
      * - Work the student can no longer hand in (past the cut-off or a quiz's close, or every quiz
-     *   attempt used with none finished): Past at once, whatever the deadline.
+     *   attempt used with none finished): Past once the deadline has passed; before it, Upcoming with
+     *   "Can't submit", as work a teacher locked (Pierre, 2026-10-21).
      * - Submitted: Upcoming until the deadline, then Past (in marking, or released). A final submission
      *   (finalised, locked by a teacher, every quiz attempt used) too (Pierre, 2026-10-09).
      * - A reopened attempt not yet resubmitted: Upcoming, with no pill (G13).
@@ -125,8 +126,9 @@ class classifier {
             return [($due !== null && $due >= $now) ? self::UPCOMING : self::PAST, $done];
         }
         if (!self::submittable($row, $now)) {
-            // Locked by a teacher before the deadline: Upcoming, saying why there's no Submit (B1).
-            if (self::teacher_locked($row) && $due !== null && $due >= $now) {
+            // Can't be handed in before the deadline (locked by a teacher, B1, or every quiz attempt used with none
+            // finished): Upcoming, saying why there's no Submit (Pierre, 2026-10-21).
+            if ($due !== null && $due >= $now) {
                 return [self::UPCOMING, self::STATUS_PENDING];
             }
             // Nothing can be handed in any more: Past, with Mitigate while its window is open.
@@ -180,7 +182,7 @@ class classifier {
     const TOMARK = 'tomark';
     /** Staff section: all my units marked. */
     const COMPLETED = 'completed';
-    /** Staff and convenor section: deadline ahead. */
+    /** Convenor section: deadline ahead. */
     const STAFF_UPCOMING = 'upcoming';
     /** Convenor section: deadline passed, marking or release outstanding. */
     const INPROGRESS = 'inprogress';
@@ -188,57 +190,41 @@ class classifier {
     const CONVENOR_PAST = 'past';
 
     /**
-     * Where an assessment goes in a marker's view.
-     *
-     * Past the deadline with nothing to mark and extensions still to come, an assessment
-     * stays in Upcoming deadlines (G9).
+     * Where an assessment goes in a marker's view. There is no Upcoming section (Pierre, 2026-10-21): work
+     * before its deadline isn't marking yet. Past the deadline with nothing of mine to mark, an assessment
+     * goes to Completed marking once my share is marked, with its Extensions hint while extensions run, and
+     * nowhere before that; late work brings it back to Marking in progress (G6).
      *
      * @param int $tomark My units ready and not marked.
-     * @param int $mine My units in total.
+     * @param int $own My own units: allocated to me or marked by me. Work without allocation that colleagues
+     *                 marked counts as mine to mark, but isn't my own once done (Pierre, 2026-10-21).
      * @param int|null $due
      * @param int $now
-     * @param bool $pending Students whose marking is mine have extensions still to come.
      * @return string|null Section, or null when it isn't shown in the marking sections.
      */
-    public static function staff(int $tomark, int $mine, ?int $due, int $now, bool $pending = false): ?string {
+    public static function staff(int $tomark, int $own, ?int $due, int $now): ?string {
         if ($tomark > 0) {
             return self::TOMARK;
         }
         if ($due === null) {
             // No deadline: all my marking done is finished (Pierre, 2026-10-04); with none yet,
             // work may still arrive (EC2).
-            return $mine > 0 ? self::COMPLETED : self::UNDATED;
+            return $own > 0 ? self::COMPLETED : self::UNDATED;
         }
-        if ($pending && $due !== null && $due < $now) {
-            return self::STAFF_UPCOMING;
-        }
-        if ($mine > 0 && $due < $now) {
-            return self::COMPLETED;
-        }
-        return null;
+        return $own > 0 && $due < $now ? self::COMPLETED : null;
     }
 
     /**
-     * Where an assessment goes in the convenor view.
+     * Where an assessment goes in the convenor view. Past its deadline with nothing to mark or release, it goes to
+     * Past at once, and late work brings it back to In progress (Pierre, 2026-10-21).
      *
      * @param int|null $due
      * @param int $now
      * @param int $submitted Submitted units.
-     * @param int $outstanding Ready units not marked at some stage, plus marked units not released.
-     * @param int $thresholddays Days after the deadline an assessment with no submissions stays in progress.
-     * @param int|null $students Students who can take it now, if known: with none left, nothing more can arrive (EC4).
-     * @param bool $closed Nothing more can be handed in: a generic type, or every cut-off has passed (F3).
+     * @param int $outstanding Ready units not marked at some stage, marked units not released, and extensions to come.
      * @return string
      */
-    public static function convenor(
-        ?int $due,
-        int $now,
-        int $submitted,
-        int $outstanding,
-        int $thresholddays,
-        ?int $students = null,
-        bool $closed = false
-    ): string {
+    public static function convenor(?int $due, int $now, int $submitted, int $outstanding): string {
         if ($due !== null && $due >= $now) {
             return self::STAFF_UPCOMING;
         }
@@ -248,9 +234,6 @@ class classifier {
         if ($due === null) {
             // Finished work goes to Past whatever its date (Pierre, 2026-10-04).
             return $submitted > 0 ? self::CONVENOR_PAST : self::UNDATED;
-        }
-        if ($submitted === 0 && $students !== 0 && !$closed && $due >= $now - $thresholddays * DAYSECS) {
-            return self::INPROGRESS;
         }
         return self::CONVENOR_PAST;
     }

@@ -34,8 +34,19 @@ Feature: Activity icons match the course page
       | activity | user     | view          |
       | assign   | student1 | Student view  |
       | quiz     | student1 | Student view  |
-      | assign   | marker1  | My marking    |
-      | quiz     | marker1  | My marking    |
+
+  # Undated, so it's listed: My marking has no Upcoming section since beta28.
+  Scenario Outline: A My marking row's activity icon is the one the course page shows
+    Given a summative "<activity>" "A1" in "M1" with no due date exists
+    And the My assessments index is up to date
+    When I log in as "marker1" and view the "My marking"
+    Then the activity icon of "A1" should be the "<activity>" module's own icon
+    And the activity icon of "A1" should use the "assessment" purpose colour
+
+    Examples:
+      | activity |
+      | assign   |
+      | quiz     |
 
   @mod_coursework
   Scenario: Coursework uses its own module icon

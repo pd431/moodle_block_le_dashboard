@@ -69,13 +69,14 @@ Feature: Staff are told when a tagged assessment is missing a setting
   Scenario: A quiz whose marks are never shown is flagged
     Given a summative "quiz" "Q1" in "M1" with marks never shown is due "tomorrow"
     And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
+    # In the Convenor view: My marking has no Upcoming section since beta28.
+    When I log in as "convenor1" and view the "Convenor view"
     Then "Q1" should have a "setup" hint
 
   Scenario: A formative quiz whose marks are never shown is not flagged
     Given a formative "quiz" "F1" in "M1" with marks never shown is due "tomorrow"
     And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
+    When I log in as "convenor1" and view the "Convenor view"
     Then "F1" should not have a "setup" hint
 
   Scenario: An activity tagged both summative and formative is flagged
@@ -104,8 +105,8 @@ Feature: Staff are told when a tagged assessment is missing a setting
     When I log in as "convenor1" and view the "Module convenor view" for academic year "All years"
     Then I should see "2 tagged activities need their settings checked across your courses." in the "My assessments" block
     And the settings check list should be collapsed
-    When I click on "2 tagged activities need their settings checked across your courses." "text" in the "My assessments" "block"
-    And I click on "Module 1 (2)" "text" in the "My assessments" "block"
+    When I click on "2 tagged activities need their settings checked across your courses." "text" in the "My Assessments" "block"
+    And I click on "Module 1 (2)" "text" in the "My Assessments" "block"
     Then I should see "No due date" in the settings check list
     And I should see "Not shown on dashboards: Workshop is not enabled in Le Dashboard" in the settings check list
 

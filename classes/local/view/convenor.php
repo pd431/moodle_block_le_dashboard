@@ -106,9 +106,7 @@ class convenor extends base {
         $students = $DB->get_records_sql("SELECT s.cmid,
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
                                                  SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
-                                                          THEN 1 ELSE 0 END) AS submitted,
-                                                 SUM(CASE WHEN s.cutoff IS NULL THEN 1 ELSE 0 END) AS uncut,
-                                                 MAX(s.cutoff) AS lastcutoff
+                                                          THEN 1 ELSE 0 END) AS submitted
                                             FROM {block_le_dashboard_stu} s
                                             JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            WHERE c.courseid $insql
@@ -178,7 +176,6 @@ class convenor extends base {
         $pending = staff::pending_extensions("c.courseid $insql", $params, $this->now);
 
         $names = format::course_names(array_column($cms, 'courseid'));
-        $threshold = config::overdue_threshold_days();
         $oldest = null;
         $active = [];
         foreach ($cms as $cmid => $cm) {
@@ -224,22 +221,15 @@ class convenor extends base {
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
-                // Release is outstanding until some is released: what is held back after that is withheld on
-                // purpose, so the assessment can go to Past (Pierre, 2026-10-07).
-                $outstanding += $released > 0 ? 0 : $units;
+                // Release is outstanding until every marked unit is released (Pierre, 2026-10-21, reversing
+                // 2026-10-07): a partly released assessment stays In progress.
+                $outstanding += $units - $released;
             }
-            // Nothing more can be handed in: a generic type, or every student's cut-off has passed (F3).
-            $closed = $cm->adapter === 'generic'
-                || ($s && (int)$s->uncut === 0 && $s->lastcutoff !== null && (int)$s->lastcutoff < $this->now);
-
             $section = classifier::convenor(
                 $cm->due === null ? null : (int)$cm->due,
                 $this->now,
                 $units,
-                $outstanding + (int)($pending[$cmid]->students ?? 0),
-                $threshold,
-                (int)($s->total ?? 0),
-                $closed
+                $outstanding + (int)($pending[$cmid]->students ?? 0)
             );
             $otheryear = !isset($inyear[(int)$cm->courseid]);
             // Only with marking or release actually outstanding: that is the work needing action.
@@ -250,7 +240,7 @@ class convenor extends base {
             if ($otheryear) {
                 $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
             }
-            [$markingdate, $defaulthint] = format::markingdue($row, $cm);
+            $markingdate = format::markingdue($row, $cm);
             $row['dates'] = array_values(array_filter([
                 $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
                 $markingdate,
@@ -296,9 +286,6 @@ class convenor extends base {
             if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
                 $row['hints'][] = $generic;
             }
-            if ($defaulthint) {
-                $row['hints'][] = $defaulthint;
-            }
             // Work that arrived after marking was finished brought this back to In progress (G6).
             if (
                 $section === classifier::INPROGRESS && config::shown('hint_returned')
@@ -325,14 +312,18 @@ class convenor extends base {
                 $row['grading'] = format::grading($units, $released, (int)($unmarked[$cmid] ?? 0), !empty($cm->norelease));
                 $row = format::marking_detail($row, get_string('marking_all', 'block_le_dashboard'));
             }
-            $row['sortkey'] = [$markingdue ?? PHP_INT_MAX, (int)$cm->due];
+            // Upcoming by submission deadline, the rest by marking deadline, else deadline (Pierre, 2026-10-21).
+            $row['sortkey'] = $upcoming ? (int)$cm->due : (int)($markingdue ?? $cm->due);
             $sections[$section][] = $row;
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
-        $sections[classifier::CONVENOR_PAST] = array_reverse($sections[classifier::CONVENOR_PAST]);
-        usort($sections[classifier::UNDATED], fn($a, $b) => strcmp($a['search'], $b['search']));
-        // In progress by marking deadline, then deadline.
-        usort($sections[classifier::INPROGRESS], fn($a, $b) => $a['sortkey'] <=> $b['sortkey']);
+        // Soonest first while there's work, latest first once done, undated by name; ties by name (Pierre, 2026-10-21).
+        foreach ($sections as $key => &$rows) {
+            $order = $key === classifier::CONVENOR_PAST ? -1 : 1;
+            usort($rows, fn($a, $b) => ($key === classifier::UNDATED ? 0 : $order * ($a['sortkey'] <=> $b['sortkey']))
+                ?: strcmp($a['search'], $b['search']));
+        }
+        unset($rows);
         return $this->sections_context($sections, $oldest, $extra);
     }
 
