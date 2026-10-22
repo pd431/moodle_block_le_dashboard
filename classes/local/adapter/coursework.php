@@ -712,4 +712,45 @@ class coursework extends base {
         }
         return $rows;
     }
+
+    #[\Override]
+    public function takes_selfcert(): bool {
+        return true;
+    }
+
+    #[\Override]
+    public function selfcert_subject(int $instanceid): ?object {
+        if (!class_exists('\mod_coursework\models\coursework')) {
+            return null;
+        }
+        return \mod_coursework\models\coursework::find($instanceid) ?: null;
+    }
+
+    /**
+     * Self-certified extensions the student has used since a time, from the mitigations table by the same
+     * reading as extensions(): only rows of type extension where the table has a type, and only rows the
+     * selfcert column marks, so a schema without that column has none.
+     *
+     * @param int $userid
+     * @param int $since
+     * @return int|null Null without the table.
+     */
+    #[\Override]
+    public function selfcert_used(int $userid, int $since): ?int {
+        global $DB;
+        if (!self::column('coursework_mitigations', ['id'])) {
+            return null;
+        }
+        if (!self::column('coursework_mitigations', ['selfcert'])) {
+            return 0;
+        }
+        $type = self::column('coursework_mitigations', ['type']) ? "type = 'extension' AND" : '';
+        return $DB->count_records_sql(
+            "SELECT COUNT(1)
+               FROM {coursework_mitigations}
+              WHERE $type selfcert = 1 AND allocatabletype = 'user'
+                AND allocatableid = :userid AND timecreated > :since",
+            ['userid' => $userid, 'since' => $since]
+        );
+    }
 }

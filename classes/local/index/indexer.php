@@ -16,6 +16,7 @@
 
 namespace block_le_dashboard\local\index;
 
+use block_le_dashboard\local\adapter\adapter;
 use block_le_dashboard\local\adapter\registry;
 use block_le_dashboard\local\config;
 use block_le_dashboard\local\memo;
@@ -239,10 +240,10 @@ class indexer {
                 registry::clear_error($cm->modname);
                 return false;
             }
-            if ($cmrow->submissions && registry::no_submission($cm)) {
+            if ($cmrow->submissions && registry::no_submission($cm, $adapter)) {
                 $cmrow->submissions = false;
             }
-            if (!$cmrow->submissions && !$cmrow->stages && registry::no_submission($cm)) {
+            if (!$cmrow->submissions && !$cmrow->stages && registry::no_submission($cm, $adapter)) {
                 // Marked from the gradebook (base::no_submission_units), so one marking stage.
                 $cmrow->stages = ['marked'];
             }
@@ -250,7 +251,7 @@ class indexer {
             // failure, or a process that dies part way (memory, time limit), leaves it listed for staff
             // with an honest note rather than missing (Pierre, 2026-10-08).
             if (!$DB->record_exists(self::CM, ['cmid' => $cmid])) {
-                $DB->insert_record(self::CM, $this->cm_record($cm, $courseid, $types[$cmid], $cmrow, true));
+                $DB->insert_record(self::CM, $this->cm_record($cm, $adapter, $courseid, $types[$cmid], $cmrow, true));
             }
             $students = self::students($courseid);
             $groupids = [];
@@ -271,7 +272,7 @@ class indexer {
                 "block_le_dashboard: indexing cm $cmid ({$cm->modname}) failed: " . $e->getMessage(),
                 DEBUG_DEVELOPER
             );
-            $this->load_error($cm, $courseid, $types[$cmid], $cmrow ?? null);
+            $this->load_error($cm, $adapter, $courseid, $types[$cmid], $cmrow ?? null);
             return true;
         }
 
@@ -284,7 +285,7 @@ class indexer {
             }
         }
 
-        $record = $this->cm_record($cm, $courseid, $types[$cmid], $cmrow, $failed || $markfailed);
+        $record = $this->cm_record($cm, $adapter, $courseid, $types[$cmid], $cmrow, $failed || $markfailed);
         $markers = array_flip(self::markers($courseid));
         $stu = [];
         $dues = [];
@@ -419,7 +420,7 @@ class indexer {
                     $transaction->rollback($e);
                 } finally {
                     registry::record_error($cm->modname, $e);
-                    $this->load_error($cm, $courseid, $types[$cmid], $cmrow);
+                    $this->load_error($cm, $adapter, $courseid, $types[$cmid], $cmrow);
                 }
             }
         }
@@ -440,13 +441,21 @@ class indexer {
      * The assessment's index row.
      *
      * @param \cm_info $cm
+     * @param adapter $adapter
      * @param int $courseid
      * @param string $type summative or formative
      * @param cm_row|null $cmrow Null when the adapter couldn't even read the activity.
      * @param bool $loaderror Whether student data couldn't be read, in whole or in part.
      * @return \stdClass
      */
-    protected function cm_record(\cm_info $cm, int $courseid, string $type, ?cm_row $cmrow, bool $loaderror): \stdClass {
+    protected function cm_record(
+        \cm_info $cm,
+        adapter $adapter,
+        int $courseid,
+        string $type,
+        ?cm_row $cmrow,
+        bool $loaderror
+    ): \stdClass {
         $section = $cm->get_section_info();
         return (object)[
             'cmid' => $cm->id,
@@ -462,7 +471,7 @@ class indexer {
             'markingdue' => $cmrow?->markingdue,
             'hiddenfromstudents' => (!$cm->visible || ($section && !$section->visible)) ? 1 : 0,
             'hasallocation' => $cmrow && $cmrow->hasallocation ? 1 : 0,
-            'hasbrief' => self::has_brief($cm) ? 1 : 0,
+            'hasbrief' => self::has_brief($cm, $adapter) ? 1 : 0,
             'stages' => $cmrow ? implode(',', $cmrow->stages) : '',
             'nosubmission' => !$cmrow || $cmrow->submissions ? 0 : 1,
             'norelease' => !$cmrow || $cmrow->releases ? 0 : 1,
@@ -476,17 +485,18 @@ class indexer {
      * Marks the assessment's row as not loaded, writing the row first if it has none, so it stays listed.
      *
      * @param \cm_info $cm
+     * @param adapter $adapter
      * @param int $courseid
      * @param string $type
      * @param cm_row|null $cmrow
      */
-    protected function load_error(\cm_info $cm, int $courseid, string $type, ?cm_row $cmrow): void {
+    protected function load_error(\cm_info $cm, adapter $adapter, int $courseid, string $type, ?cm_row $cmrow): void {
         global $DB;
         try {
             if ($DB->record_exists(self::CM, ['cmid' => $cm->id])) {
                 $DB->set_field(self::CM, 'loaderror', 1, ['cmid' => $cm->id]);
             } else {
-                $DB->insert_record(self::CM, $this->cm_record($cm, $courseid, $type, $cmrow, true));
+                $DB->insert_record(self::CM, $this->cm_record($cm, $adapter, $courseid, $type, $cmrow, true));
             }
         } catch (\Throwable $e) {
             debugging('block_le_dashboard: marking cm ' . $cm->id . ' as not loaded failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
@@ -760,17 +770,15 @@ class indexer {
         return [$out + array_fill_keys(array_keys($groupids), $default), array_filter($access, fn($can) => !$can)];
     }
 
-    /** File areas that hold an activity's brief, besides its intro. */
-    const BRIEF_AREAS = ['assign' => ['introattachment']];
-
     /**
      * Whether the activity has a description (intro text that isn't just markup)
-     * or a brief file.
+     * or a brief file, in its intro or in the file areas its adapter names.
      *
      * @param \cm_info $cm
+     * @param adapter $adapter
      * @return bool
      */
-    public static function has_brief(\cm_info $cm): bool {
+    public static function has_brief(\cm_info $cm, adapter $adapter): bool {
         global $DB;
         $columns = $DB->get_columns($cm->modname);
         if (isset($columns['intro'])) {
@@ -780,7 +788,7 @@ class indexer {
             }
         }
         $fs = get_file_storage();
-        foreach (array_merge(['intro'], self::BRIEF_AREAS[$cm->modname] ?? []) as $area) {
+        foreach (array_merge(['intro'], $adapter->brief_areas()) as $area) {
             if (!$fs->is_area_empty($cm->context->id, 'mod_' . $cm->modname, $area, false, true)) {
                 return true;
             }

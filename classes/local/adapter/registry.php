@@ -32,9 +32,6 @@ class registry {
         'coursework' => coursework::class,
     ];
 
-    /** Activity types where students never hand anything in online. */
-    const NOSUBMISSION = ['attendance'];
-
     /** Activity types never offered (R8: LTI is out of scope for now). */
     const EXCLUDED = ['lti'];
 
@@ -263,15 +260,17 @@ class registry {
     }
 
     /**
-     * Whether students hand nothing in online for this assessment, whatever its adapter says:
-     * attendance, or an activity tagged as done in person. The adapters declare their own cases
-     * (cm_row::$submissions), such as an assignment with no submission types.
+     * Whether students hand nothing in online for this assessment, whatever its own settings say: a type that
+     * never takes submissions (adapter::takes_submissions()), or an activity tagged as done in person. The
+     * adapters declare each activity's own case (cm_row::$submissions), such as an assignment with no
+     * submission types.
      *
      * @param \cm_info $cm
+     * @param adapter $adapter The activity's adapter.
      * @return bool
      */
-    public static function no_submission(\cm_info $cm): bool {
-        return in_array($cm->modname, self::NOSUBMISSION)
+    public static function no_submission(\cm_info $cm, adapter $adapter): bool {
+        return $adapter->takes_submissions() === false
             || \block_le_dashboard\local\tags::has_any((int)$cm->id, \block_le_dashboard\local\config::inperson_tags());
     }
 }

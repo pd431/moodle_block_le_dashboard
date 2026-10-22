@@ -70,6 +70,18 @@ class assign extends base {
     }
 
     #[\Override]
+    public static function events_for_related_user(): array {
+        // A teacher's lock or unlock is about the student it names (B4).
+        return ['\mod_assign\event\submission_locked', '\mod_assign\event\submission_unlocked'];
+    }
+
+    #[\Override]
+    public function brief_areas(): array {
+        // The "Additional files" on the assignment's settings.
+        return ['introattachment'];
+    }
+
+    #[\Override]
     public function cm_row(\cm_info $cm): ?cm_row {
         $a = $this->instance($cm);
         $markers = self::markercount($a);
@@ -87,7 +99,7 @@ class assign extends base {
             markingdue: self::date($a->gradingduedate),
             hasallocation: !empty($a->markingworkflow) && !empty($a->markingallocation),
             stages: $stages,
-            submissions: self::takes_submissions($a),
+            submissions: self::submissions_enabled($a),
         );
     }
 
@@ -99,7 +111,7 @@ class assign extends base {
      * @param \stdClass $a
      * @return bool
      */
-    protected static function takes_submissions(\stdClass $a): bool {
+    protected static function submissions_enabled(\stdClass $a): bool {
         global $DB;
         return $DB->record_exists_select(
             'assign_plugin_config',
