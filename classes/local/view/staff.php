@@ -74,9 +74,9 @@ class staff extends base {
     }
 
     /**
-     * My marking per assessment and stage: tomark, mine, marked, own (units allocated to me or that I marked, my own
-     * workload for Completed marking), unallocated (units counted
-     * because they fall to me as convenor), isgroup (units are groups), firstready (earliest
+     * My marking per assessment and stage: tomark, mine, marked, own (units allocated to me or that I marked, and
+     * work without allocation no one marked by hand where I convene: my own workload for Completed marking),
+     * unallocated (units counted because they fall to me as convenor), isgroup (units are groups), firstready (earliest
      * time an unmarked unit became ready) and lastmarked (my latest mark here).
      *
      * Mine is: units allocated to me; unallocated units on activities with allocation in
@@ -90,13 +90,21 @@ class staff extends base {
      */
     protected function marking(): array {
         global $DB;
-        [$staff, $marker] = $this->courses(true);
+        [$staff, $marker, $convenor] = $this->courses(true);
         if (!$marker) {
             return [];
         }
         [$where, $params] = $this->mine_sql(false);
         $shared = $staff ? $this->shared_marking($staff) : [];
         $params += ['me2' => $this->userid, 'me3' => $this->userid];
+        // In modules I convene, work without allocation that no one marked by hand (an auto-marked quiz) is mine too;
+        // a colleague's marking isn't (Pierre, 2026-10-22).
+        $automarked = '';
+        if ($convenor) {
+            [$autosql, $autoparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'am');
+            $automarked = " OR (m.marked = 1 AND m.markedby IS NULL AND c.hasallocation = 0 AND c.courseid $autosql)";
+            $params += $autoparams;
+        }
         $ready = self::ready_sql($this->now);
         // Work still to mark whose marking deadline falls within each summary window, or has passed (UAT, beta27).
         $deadline = self::marking_deadline_sql();
@@ -110,8 +118,8 @@ class staff extends base {
                                             SUM(CASE WHEN $ready AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
                                             SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS mine,
                                             SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
-                                            SUM(CASE WHEN $ready AND " . self::MARKER_SQL . " = :me3 THEN 1 ELSE 0 END)
-                                                AS own,
+                                            SUM(CASE WHEN $ready AND (" . self::MARKER_SQL . " = :me3$automarked)
+                                                     THEN 1 ELSE 0 END) AS own,
                                             SUM(CASE WHEN $ready AND m.allocatedto IS NULL AND c.hasallocation = 1
                                                      THEN 1 ELSE 0 END) AS unallocated,
                                             MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,

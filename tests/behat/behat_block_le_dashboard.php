@@ -263,16 +263,17 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Adds a question an attempt can be made at (an essay, which needs manual grading).
+     * Adds a question an attempt can be made at: an essay, which needs manual grading, or another type.
      *
      * @param stdClass $quiz
+     * @param string $qtype A short answer is marked automatically.
      */
-    protected static function add_essay(stdClass $quiz): void {
+    protected static function add_essay(stdClass $quiz, string $qtype = 'essay'): void {
         global $CFG;
         require_once($CFG->dirroot . '/mod/quiz/locallib.php');
         $qgen = testing_util::get_data_generator()->get_plugin_generator('core_question');
         $cat = $qgen->create_question_category(['contextid' => context_module::instance($quiz->cmid)->id]);
-        $question = $qgen->create_question('essay', null, ['category' => $cat->id]);
+        $question = $qgen->create_question($qtype, null, ['category' => $cat->id]);
         quiz_add_quiz_question($question->id, $quiz);
     }
 
@@ -485,7 +486,8 @@ class behat_block_le_dashboard extends behat_base {
                 'filename' => 'brief.pdf'], 'Brief');
         }
         if ($modname === 'quiz') {
-            self::add_essay($instance);
+            // With "no essay question", a short answer, marked automatically when the attempt is finished.
+            self::add_essay($instance, str_contains($opts, 'no essay question') ? 'shortanswer' : 'essay');
             $review = ['marks never shown' => 0, 'marks shown immediately after only' => 0x11000,
                 'marks shown after close only' => 0x00010];
             foreach ($review as $phrase => $marks) {
