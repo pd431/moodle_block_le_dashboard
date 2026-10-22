@@ -1,5 +1,5 @@
 @block @block_le_dashboard @block_le_dashboard_crossdb
-Feature: Fixes from the LMS support map audit (F1 to F9)
+Feature: Rows leave Upcoming when nothing more can be handed in, and marks release as the activity does
   In order that what the dashboard says matches what happened in the activity
   As a student, marker, module convenor or admin
   I need released grades, closed quizzes, empty assessments and settings changes handled correctly

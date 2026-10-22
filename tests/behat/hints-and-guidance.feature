@@ -243,7 +243,7 @@ Feature: Admins can turn each optional hint off, on a Hints and guidance page wi
 
   Scenario: An upgraded site that never saved its settings keeps today's text and hints
     Given the My assessments guidance settings were never saved before the beta27 upgrade
-    When the beta27 upgrade runs
+    When the site was upgraded from before the hint switches existed
     Then the "guidance_latepenalty" setting should contain "Work up to 10 minutes late may have 10% taken off its mark."
     And the "guidance_finalised" setting should contain "contact your Info Point"
     And the "feedbackdatemode" setting should be "asset"

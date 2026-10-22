@@ -1,11 +1,11 @@
 @block @block_le_dashboard
-Feature: Fixes from the dev architecture audit (A1 to A12)
+Feature: The index keeps up with changes made while it fills, and counts stay honest
   In order that the index stays right whatever order things happen in
   As an admin, student, marker or module convenor
   I need rebuilds, settings changes, gradebook grades, slow updates and category roles handled correctly
 
   # Findings: /mnt/project-files/audience-docs/dev/findings.md (beta16). Approved by the coordinator,
-  # 2026-10-06. A2 and A4 are the same as F2 and F3 (support-audit-fixes.feature).
+  # 2026-10-06. A2 and A4 are the same as F2 and F3 (submittability-and-release.feature).
   #
   # As built:
   # - A1, A3 and the coordinator's follow-up: the four backfill writers (install, the settings

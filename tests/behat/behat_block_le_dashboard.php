@@ -2620,11 +2620,11 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Runs the beta27 upgrade step.
+     * Runs the upgrade step that keeps an older site's hints and guidance as they were (config::keep_today()).
      *
-     * @When /^the beta27 upgrade runs$/
+     * @When /^the site was upgraded from before the hint switches existed$/
      */
-    public function the_beta27_upgrade_runs(): void {
+    public function upgraded_from_before_the_hint_switches(): void {
         \block_le_dashboard\local\config::keep_today();
     }
 
