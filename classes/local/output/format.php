@@ -436,6 +436,29 @@ class format {
     }
 
     /**
+     * The hint on a row with extensions still to come (G9), with the count beside its icon.
+     *
+     * @param string $rowid
+     * @param \stdClass $pending students, latest
+     * @return array
+     */
+    public static function extensions_hint(string $rowid, \stdClass $pending): array {
+        $n = (int)$pending->students;
+        $dated = self::dated('hint_extensions_text', (int)$pending->latest);
+        $hint = self::hint(
+            $rowid,
+            'extensions',
+            $dated['text'],
+            null,
+            $n === 1 ? get_string('hint_extensions_one', 'block_le_dashboard')
+                : get_string('hint_extensions_many', 'block_le_dashboard', $n),
+            $n
+        );
+        $hint['dated'] = $dated;
+        return $hint;
+    }
+
+    /**
      * The hint on a row with submissions flagged for an academic conduct (plagiarism) check:
      * staff and convenors only, never students.
      *

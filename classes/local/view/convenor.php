@@ -112,7 +112,7 @@ class convenor extends base {
                                            WHERE c.courseid $insql
                                         GROUP BY s.cmid", $params);
         // Marking units per stage. Work counts once its unit's deadline has passed (G9).
-        $ready = staff::ready_sql($this->now);
+        $ready = marking_rules::ready_sql($this->now);
         $marking = [];
         $rs = $DB->get_recordset_sql("SELECT m.cmid, m.stage,
                                              COUNT(1) AS units,
@@ -151,7 +151,7 @@ class convenor extends base {
         // Per marker, per stage.
         $markers = [];
         // Marked work is credited to whoever marked it (EC8).
-        $marker = staff::MARKER_SQL;
+        $marker = marking_rules::MARKER_SQL;
         $rs = $DB->get_recordset_sql("SELECT m.cmid, $marker AS allocatedto, m.stage,
                                              SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS ready,
                                              SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
@@ -173,7 +173,7 @@ class convenor extends base {
         }
 
         // Extensions still to come, for every student (G9).
-        $pending = staff::pending_extensions("c.courseid $insql", $params, $this->now);
+        $pending = marking_rules::pending_extensions("c.courseid $insql", $params, $this->now);
 
         $names = format::course_names(array_column($cms, 'courseid'));
         $oldest = null;
@@ -289,13 +289,13 @@ class convenor extends base {
             // Work that arrived after marking was finished brought this back to In progress (G6).
             if (
                 $section === classifier::INPROGRESS && config::shown('hint_returned')
-                    && staff::returned($m, $cm->due === null ? null : (int)$cm->due)
+                    && marking_rules::returned($m, $cm->due === null ? null : (int)$cm->due)
             ) {
                 $text = get_string('hint_returned_convenor', 'block_le_dashboard');
                 $row['hints'][] = format::hint($row['id'], 'returned', $text);
             }
             if (isset($pending[$cmid]) && config::shown('hint_extensions')) {
-                $row['hints'][] = staff::extensions_hint($row['id'], $pending[$cmid]);
+                $row['hints'][] = format::extensions_hint($row['id'], $pending[$cmid]);
             }
             if (!empty($flagged[$cmid])) {
                 $row['hints'][] = format::plagiarism_hint($row['id'], (int)$flagged[$cmid]);
