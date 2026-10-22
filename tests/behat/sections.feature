@@ -124,3 +124,8 @@ Feature: Each view has the sections its users work in
     And I log in as "convenor" and view the "Convenor view"
     Then "A1" should appear in the "Past" section
     And "A1" should show the grading status "Released to students"
+
+  Scenario: My marking with nothing to show says there's no current marking
+    Given a summative "assign" "A1" in "M1" is due "in 5 days"
+    When I log in as "marker1" and view the "My marking"
+    Then I should see "You have no current marking for this academic year." in the "My Assessments" "block"
