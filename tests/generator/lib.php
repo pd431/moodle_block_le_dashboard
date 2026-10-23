@@ -14,14 +14,54 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+use block_le_dashboard\fixture\fixture;
+use block_le_dashboard\fixture\registry;
+
 /**
- * Data generator for block_le_dashboard: configures the block and tags assessments.
+ * Data generator for block_le_dashboard: configures the block, tags assessments, and hands out the fixture that
+ * writes each activity type.
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class block_le_dashboard_generator extends component_generator_base {
+    /** @var string[] The fixture files, in dependency order. */
+    const FIXTURES = ['fixture', 'unavailable', 'phrases', 'base', 'generic', 'assign', 'quiz', 'coursework', 'peerwork',
+        'registry'];
+
+    /**
+     * Loads the fixtures (the write-side twin of the adapters), which live beside the generator, outside the
+     * autoloaded classes.
+     *
+     * @param testing_data_generator $datagenerator
+     */
+    public function __construct(testing_data_generator $datagenerator) {
+        parent::__construct($datagenerator);
+        foreach (self::FIXTURES as $file) {
+            require_once(__DIR__ . '/fixture/' . $file . '.php');
+        }
+    }
+
+    /**
+     * The fixture that writes an activity type, or an activity.
+     *
+     * @param string|cm_info $type A module name, or the activity itself.
+     * @return fixture
+     */
+    public function fixture($type): fixture {
+        return $type instanceof cm_info ? registry::for_cm($type) : registry::for($type);
+    }
+
+    /**
+     * Every table and column holding a time in any installed type, for tests that move time.
+     *
+     * @return array table => [columns]
+     */
+    public function time_fields(): array {
+        return registry::time_fields();
+    }
+
     /**
      * Sets the tags, roles and enabled types the tests use, and creates the module convenor role.
      *
@@ -55,31 +95,14 @@ class block_le_dashboard_generator extends component_generator_base {
     }
 
     /**
-     * Allocates a student's assignment to a marker, in assign_user_flags before Moodle 5.0
-     * and in assign_allocated_marker from 5.0.
+     * Allocates a student's assignment to a marker (0 removes the allocation), optionally setting the workflow state.
      *
      * @param int $cmid
      * @param int $userid
-     * @param int $markerid 0 removes the allocation.
-     * @param string|null $workflowstate Also sets the marking workflow state.
+     * @param int $markerid
+     * @param string|null $workflowstate
      */
     public function allocate_assign(int $cmid, int $userid, int $markerid, ?string $workflowstate = null): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        $assign = new assign(context_module::instance($cmid), null, null);
-        $flags = $assign->get_user_flags($userid, true);
-        if ($workflowstate !== null) {
-            $flags->workflowstate = $workflowstate;
-        }
-        if ($DB->get_manager()->table_exists('assign_allocated_marker')) {
-            $params = ['assignment' => $assign->get_instance()->id, 'student' => $userid];
-            $DB->delete_records('assign_allocated_marker', $params);
-            if ($markerid) {
-                $DB->insert_record('assign_allocated_marker', $params + ['marker' => $markerid]);
-            }
-        } else {
-            $flags->allocatedmarker = $markerid;
-        }
-        $assign->update_user_flags($flags);
+        \block_le_dashboard\fixture\assign::allocate_marker($cmid, $userid, $markerid ? [$markerid] : [], $workflowstate);
     }
 }

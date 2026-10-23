@@ -23,15 +23,18 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
 use Behat\Gherkin\Node\TableNode;
 use Behat\Mink\Exception\ExpectationException;
+use block_le_dashboard\fixture\fixture;
+use block_le_dashboard\fixture\phrases;
+use block_le_dashboard\fixture\unavailable;
 use block_le_dashboard\local\index\indexer;
 use block_le_dashboard\local\years;
 
 /**
  * Steps for the My assessments scope (logic-overhaul/scope/*.feature).
  *
- * Test data is created through each plugin's own API where it has one. Where a step sets data
- * directly, it queues the re-index the plugin's own event would have queued, so "view my
- * dashboard" (which runs pending index tasks first) sees it.
+ * Test data is written through the fixture of each activity type (tests/generator/fixture/), the write-side twin of
+ * its adapter, so no step here names a plugin's tables or classes. A fixture queues the re-index the plugin's own
+ * event would have queued, so "view my dashboard" (which runs pending index tasks first) sees it.
  *
  * @package    block_le_dashboard
  * @category   test
@@ -87,34 +90,6 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     // Helpers.
-
-    /**
-     * A time from words: now, tomorrow, yesterday, "3 days ago", "in 10 days", "in 1 minute".
-     *
-     * @param string $text
-     * @return int
-     */
-    protected static function time(string $text): int {
-        // An absolute time may name its zone ("12 October 2026 10:00 Europe/London"), which strtotime() reads
-        // only as written.
-        $absolute = trim($text);
-        $text = strtolower($absolute);
-        $map = ['now' => 0, 'tomorrow' => DAYSECS, 'yesterday' => -DAYSECS];
-        if (isset($map[$text])) {
-            return time() + $map[$text];
-        }
-        if (preg_match('/^in (\d+) (minute|hour|day|week)s?$/', $text, $m)) {
-            return strtotime("+{$m[1]} {$m[2]}");
-        }
-        if (preg_match('/^(\d+) (minute|hour|day|week)s? ago$/', $text, $m)) {
-            return strtotime("-{$m[1]} {$m[2]}");
-        }
-        $time = strtotime($absolute);
-        if ($time === false) {
-            throw new coding_exception("Unknown time '$absolute'");
-        }
-        return $time;
-    }
 
     /**
      * Skips the scenario when a module it needs is not installed.
@@ -176,6 +151,25 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected static function queue($cm): void {
         indexer::queue_cm(is_object($cm) ? (int)$cm->id : (int)$cm);
+    }
+
+    /**
+     * The fixture that writes an activity's type.
+     *
+     * @param cm_info $cm
+     * @return fixture
+     */
+    protected static function fixture(cm_info $cm): fixture {
+        return self::generator()->fixture($cm);
+    }
+
+    /**
+     * The block's generator, which also loads the fixtures.
+     *
+     * @return block_le_dashboard_generator
+     */
+    protected static function generator(): block_le_dashboard_generator {
+        return testing_util::get_data_generator()->get_plugin_generator('block_le_dashboard');
     }
 
     /**
@@ -262,21 +256,6 @@ class behat_block_le_dashboard extends behat_base {
         return $this->row($name)->find('xpath', $xpath);
     }
 
-    /**
-     * Adds a question an attempt can be made at: an essay, which needs manual grading, or another type.
-     *
-     * @param stdClass $quiz
-     * @param string $qtype A short answer is marked automatically.
-     */
-    protected static function add_essay(stdClass $quiz, string $qtype = 'essay'): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/quiz/locallib.php');
-        $qgen = testing_util::get_data_generator()->get_plugin_generator('core_question');
-        $cat = $qgen->create_question_category(['contextid' => context_module::instance($quiz->cmid)->id]);
-        $question = $qgen->create_question($qtype, null, ['category' => $cat->id]);
-        quiz_add_quiz_question($question->id, $quiz);
-    }
-
     // Set-up steps.
 
     /**
@@ -349,7 +328,7 @@ class behat_block_le_dashboard extends behat_base {
         string $due
     ): void {
         // A quoted tag is any tag, such as one the settings don't list yet.
-        $this->create_assessment(trim($tag, '"'), $modname, $name, $course, $opts, self::time($due));
+        $this->create_assessment(trim($tag, '"'), $modname, $name, $course, $opts, phrases::time($due));
     }
 
     /**
@@ -390,157 +369,12 @@ class behat_block_le_dashboard extends behat_base {
         string $opts,
         ?int $due
     ): void {
-        global $CFG, $DB;
         self::require_module($modname);
-        $course = self::course($shortname);
-        $gen = testing_util::get_data_generator();
-        $allocation = str_contains($opts, 'marker allocation');
-        $markingdue = preg_match('/marking deadline "([^"]*)"/', $opts, $m) ? self::time($m[1]) : 0;
-        $record = ['course' => $course->id, 'name' => $name];
-        if (str_contains($opts, 'no description')) {
-            $record['intro'] = '';
-        } else if (preg_match('/description "([^"]*)"/', $opts, $m)) {
-            $record['intro'] = $m[1];
+        try {
+            self::generator()->fixture($modname)->create(self::course($shortname), [$tag], $name, $due, $opts);
+        } catch (unavailable $e) {
+            throw new \Moodle\BehatExtension\Exception\SkippedException($e->getMessage());
         }
-        switch ($modname) {
-            case 'assign':
-                // EC5: "with no online submission" means the assignment only records a mark.
-                $online = str_contains($opts, 'no online submission') ? 0 : 1;
-                $record += ['duedate' => (int)$due, 'submissiondrafts' => str_contains($opts, 'required Submit') ? 1 : 0,
-                    'assignsubmission_onlinetext_enabled' => $online,
-                    'assignsubmission_file_enabled' => 0,
-                    'gradingduedate' => $markingdue,
-                    'markingworkflow' => $allocation || str_contains($opts, 'marking workflow') ? 1 : 0,
-                    'markingallocation' => $allocation ? 1 : 0];
-                if (str_contains($opts, 'team submission')) {
-                    $record += ['teamsubmission' => 1, 'requireallteammemberssubmit' => 0, 'preventsubmissionnotingroup' => 0];
-                    // Teams from one grouping, so a student's other groups (an extension group) aren't teams.
-                    if (preg_match('/team submission in grouping "([^"]*)"/', $opts, $m)) {
-                        $grouping = $DB->get_record('groupings', ['courseid' => $course->id, 'name' => $m[1]])
-                            ?: $gen->create_grouping(['courseid' => $course->id, 'name' => $m[1]]);
-                        $record['teamsubmissiongroupingid'] = $grouping->id;
-                    }
-                }
-                if (str_contains($opts, 'reopened attempts')) {
-                    $record += ['attemptreopenmethod' => 'manual', 'maxattempts' => -1];
-                }
-                if (preg_match('/cut-off "([^"]*)"/', $opts, $m)) {
-                    $record['cutoffdate'] = self::time($m[1]);
-                }
-                if (preg_match('/(\d+) markers/', $opts, $m)) {
-                    if (!$DB->get_manager()->field_exists('assign', 'markercount')) {
-                        throw new \Moodle\BehatExtension\Exception\SkippedException('Several assign markers need Moodle 5.0');
-                    }
-                    $record += ['markercount' => (int)$m[1],
-                        'multimarkmethod' => str_contains($opts, 'manual agreement') ? 'manual' : 'average'];
-                }
-                break;
-            case 'quiz':
-                require_once($CFG->dirroot . '/mod/quiz/lib.php');
-                $methods = ['first attempt' => QUIZ_ATTEMPTFIRST, 'last attempt' => QUIZ_ATTEMPTLAST,
-                    'highest grade' => QUIZ_GRADEHIGHEST];
-                $record += ['timeclose' => (int)$due, 'sumgrades' => 1];
-                if (preg_match('/grading method "([^"]*)"/', $opts, $m)) {
-                    $record['grademethod'] = $methods[strtolower($m[1])];
-                }
-                if (preg_match('/(\d+) attempts? allowed/', $opts, $m)) {
-                    $record['attempts'] = (int)$m[1];
-                }
-                break;
-            case 'peerwork':
-                $record += ['duedate' => (int)$due];
-                break;
-            case 'coursework':
-                $markers = preg_match('/(\d+) markers/', $opts, $m) ? (int)$m[1] : 1;
-                $record += ['deadline' => (int)$due, 'numberofmarkers' => $markers, 'allocationenabled' => $allocation ? 1 : 0,
-                    'moderationenabled' => str_contains($opts, 'moderation') ? 1 : 0,
-                    'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue];
-                if (str_contains($opts, 'submission type attendance')) {
-                    $record['submissiontype'] = 'attendance';
-                }
-                break;
-            case 'workshop':
-                $record += ['submissionend' => (int)$due];
-                break;
-            default:
-                $record += ['duedate' => (int)$due];
-        }
-        if (preg_match('/opens "([^"]*)"/', $opts, $m)) {
-            // When submissions open (Pierre's UAT, 2026-10-19), in each type's own field.
-            $fields = ['assign' => 'allowsubmissionsfromdate', 'quiz' => 'timeopen', 'coursework' => 'startdate',
-                'peerwork' => 'fromdate'];
-            $record[$fields[$modname]] = self::time($m[1]);
-        }
-        if (str_contains($opts, 'no grade')) {
-            // A grade of 0 is grade type None.
-            $record['grade'] = 0;
-        }
-        $instance = $gen->create_module($modname, $record);
-        if (isset($record['intro'])) {
-            // Module generators fill in an empty intro, so set it afterwards.
-            $DB->set_field($modname, 'intro', $record['intro'], ['id' => $instance->id]);
-        }
-        if (str_contains($opts, 'brief file')) {
-            get_file_storage()->create_file_from_string(['contextid' => context_module::instance($instance->cmid)->id,
-                'component' => 'mod_' . $modname, 'filearea' => 'intro', 'itemid' => 0, 'filepath' => '/',
-                'filename' => 'brief.pdf'], 'Brief');
-        }
-        if ($modname === 'quiz') {
-            // With "no essay question", a short answer, marked automatically when the attempt is finished.
-            self::add_essay($instance, str_contains($opts, 'no essay question') ? 'shortanswer' : 'essay');
-            $review = ['marks never shown' => 0, 'marks shown immediately after only' => 0x11000,
-                'marks shown after close only' => 0x00010];
-            foreach ($review as $phrase => $marks) {
-                if (str_contains($opts, $phrase)) {
-                    self::set_quiz((int)$instance->id, ['reviewmarks' => $marks]);
-                }
-            }
-            if (str_contains($opts, 'a maximum grade of 0')) {
-                self::set_quiz((int)$instance->id, ['grade' => 0]);
-            }
-        }
-        if ($due) {
-            self::joined_before($course->id, $due);
-        }
-        $tags = [$tag];
-        if (preg_match('/tagged "([^"]*)"/', $opts, $m)) {
-            $tags[] = $m[1];
-        }
-        core_tag_tag::set_item_tags('core', 'course_modules', $instance->cmid, context_module::instance($instance->cmid), $tags);
-    }
-
-    /**
-     * Changes quiz settings in the database and updates its grade item, as saving the form would.
-     *
-     * @param int $quizid
-     * @param array $fields
-     */
-    protected static function set_quiz(int $quizid, array $fields): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/mod/quiz/lib.php');
-        $DB->update_record('quiz', ['id' => $quizid] + $fields);
-        $quiz = $DB->get_record('quiz', ['id' => $quizid]);
-        $quiz->cmidnumber = '';
-        quiz_grade_item_update($quiz);
-    }
-
-    /**
-     * Dates the enrolments already in a course before a deadline: students on the module when an
-     * assessment is set were there before its deadline. Students enrolled later in a scenario are
-     * late joiners (EC10).
-     *
-     * @param int $courseid
-     * @param int $due
-     */
-    protected static function joined_before(int $courseid, int $due): void {
-        global $DB;
-        $before = $due - DAYSECS;
-        $DB->execute(
-            "UPDATE {user_enrolments}
-                         SET timecreated = :t1, timestart = CASE WHEN timestart > :t2 THEN :t3 ELSE timestart END
-                       WHERE timecreated > :t4 AND enrolid IN (SELECT id FROM {enrol} WHERE courseid = :courseid)",
-            ['t1' => $before, 't2' => $before, 't3' => $before, 't4' => $before, 'courseid' => $courseid]
-        );
     }
 
     /**
@@ -751,9 +585,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function are_team_of(string $u1, string $u2, string $group, string $name): void {
-        global $DB;
         $cm = $this->cm($name);
-        $groupingid = $DB->get_field('assign', 'teamsubmissiongroupingid', ['id' => $cm->instance], MUST_EXIST);
+        $groupingid = self::fixture($cm)->team_grouping($cm);
         $gen = testing_util::get_data_generator();
         $g = $gen->create_group(['courseid' => $cm->course, 'name' => $group]);
         $gen->create_grouping_group(['groupingid' => $groupingid, 'groupid' => $g->id]);
@@ -789,7 +622,7 @@ class behat_block_le_dashboard extends behat_base {
     public function is_only_available_from(string $name, string $when): void {
         self::restrict($this->cm($name), [\availability_date\condition::get_json(
             \availability_date\condition::DIRECTION_FROM,
-            self::time($when)
+            phrases::time($when)
         )]);
     }
 
@@ -825,7 +658,7 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_enrolment_ended(string $username, string $shortname, string $when): void {
         [$plugin, $instance, $userid] = self::enrolment($username, $shortname);
-        $plugin->update_user_enrol($instance, $userid, null, null, self::time($when));
+        $plugin->update_user_enrol($instance, $userid, null, null, phrases::time($when));
     }
 
     /**
@@ -956,8 +789,9 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function have_submitted(string $u1, string $u2, string $name): void {
+        $cm = $this->cm($name);
         foreach (array_filter([$u1, $u2]) as $username) {
-            $this->submit($this->cm($name), self::userid($username));
+            self::fixture($cm)->submit($cm, self::userid($username));
         }
     }
 
@@ -970,24 +804,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function submitted_at(string $username, string $name, string $when): void {
-        global $DB;
         $cm = $this->cm($name);
-        $userid = self::userid($username);
-        $this->submit($cm, $userid);
-        $time = self::time($when);
-        if ($cm->modname === 'assign') {
-            $DB->set_field('assign_submission', 'timemodified', $time, ['assignment' => $cm->instance, 'userid' => $userid]);
-        } else if ($cm->modname === 'coursework') {
-            $DB->set_field(
-                'coursework_submissions',
-                'timesubmitted',
-                $time,
-                ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user']
-            );
-        } else {
-            throw new coding_exception("Setting the submission time of {$cm->modname} is not supported");
-        }
-        self::queue($cm);
+        self::fixture($cm)->submit($cm, self::userid($username), phrases::time($when));
     }
 
     /**
@@ -999,17 +817,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function has_an_extension(string $username, string $name, string $when): void {
-        global $CFG;
         $cm = $this->cm($name);
-        if ($cm->modname !== 'assign') {
-            throw new coding_exception("Extensions on {$cm->modname} are not supported");
-        }
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        $assign = new assign($cm->context, $cm, null);
-        $flags = $assign->get_user_flags(self::userid($username), true);
-        $flags->extensionduedate = self::time($when);
-        $assign->update_user_flags($flags);
-        self::queue($cm);
+        self::fixture($cm)->extend($cm, self::userid($username), phrases::time($when));
     }
 
     /**
@@ -1021,14 +830,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function self_certified(string $username, string $name, string $when): void {
-        global $DB;
         $cm = $this->cm($name);
-        $record = ['courseworkid' => $cm->instance, 'allocatableid' => self::userid($username), 'allocatabletype' => 'user',
-            'extended_deadline' => self::time($when), 'type' => 'extension', 'selfcert' => 1,
-            'timecreated' => time(), 'timemodified' => time()];
-        $columns = $DB->get_columns('coursework_mitigations');
-        $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
-        self::queue($cm);
+        self::fixture($cm)->extend($cm, self::userid($username), phrases::time($when), true);
     }
 
     /**
@@ -1051,82 +854,7 @@ class behat_block_le_dashboard extends behat_base {
         global $DB;
         $cm = $this->cm($name);
         $groupid = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $group], MUST_EXIST);
-        if ($cm->modname === 'assign') {
-            // A team assignment submits for the member's group (CI caught this step using peerwork's generator).
-            $this->submit($cm, self::userid($username));
-            if (
-                !$DB->record_exists('assign_submission', ['assignment' => $cm->instance, 'groupid' => $groupid,
-                    'status' => 'submitted'])
-            ) {
-                throw new coding_exception("'$username' did not submit '$name' for '$group'");
-            }
-            self::queue($cm);
-            return;
-        }
-        testing_util::get_data_generator()->get_plugin_generator('mod_peerwork')->create_submission([
-            'peerworkid' => $cm->instance, 'groupid' => $groupid, 'userid' => self::userid($username),
-            'timecreated' => time(), 'timemodified' => time()]);
-        self::queue($cm);
-    }
-
-    /**
-     * One submission through the plugin's own API or generator.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     */
-    protected function submit(cm_info $cm, int $userid): void {
-        global $DB;
-        $gen = testing_util::get_data_generator();
-        switch ($cm->modname) {
-            case 'assign':
-                $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $userid, 'cmid' => $cm->id,
-                    'onlinetext' => 'My work']);
-                // Where students must click Submit, the generator leaves a draft: submit it, as the student would.
-                $DB->set_field(
-                    'assign_submission',
-                    'status',
-                    'submitted',
-                    ['assignment' => $cm->instance, 'userid' => $userid, 'latest' => 1]
-                );
-                break;
-            case 'quiz':
-                $this->finish_attempts($cm, $userid, 1);
-                return;
-            case 'coursework':
-                $gen->get_plugin_generator('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-                    'allocatableid' => $userid, 'allocatabletype' => 'user',
-                    'finalisedstatus' => \mod_coursework\models\submission::FINALISED_STATUS_FINALISED]);
-                break;
-            default:
-                throw new coding_exception("Submitting {$cm->modname} is not supported");
-        }
-        self::queue($cm);
-    }
-
-    /**
-     * Finishes quiz attempts, answering the essay.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     * @param int $count
-     */
-    protected function finish_attempts(cm_info $cm, int $userid, int $count): void {
-        global $USER;
-        $qgen = testing_util::get_data_generator()->get_plugin_generator('mod_quiz');
-        $saved = $USER;
-        \core\session\manager::set_user(core_user::get_user($userid));
-        for ($i = 0; $i < $count; $i++) {
-            $attempt = $qgen->create_attempt($cm->instance, $userid);
-            $qgen->submit_responses(
-                $attempt->id,
-                [1 => 'My answer'],
-                false,
-                true
-            );
-        }
-        \core\session\manager::set_user($saved);
-        self::queue($cm);
+        self::fixture($cm)->submit_for_group($cm, self::userid($username), (int)$groupid);
     }
 
     /**
@@ -1138,8 +866,9 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function have_finished(string $u1, string $u2, string $name): void {
+        $cm = $this->cm($name);
         foreach (array_filter([$u1, $u2]) as $username) {
-            $this->finish_attempts($this->cm($name), self::userid($username), 1);
+            self::fixture($cm)->attempts($cm, self::userid($username), 1);
         }
     }
 
@@ -1152,7 +881,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function has_finished_attempts(string $username, int $count, string $name): void {
-        $this->finish_attempts($this->cm($name), self::userid($username), $count);
+        $cm = $this->cm($name);
+        self::fixture($cm)->attempts($cm, self::userid($username), $count);
     }
 
     /**
@@ -1163,16 +893,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function has_abandoned_attempt(string $username, string $name): void {
-        global $DB, $USER;
         $cm = $this->cm($name);
-        $userid = self::userid($username);
-        $saved = $USER;
-        \core\session\manager::set_user(core_user::get_user($userid));
-        $attempt = testing_util::get_data_generator()->get_plugin_generator('mod_quiz')->create_attempt($cm->instance, $userid);
-        \core\session\manager::set_user($saved);
-        $DB->update_record('quiz_attempts', (object)['id' => $attempt->id, 'state' => 'abandoned',
-            'timefinish' => 0, 'timemodified' => time() - 60]);
-        self::queue($cm);
+        self::fixture($cm)->abandon_attempt($cm, self::userid($username));
     }
 
     /**
@@ -1185,39 +907,11 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $state
      */
     public function the_attempt_is(string $which, string $username, string $name, string $state): void {
-        global $DB;
         $cm = $this->cm($name);
-        $attempts = $DB->get_records('quiz_attempts', ['quiz' => $cm->instance, 'userid' => self::userid($username)], 'attempt');
-        $attempt = $which === 'first' ? reset($attempts) : end($attempts);
+        $userid = self::userid($username);
         if ($state === 'has been graded') {
-            $quba = question_engine::load_questions_usage_by_activity($attempt->uniqueid);
-            $quba->manual_grade(1, 'Good', 1, FORMAT_HTML);
-            question_engine::save_questions_usage_by_activity($quba);
-            $DB->set_field('quiz_attempts', 'sumgrades', $quba->get_total_mark(), ['id' => $attempt->id]);
-            self::regrade_quiz($cm, (int)$attempt->userid);
-        } else {
-            $this->assert_ungraded($attempt);
-        }
-        self::queue($cm);
-    }
-
-    /**
-     * Writes a student's quiz grade to the gradebook, as finishing a manual grade does.
-     *
-     * @param cm_info|stdClass $cm
-     * @param int $userid
-     */
-    protected static function regrade_quiz($cm, int $userid): void {
-        \mod_quiz\quiz_settings::create((int)$cm->instance)->get_grade_calculator()->recompute_final_grade($userid);
-    }
-
-    /**
-     * Checks an attempt is still waiting for manual grading.
-     *
-     * @param stdClass $attempt
-     */
-    protected function assert_ungraded(stdClass $attempt): void {
-        if ($attempt->sumgrades !== null) {
+            self::fixture($cm)->grade_attempt($cm, $userid, $which);
+        } else if (!self::fixture($cm)->attempt_ungraded($cm, $userid, $which)) {
             throw new ExpectationException('The attempt is already graded', $this->getSession());
         }
     }
@@ -1232,14 +926,9 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $marker2 A second marker (Moodle 5.0+ assign with several markers).
      */
     public function the_submission_is_allocated(string $student, string $name, string $marker = '', string $marker2 = ''): void {
-        global $DB;
         $cm = $this->cm($name);
-        $this->allocate($cm, self::userid($student), $marker ? self::userid($marker) : 0);
-        if ($marker2) {
-            $DB->insert_record('assign_allocated_marker', ['assignment' => $cm->instance, 'student' => self::userid($student),
-                'marker' => self::userid($marker2)]);
-            self::queue($cm);
-        }
+        $markers = array_map([self::class, 'userid'], array_filter([$marker, $marker2]));
+        self::fixture($cm)->allocate($cm, self::userid($student), array_values($markers));
     }
 
     /**
@@ -1250,50 +939,10 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $marker
      */
     public function both_submissions_are_allocated(string $name, string $marker): void {
-        global $DB;
         $cm = $this->cm($name);
-        if ($cm->modname === 'assign') {
-            $students = $DB->get_fieldset_select(
-                'assign_submission',
-                'userid',
-                "assignment = :id AND status = 'submitted' AND latest = 1",
-                ['id' => $cm->instance]
-            );
-        } else {
-            $students = $DB->get_fieldset_select(
-                'coursework_submissions',
-                'allocatableid',
-                "courseworkid = :id AND allocatabletype = 'user'",
-                ['id' => $cm->instance]
-            );
+        foreach (self::fixture($cm)->submitters($cm) as $userid) {
+            self::fixture($cm)->allocate($cm, $userid, [self::userid($marker)]);
         }
-        foreach ($students as $userid) {
-            $this->allocate($cm, (int)$userid, self::userid($marker));
-        }
-    }
-
-    /**
-     * Allocates one student's marking.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     * @param int $markerid 0 for unallocated.
-     */
-    protected function allocate(cm_info $cm, int $userid, int $markerid): void {
-        global $CFG;
-        if ($cm->modname === 'assign') {
-            testing_util::get_data_generator()->get_plugin_generator('block_le_dashboard')
-                ->allocate_assign($cm->id, $userid, $markerid);
-        } else if ($cm->modname === 'coursework') {
-            if ($markerid) {
-                testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_allocation([
-                    'courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user',
-                    'assessorid' => $markerid, 'stageidentifier' => 'assessor_1', 'ismanual' => 1]);
-            }
-        } else {
-            throw new coding_exception("{$cm->modname} has no allocation");
-        }
-        self::queue($cm);
     }
 
     /**
@@ -1304,20 +953,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function moderates(string $marker, string $name): void {
-        global $DB;
         $cm = $this->cm($name);
-        $students = $DB->get_fieldset_select(
-            'coursework_submissions',
-            'allocatableid',
-            "courseworkid = :id AND allocatabletype = 'user'",
-            ['id' => $cm->instance]
-        );
-        foreach ($students as $userid) {
-            testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_allocation([
-                'courseworkid' => $cm->instance, 'allocatableid' => (int)$userid, 'allocatabletype' => 'user',
-                'assessorid' => self::userid($marker), 'stageidentifier' => 'moderator', 'ismanual' => 1]);
-        }
-        self::queue($cm);
+        self::fixture($cm)->moderate($cm, self::userid($marker));
     }
 
     /**
@@ -1329,7 +966,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function marks_the_submission(string $marker, string $student, string $name): void {
-        $this->feedback($this->cm($name), self::userid($student), self::userid($marker), 'assessor_1', false);
+        $cm = $this->cm($name);
+        self::fixture($cm)->mark($cm, self::userid($student), self::userid($marker));
     }
 
     /**
@@ -1341,28 +979,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_grade_is_released(string $student, string $name): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        require_once($CFG->libdir . '/gradelib.php');
         $cm = $this->cm($name);
-        $userid = self::userid($student);
-        $assign = new assign($cm->context, $cm, null);
-        if ($assign->get_instance()->markingworkflow) {
-            $flags = $assign->get_user_flags($userid, true);
-            $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_RELEASED;
-            $assign->update_user_flags($flags);
-            // Pushes the grade to the gradebook, now that its state allows it.
-            $assign->update_grade($assign->get_user_grade($userid, false));
-        }
-        $where = 'assignment = :id AND userid = :userid';
-        $params = ['id' => $cm->instance, 'userid' => $userid];
-        $DB->execute("UPDATE {assign_submission} SET timemodified = timemodified - 120 WHERE $where", $params);
-        $DB->execute("UPDATE {assign_grades} SET timemodified = timemodified - 60 WHERE $where", $params);
-        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'assign', 'iteminstance' => $cm->instance,
-            'itemnumber' => 0, 'courseid' => $cm->course]);
-        $DB->execute("UPDATE {grade_grades} SET timemodified = timemodified - 60, timecreated = timecreated - 60
-                       WHERE itemid = :itemid AND userid = :userid", ['itemid' => $item->id, 'userid' => $userid]);
-        self::queue($cm);
+        self::fixture($cm)->release($cm, self::userid($student));
     }
 
     /**
@@ -1373,17 +991,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_submission_is_reopened(string $student, string $name): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
         $cm = $this->cm($name);
-        $assign = new assign($cm->context, $cm, null);
-        // Core's add_attempt() is what "Allow another attempt" calls; it isn't public.
-        $method = new ReflectionMethod($assign, 'add_attempt');
-        $method->setAccessible(true);
-        if (!$method->invoke($assign, self::userid($student))) {
-            throw new coding_exception("Could not reopen the submission of $student for $name");
-        }
-        self::queue($cm);
+        self::fixture($cm)->reopen($cm, self::userid($student));
     }
 
     /**
@@ -1394,24 +1003,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function both_markers_have_given_feedback(string $student, string $name): void {
-        global $DB;
         $cm = $this->cm($name);
-        $userid = self::userid($student);
-        if ($cm->modname === 'assign') {
-            // Moodle 5.0+: each allocated marker gives their own mark.
-            $markers = $DB->get_fieldset_select(
-                'assign_allocated_marker',
-                'marker',
-                'assignment = :a AND student = :s',
-                ['a' => $cm->instance, 's' => $userid]
-            );
-            foreach ($markers as $markerid) {
-                $this->feedback($cm, $userid, (int)$markerid, 'assessor_1', false);
-            }
-            return;
-        }
-        $this->feedback($cm, $userid, get_admin()->id, 'assessor_1', false);
-        $this->feedback($cm, $userid, get_admin()->id, 'assessor_2', false);
+        self::fixture($cm)->all_markers_mark($cm, self::userid($student));
     }
 
     /**
@@ -1423,50 +1016,8 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_agreed_grade_is_published(string $student, string $name): void {
         $cm = $this->cm($name);
-        $this->feedback($cm, self::userid($student), get_admin()->id, 'final_agreed_1', true);
-        $coursework = \mod_coursework\models\coursework::get_from_id($cm->instance);
-        $coursework->publish_grades();
-        self::queue($cm);
-    }
-
-    /**
-     * Coursework feedback at a stage, or an assign grade.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     * @param int $markerid
-     * @param string $stage
-     * @param bool $final
-     * @param float $mark
-     */
-    protected function feedback(cm_info $cm, int $userid, int $markerid, string $stage, bool $final, float $mark = 60): void {
-        global $CFG;
-        if ($cm->modname === 'assign') {
-            require_once($CFG->dirroot . '/mod/assign/locallib.php');
-            $assign = new assign($cm->context, $cm, null);
-            $grade = $assign->get_user_grade($userid, true);
-            if ((int)($assign->get_instance()->markercount ?? 1) > 1) {
-                // Moodle 5.0+ with several markers: a marker's own mark, not the final grade.
-                $grade->grader = $markerid;
-                $assign->update_mark($grade, 60);
-                self::queue($cm);
-                return;
-            }
-            $grade->grade = $mark;
-            $grade->grader = $markerid;
-            $assign->update_grade($grade);
-            if ($assign->get_instance()->markingworkflow) {
-                // Under marking workflow, a marker's work is done when it goes to review.
-                $flags = $assign->get_user_flags($userid, true);
-                $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_READYFORREVIEW;
-                $assign->update_user_flags($flags);
-            }
-        } else {
-            testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_feedback([
-                'courseworkid' => $cm->instance, 'allocatableid' => $userid, 'assessorid' => $markerid,
-                'stage_identifier' => $stage, 'grade' => 60, 'isfinalgrade' => $final ? 1 : 0, 'finalised' => 1]);
-        }
-        self::queue($cm);
+        self::fixture($cm)->mark($cm, self::userid($student), get_admin()->id, 60, true, 'final_agreed_1');
+        self::fixture($cm)->release($cm, self::userid($student));
     }
 
     // Freshness steps (perf review F1 to F5, F9).
@@ -1500,7 +1051,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function submits(string $username, string $name): void {
-        $this->submit($this->cm($name), self::userid($username));
+        $cm = $this->cm($name);
+        self::fixture($cm)->submit($cm, self::userid($username));
     }
 
     /**
@@ -1635,7 +1187,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $grade
      */
     public function grades_with(string $marker, string $student, string $name, string $grade): void {
-        $this->feedback($this->cm($name), self::userid($student), self::userid($marker), 'assessor_1', true, (float)$grade);
+        $cm = $this->cm($name);
+        self::fixture($cm)->mark($cm, self::userid($student), self::userid($marker), (float)$grade, true);
     }
 
     /**
@@ -1689,7 +1242,7 @@ class behat_block_le_dashboard extends behat_base {
         global $DB;
         $cm = $this->cm($name);
         $userid = self::userid($username);
-        $this->submit($cm, $userid);
+        self::fixture($cm)->submit($cm, $userid);
         $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\reindex']);
         self::$savedrow = (array)$DB->get_record('block_le_dashboard_stu', ['cmid' => $cm->id, 'userid' => $userid]);
     }
@@ -1755,7 +1308,7 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function a_course_with(string $course, string $tag, string $modname, string $name, string $due): void {
         testing_util::get_data_generator()->create_course(['shortname' => $course, 'fullname' => $course]);
-        $this->create_assessment($tag, $modname, $name, $course, '', self::time($due));
+        $this->create_assessment($tag, $modname, $name, $course, '', phrases::time($due));
     }
 
     /**
@@ -1771,7 +1324,7 @@ class behat_block_le_dashboard extends behat_base {
         if (!$row || $row->name !== $name) {
             throw new ExpectationException("The index doesn't show '$name'", $this->getSession());
         }
-        if ($when !== '' && date('Y-m-d', (int)$row->due) !== date('Y-m-d', self::time($when))) {
+        if ($when !== '' && date('Y-m-d', (int)$row->due) !== date('Y-m-d', phrases::time($when))) {
             throw new ExpectationException("The index shows '$name' due " . date('Y-m-d', (int)$row->due), $this->getSession());
         }
     }
@@ -1836,11 +1389,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function the_deadline_is_changed_directly(string $name, string $when): void {
-        global $DB;
         $cm = $this->cm($name);
-        $field = ['assign' => 'duedate', 'quiz' => 'timeclose', 'coursework' => 'deadline', 'workshop' => 'submissionend',
-            'peerwork' => 'duedate'][$cm->modname];
-        $DB->set_field($cm->modname, $field, self::time($when), ['id' => $cm->instance]);
+        self::fixture($cm)->set_due($cm, phrases::time($when));
     }
 
     /**
@@ -1857,15 +1407,8 @@ class behat_block_le_dashboard extends behat_base {
             'block_le_dashboard_cm' => ['due', 'cutoff', 'markingdue', 'timeindexed'],
             'block_le_dashboard_stu' => ['due', 'cutoff', 'timesubmitted', 'timereleased'],
             'block_le_dashboard_mark' => ['timeready', 'unitdue', 'timemarked'],
-            'quiz' => ['timeclose'],
-            'assign' => ['duedate', 'cutoffdate', 'gradingduedate', 'allowsubmissionsfromdate'],
-            'assign_overrides' => ['duedate', 'cutoffdate'],
-            'assign_user_flags' => ['extensionduedate'],
-            'assign_submission' => ['timecreated', 'timemodified'],
-            'assign_grades' => ['timecreated', 'timemodified'],
-            'assign_mark' => ['timecreated', 'timemodified'],
             'grade_grades' => ['timecreated', 'timemodified'],
-        ];
+        ] + self::generator()->time_fields();
         $dbman = $DB->get_manager();
         foreach ($fields as $table => $columns) {
             if (!$dbman->table_exists($table)) {
@@ -1894,9 +1437,7 @@ class behat_block_le_dashboard extends behat_base {
         for ($i = 1; $i <= $count; $i++) {
             $course = $gen->create_course(['shortname' => "BULK$i", 'fullname' => "Bulk module $i"]);
             $gen->enrol_user($userid, $course->id, $roleid);
-            $a = $gen->create_module('assign', ['course' => $course->id, 'name' => "Bulk assessment $i",
-                'duedate' => time() + 7 * DAYSECS]);
-            core_tag_tag::set_item_tags('core', 'course_modules', $a->cmid, context_module::instance($a->cmid), ['summative']);
+            self::generator()->fixture('assign')->create($course, ['summative'], "Bulk assessment $i", time() + 7 * DAYSECS);
         }
         $this->catch_up();
     }
@@ -2181,17 +1722,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_due_date_is_switched_off(string $name): void {
-        global $CFG, $DB;
         $cm = $this->cm($name);
-        $field = ['quiz' => 'timeclose', 'workshop' => 'submissionend', 'coursework' => 'deadline'][$cm->modname] ?? 'duedate';
-        $DB->set_field($cm->modname, $field, 0, ['id' => $cm->instance]);
-        if ($cm->modname === 'assign') {
-            require_once($CFG->dirroot . '/mod/assign/locallib.php');
-            $assign = new assign(context_module::instance($cm->id), null, null);
-            $assign->update_calendar($cm->id);
-        }
-        rebuild_course_cache($cm->course, true);
-        \core\event\course_module_updated::create_from_cm(get_fast_modinfo($cm->course)->get_cm($cm->id))->trigger();
+        self::fixture($cm)->switch_due_off($cm);
     }
 
     /**
@@ -2281,7 +1813,7 @@ class behat_block_le_dashboard extends behat_base {
         global $DB;
         $this->the_grade_is_released($student, $name);
         $cm = $this->cm($name);
-        $time = self::time($when);
+        $time = phrases::time($when);
         $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
             'itemnumber' => 0, 'courseid' => $cm->course]);
         $DB->set_field('grade_grades', 'timemodified', $time, ['itemid' => $item->id, 'userid' => self::userid($student)]);
@@ -2433,18 +1965,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $status
      */
     public function the_submission_is_flagged(string $student, string $name, string $status = '0'): void {
-        global $DB;
         $cm = $this->cm($name);
-        $submissionid = $DB->get_field('coursework_submissions', 'id', ['courseworkid' => $cm->instance,
-            'allocatableid' => self::userid($student), 'allocatabletype' => 'user'], MUST_EXIST);
-        $record = ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status];
-        foreach ($DB->get_columns('coursework_plagiarism_flags') as $column) {
-            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
-                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
-            }
-        }
-        $DB->insert_record('coursework_plagiarism_flags', $record);
-        self::queue($cm);
+        self::fixture($cm)->flag_plagiarism($cm, self::userid($student), $status);
     }
 
     /** Control names in steps, to the control bar's parts. */
@@ -3018,7 +2540,7 @@ class behat_block_le_dashboard extends behat_base {
         if (!$time) {
             throw new ExpectationException("'$name' has no '$label' date", $this->getSession());
         }
-        $expected = date('Y-m-d', self::time($when));
+        $expected = date('Y-m-d', phrases::time($when));
         if (substr($time->getAttribute('datetime'), 0, 10) !== $expected) {
             throw new ExpectationException(
                 "'$name' $label is {$time->getAttribute('datetime')}, not $expected",
@@ -3188,7 +2710,7 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_index_was_last_updated(string $when): void {
         global $DB;
-        $DB->set_field('block_le_dashboard_cm', 'timeindexed', self::time($when));
+        $DB->set_field('block_le_dashboard_cm', 'timeindexed', phrases::time($when));
     }
 
     /**
@@ -3291,10 +2813,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_submission_is_reverted_to_draft(string $student, string $name): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
         $cm = $this->cm($name);
-        (new assign($cm->context, $cm, null))->revert_to_draft(self::userid($student));
+        self::fixture($cm)->revert_to_draft($cm, self::userid($student));
     }
 
     /**
@@ -3305,14 +2825,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_submission_is_locked(string $student, string $name): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
         $cm = $this->cm($name);
-        $assign = new assign($cm->context, $cm, null);
-        $flags = $assign->get_user_flags(self::userid($student), true);
-        $flags->locked = 1;
-        $assign->update_user_flags($flags);
-        self::queue($cm);
+        self::fixture($cm)->lock($cm, self::userid($student));
     }
 
     /**
@@ -3326,18 +2840,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_teacher_locks_submissions(string $teacher, string $action, string $student, string $name): void {
-        global $CFG, $USER;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
         $cm = $this->cm($name);
-        $saved = $USER;
-        \core\session\manager::set_user(core_user::get_user(self::userid($teacher)));
-        try {
-            $assign = new assign($cm->context, $cm, null);
-            $action === 'locks' ? $assign->lock_submission(self::userid($student))
-                : $assign->unlock_submission(self::userid($student));
-        } finally {
-            \core\session\manager::set_user($saved);
-        }
+        self::fixture($cm)->lock($cm, self::userid($student), $action === 'locks', self::userid($teacher));
     }
 
     /**
@@ -4153,11 +3657,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function has_a_quiz_override(string $username, string $name, string $when): void {
-        global $DB;
         $cm = $this->cm($name);
-        $DB->insert_record('quiz_overrides', ['quiz' => $cm->instance, 'userid' => self::userid($username),
-            'timeclose' => self::time($when)]);
-        self::queue($cm);
+        self::fixture($cm)->override($cm, self::userid($username), phrases::time($when));
     }
 
     /**
@@ -4168,8 +3669,7 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_review_options_never_show_marks(string $name): void {
         $cm = $this->cm($name);
-        self::set_quiz((int)$cm->instance, ['reviewmarks' => 0]);
-        self::queue($cm);
+        self::fixture($cm)->hide_marks($cm);
     }
 
     /**
@@ -4181,22 +3681,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function grades_the_essay(string $marker, string $student, string $name): void {
-        global $DB, $USER;
         $cm = $this->cm($name);
-        $attempts = $DB->get_records('quiz_attempts', ['quiz' => $cm->instance, 'userid' => self::userid($student)], 'attempt');
-        $attempt = end($attempts);
-        $saved = $USER;
-        \core\session\manager::set_user(core_user::get_user(self::userid($marker)));
-        try {
-            $quba = question_engine::load_questions_usage_by_activity($attempt->uniqueid);
-            $quba->manual_grade(1, 'Good', 1, FORMAT_HTML);
-            question_engine::save_questions_usage_by_activity($quba);
-            $DB->set_field('quiz_attempts', 'sumgrades', $quba->get_total_mark(), ['id' => $attempt->id]);
-            self::regrade_quiz($cm, (int)$attempt->userid);
-        } finally {
-            \core\session\manager::set_user($saved);
-        }
-        self::queue($cm);
+        self::fixture($cm)->grade_attempt($cm, self::userid($student), 'last', self::userid($marker));
     }
 
     /**
@@ -4281,17 +3767,7 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function has_saved_a_draft_of(string $username, string $name): void {
         $cm = $this->cm($name);
-        $gen = testing_util::get_data_generator();
-        if ($cm->modname === 'assign') {
-            // Under required Submit the generator leaves a draft.
-            $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => self::userid($username),
-                'cmid' => $cm->id, 'onlinetext' => 'Draft']);
-        } else {
-            $gen->get_plugin_generator('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-                'allocatableid' => self::userid($username), 'allocatabletype' => 'user', 'finalised' => 0,
-                'finalisedstatus' => 0]);
-        }
-        self::queue($cm);
+        self::fixture($cm)->save_draft($cm, self::userid($username));
     }
 
     /**
@@ -4303,18 +3779,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function has_saved_blank_feedback(string $marker, string $student, string $name): void {
-        global $DB;
         $cm = $this->cm($name);
-        $submissionid = $DB->get_field(
-            'coursework_submissions',
-            'id',
-            ['courseworkid' => $cm->instance, 'allocatableid' => self::userid($student)],
-            MUST_EXIST
-        );
-        $gen = testing_util::get_data_generator()->get_plugin_generator('mod_coursework');
-        $gen->create_feedback(['submissionid' => $submissionid, 'assessorid' => self::userid($marker),
-            'grade' => null, 'feedbackcomment' => '', 'stage_identifier' => 'assessor_1', 'finalised' => 0]);
-        self::queue($cm);
+        self::fixture($cm)->blank_feedback($cm, self::userid($student), self::userid($marker));
     }
 
     /**
@@ -4408,7 +3874,7 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function several_assessments_are_due(int $n, string $tag, string $modname, string $course, string $due): void {
         for ($i = 1; $i <= $n; $i++) {
-            $this->create_assessment($tag, $modname, "Assessment $i", $course, '', self::time($due));
+            $this->create_assessment($tag, $modname, "Assessment $i", $course, '', phrases::time($due));
         }
     }
 
@@ -4830,14 +4296,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $n
      */
     public function has_used_self_certified_extensions(string $username, int $n): void {
-        global $DB;
-        $columns = $DB->get_columns('coursework_mitigations');
-        for ($i = 0; $i < $n; $i++) {
-            $record = ['courseworkid' => 0, 'allocatableid' => self::userid($username), 'allocatabletype' => 'user',
-                'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
-                'timecreated' => time(), 'timemodified' => time()];
-            $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
-        }
+        self::generator()->fixture('coursework')->used_self_certs(self::userid($username), $n);
     }
 
     /**

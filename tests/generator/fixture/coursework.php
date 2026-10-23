@@ -1,0 +1,209 @@
+<?php
+// This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+namespace block_le_dashboard\fixture;
+
+/**
+ * Writes courseworks (mod_coursework, where installed) the way their users do: finalised and draft submissions,
+ * assessor and moderator allocation, feedback at each stage, the agreed grade and its publication,
+ * self-certified extensions, plagiarism flags.
+ *
+ * @package    block_le_dashboard
+ * @category   test
+ * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+final class coursework extends base {
+    #[\Override]
+    public function modname(): string {
+        return 'coursework';
+    }
+
+    #[\Override]
+    protected function due_field(): string {
+        return 'deadline';
+    }
+
+    #[\Override]
+    protected function opens_field(): ?string {
+        return 'startdate';
+    }
+
+    #[\Override]
+    protected function record(array $record, ?int $due, string $opts): array {
+        $markingdue = preg_match('/marking deadline "([^"]*)"/', $opts, $m) ? phrases::time($m[1]) : 0;
+        $record += ['deadline' => (int)$due,
+            'numberofmarkers' => preg_match('/(\d+) markers/', $opts, $m) ? (int)$m[1] : 1,
+            'allocationenabled' => str_contains($opts, 'marker allocation') ? 1 : 0,
+            'moderationenabled' => str_contains($opts, 'moderation') ? 1 : 0,
+            'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue];
+        if (str_contains($opts, 'submission type attendance')) {
+            $record['submissiontype'] = 'attendance';
+        }
+        return $record;
+    }
+
+    #[\Override]
+    public function submit(\cm_info $cm, int $userid, ?int $time = null): void {
+        global $DB;
+        self::plugin_gen('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
+            'allocatableid' => $userid, 'allocatabletype' => 'user',
+            'finalisedstatus' => \mod_coursework\models\submission::FINALISED_STATUS_FINALISED]);
+        if ($time !== null) {
+            $DB->set_field('coursework_submissions', 'timesubmitted', $time, self::submission_params($cm, $userid));
+        }
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function save_draft(\cm_info $cm, int $userid): void {
+        self::plugin_gen('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
+            'allocatableid' => $userid, 'allocatabletype' => 'user', 'finalised' => 0, 'finalisedstatus' => 0]);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function submitters(\cm_info $cm): array {
+        global $DB;
+        return array_map('intval', $DB->get_fieldset_select(
+            'coursework_submissions',
+            'allocatableid',
+            "courseworkid = :id AND allocatabletype = 'user'",
+            ['id' => $cm->instance]
+        ));
+    }
+
+    #[\Override]
+    public function allocate(\cm_info $cm, int $userid, array $markerids): void {
+        foreach ($markerids as $markerid) {
+            self::allocation($cm, $userid, $markerid, 'assessor_1');
+        }
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function moderate(\cm_info $cm, int $markerid): void {
+        foreach ($this->submitters($cm) as $userid) {
+            self::allocation($cm, $userid, $markerid, 'moderator');
+        }
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function mark(
+        \cm_info $cm,
+        int $userid,
+        int $markerid,
+        float $grade = 60,
+        bool $final = false,
+        string $stage = 'assessor_1'
+    ): void {
+        self::plugin_gen('mod_coursework')->create_feedback(['courseworkid' => $cm->instance, 'allocatableid' => $userid,
+            'assessorid' => $markerid, 'stage_identifier' => $stage, 'grade' => $grade, 'isfinalgrade' => $final ? 1 : 0,
+            'finalised' => 1]);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function all_markers_mark(\cm_info $cm, int $userid): void {
+        $this->mark($cm, $userid, get_admin()->id, 60, false, 'assessor_1');
+        $this->mark($cm, $userid, get_admin()->id, 60, false, 'assessor_2');
+    }
+
+    #[\Override]
+    public function blank_feedback(\cm_info $cm, int $userid, int $markerid): void {
+        global $DB;
+        $submissionid = $DB->get_field(
+            'coursework_submissions',
+            'id',
+            ['courseworkid' => $cm->instance, 'allocatableid' => $userid],
+            MUST_EXIST
+        );
+        self::plugin_gen('mod_coursework')->create_feedback(['submissionid' => $submissionid, 'assessorid' => $markerid,
+            'grade' => null, 'feedbackcomment' => '', 'stage_identifier' => 'assessor_1', 'finalised' => 0]);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function release(\cm_info $cm, int $userid): void {
+        // Publishing is for the whole coursework; the agreed grade is given with mark(..., true, 'final_agreed_1').
+        \mod_coursework\models\coursework::get_from_id($cm->instance)->publish_grades();
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function extend(\cm_info $cm, int $userid, int $until, bool $selfcert = false): void {
+        global $DB;
+        if (!$selfcert) {
+            $this->unsupported('Extensions (other than self-certified) on');
+        }
+        $record = ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user',
+            'extended_deadline' => $until, 'type' => 'extension', 'selfcert' => 1,
+            'timecreated' => time(), 'timemodified' => time()];
+        $DB->insert_record('coursework_mitigations', array_intersect_key($record, $DB->get_columns('coursework_mitigations')));
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function flag_plagiarism(\cm_info $cm, int $userid, string $status = '0'): void {
+        global $DB;
+        $submissionid = $DB->get_field('coursework_submissions', 'id', self::submission_params($cm, $userid), MUST_EXIST);
+        $record = ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status];
+        foreach ($DB->get_columns('coursework_plagiarism_flags') as $column) {
+            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
+                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
+            }
+        }
+        $DB->insert_record('coursework_plagiarism_flags', $record);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function used_self_certs(int $userid, int $count): void {
+        global $DB;
+        $columns = $DB->get_columns('coursework_mitigations');
+        for ($i = 0; $i < $count; $i++) {
+            $record = ['courseworkid' => 0, 'allocatableid' => $userid, 'allocatabletype' => 'user',
+                'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
+                'timecreated' => time(), 'timemodified' => time()];
+            $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
+        }
+    }
+
+    /**
+     * A manual allocation at a stage.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $markerid
+     * @param string $stage
+     */
+    private static function allocation(\cm_info $cm, int $userid, int $markerid, string $stage): void {
+        self::plugin_gen('mod_coursework')->create_allocation(['courseworkid' => $cm->instance, 'allocatableid' => $userid,
+            'allocatabletype' => 'user', 'assessorid' => $markerid, 'stageidentifier' => $stage, 'ismanual' => 1]);
+    }
+
+    /**
+     * The conditions that find a student's submission.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @return array
+     */
+    private static function submission_params(\cm_info $cm, int $userid): array {
+        return ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user'];
+    }
+}
