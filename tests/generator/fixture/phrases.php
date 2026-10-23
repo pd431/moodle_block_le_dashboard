@@ -25,9 +25,14 @@ namespace block_le_dashboard\fixture;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class phrases {
+    /** @var int|null When the scenario started: two sentences that say "in 3 days" mean the same second. */
+    public static ?int $start = null;
+
     /**
      * A time from words: now, tomorrow, yesterday, "3 days ago", "in 10 days", "in 1 minute", or an absolute time
      * that may name its zone ("12 October 2026 10:00 Europe/London"), which strtotime() reads only as written.
+     * Hours, days and weeks count from the scenario's start, so rows that say the same thing share a date; minutes
+     * and "now" count from the clock, as a scenario that waits for one to pass means them.
      *
      * @param string $text
      * @return int
@@ -35,15 +40,16 @@ final class phrases {
     public static function time(string $text): int {
         $absolute = trim($text);
         $text = strtolower($absolute);
-        $map = ['now' => 0, 'tomorrow' => DAYSECS, 'yesterday' => -DAYSECS];
+        $start = self::$start ?? time();
+        $map = ['now' => time(), 'tomorrow' => $start + DAYSECS, 'yesterday' => $start - DAYSECS];
         if (isset($map[$text])) {
-            return time() + $map[$text];
+            return $map[$text];
         }
         if (preg_match('/^in (\d+) (minute|hour|day|week)s?$/', $text, $m)) {
-            return strtotime("+{$m[1]} {$m[2]}");
+            return strtotime("+{$m[1]} {$m[2]}", $m[2] === 'minute' ? time() : $start);
         }
         if (preg_match('/^(\d+) (minute|hour|day|week)s? ago$/', $text, $m)) {
-            return strtotime("-{$m[1]} {$m[2]}");
+            return strtotime("-{$m[1]} {$m[2]}", $m[2] === 'minute' ? time() : $start);
         }
         $time = strtotime($absolute);
         if ($time === false) {

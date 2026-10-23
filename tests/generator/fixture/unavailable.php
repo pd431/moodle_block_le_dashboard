@@ -17,13 +17,14 @@
 namespace block_le_dashboard\fixture;
 
 /**
- * What a test asked for exists in the plugin but not on this site (several assign markers before Moodle 5.0):
- * a Behat step turns it into a skip, as does a PHPUnit test.
+ * What a test asked for exists in the plugin but not on this site (several assign markers before Moodle 5.0, a
+ * module that is not installed): the Behat context turns it into a skipped scenario, view_testcase into a
+ * skipped test.
  *
  * @package    block_le_dashboard
  * @category   test
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
-final class unavailable extends \coding_exception {
+final class unavailable extends \Exception {
 }

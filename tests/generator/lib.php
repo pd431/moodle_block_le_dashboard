@@ -27,8 +27,8 @@ use block_le_dashboard\fixture\registry;
  */
 class block_le_dashboard_generator extends component_generator_base {
     /** @var string[] The fixture files, in dependency order. */
-    const FIXTURES = ['fixture', 'unavailable', 'phrases', 'base', 'generic', 'assign', 'quiz', 'coursework', 'peerwork',
-        'registry'];
+    const FIXTURES = ['fixture', 'unavailable', 'failed', 'phrases', 'base', 'generic', 'assign', 'quiz', 'coursework', 'peerwork',
+        'registry', 'steps'];
 
     /**
      * Loads the fixtures (the write-side twin of the adapters), which live beside the generator, outside the

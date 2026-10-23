@@ -69,8 +69,10 @@ final class fixture_contract_test extends \advanced_testcase {
         $cm = get_fast_modinfo($course)->get_cm($instance->cmid);
         $this->assertSame('workshop', $cm->modname);
         $this->assertEquals($due, $DB->get_field('workshop', 'submissionend', ['id' => $cm->instance]));
-        $this->assertEqualsCanonicalizing(['summative', 'extra'],
-            \core_tag_tag::get_item_tags_array('core', 'course_modules', $cm->id));
+        $this->assertEqualsCanonicalizing(
+            ['summative', 'extra'],
+            \core_tag_tag::get_item_tags_array('core', 'course_modules', $cm->id)
+        );
         $this->expectException(\coding_exception::class);
         registry::for('workshop')->submit($cm, 2);
     }
