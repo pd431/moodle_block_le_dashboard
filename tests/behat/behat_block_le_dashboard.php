@@ -1204,16 +1204,6 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Hovers over a row's activity icon.
-     *
-     * @When /^I hover over the activity icon of "(?P<name>[^"]*)"$/
-     * @param string $name
-     */
-    public function i_hover_over_the_activity_icon(string $name): void {
-        $this->activity_icon($name)->mouseOver();
-    }
-
-    /**
      * Presses Tab until a row's activity icon has focus.
      *
      * @When /^I press the tab key until the activity icon of "(?P<name>[^"]*)" is focused$/
@@ -2396,18 +2386,6 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_teacher_locks_submissions(string $teacher, string $action, string $student, string $name): void {
         steps::instance()->the_teacher_locks_submissions($teacher, $action, $student, $name);
-    }
-
-    /**
-     * Sets the resubmission contact, and its link.
-     *
-     * @Given /^the "Resubmission contact" setting is "(?P<text>[^"]*)"(?: with link "(?P<url>[^"]*)")?$/
-     * @param string $text
-     * @param string $url
-     */
-    public function the_resubmission_contact_is(string $text, string $url = ''): void {
-        set_config('resubmitcontact', $text, 'block_le_dashboard');
-        set_config('resubmitcontacturl', $url, 'block_le_dashboard');
     }
 
     /**
