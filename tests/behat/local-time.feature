@@ -1,4 +1,4 @@
-@block @block_le_dashboard @block_le_dashboard_crossdb @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: Dates show in the viewer's own time zone
   In order to know when work is really due where I am
   As someone using the dashboard away from the university's time zone
@@ -42,12 +42,14 @@ Feature: Dates show in the viewer's own time zone
     And a summative "assign" "A1" in "M1" is due "14 October 2026 13:30" in "Europe/London"
     And the My assessments index is up to date
 
+  @javascript
   Scenario: The same time zone changes nothing
     Given my browser's time zone is "Europe/London"
     When I log in as "student1" and view my dashboard
     Then the "Due" date of "A1" should read "14 Oct 2026, 13:30"
     And "A1" should not have a time zone icon
 
+  @javascript
   Scenario: Another time zone shows local time, with the university's time in the note
     Given my browser's time zone is "America/New_York"
     When I log in as "student1" and view my dashboard
@@ -57,6 +59,7 @@ Feature: Dates show in the viewer's own time zone
     Then the time zone note of "A1" should say "Deadline is shown in your current time zone (America/New_York)."
     And the time zone note of "A1" should say "Europe/London deadline: 14 Oct 2026, 13:30"
 
+  @javascript
   Scenario: Converting across midnight changes the date too
     Given a summative "assign" "A2" in "M1" is due "14 October 2026 23:30" in "Europe/London"
     And the My assessments index is up to date
@@ -65,6 +68,7 @@ Feature: Dates show in the viewer's own time zone
     Then the "Due" date of "A2" should read "15 Oct 2026, 07:30"
     And the time zone icon of "A2" should be "earth-asia"
 
+  @javascript
   Scenario Outline: The icon shows the viewer's part of the world
     Given my browser's time zone is "<zone>"
     When I log in as "student1" and view my dashboard
@@ -79,6 +83,7 @@ Feature: Dates show in the viewer's own time zone
       | Etc/UTC          | globe          |
       | Atlantic/Azores  | globe          |
 
+  @javascript
   Scenario: A profile set to the viewer's own zone shows no icons
     Given the user "student1" has the time zone "America/New_York"
     And my browser's time zone is "America/New_York"
@@ -86,6 +91,7 @@ Feature: Dates show in the viewer's own time zone
     Then the "Due" date of "A1" should read "14 Oct 2026, 08:30"
     And "A1" should not have a time zone icon
 
+  @javascript
   Scenario: Feedback dates say "Date", not "Deadline"
     Given the following "users" exist:
       | username | firstname | lastname | timezone      |
@@ -101,6 +107,7 @@ Feature: Dates show in the viewer's own time zone
     And I click on the time zone icon of the "Feedback received" date of "A1"
     Then the time zone note of "A1" should say "Date is shown in your current time zone (America/New_York)."
 
+  @javascript
   Scenario: Staff views convert too
     Given the following "users" exist:
       | username | firstname | lastname | timezone      |
@@ -117,6 +124,7 @@ Feature: Dates show in the viewer's own time zone
     Then the "Submission deadline" date of "A1" should read "14 Oct 2026, 08:30"
     And the time zone icon of "A1" should be "earth-americas"
 
+  @javascript
   Scenario: Dates stay converted after Refresh
     Given my browser's time zone is "America/New_York"
     When I log in as "student1" and view my dashboard

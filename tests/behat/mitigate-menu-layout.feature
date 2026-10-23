@@ -1,4 +1,4 @@
-@block @block_le_dashboard @block_rhb @javascript
+@block @block_le_dashboard @block_rhb
 Feature: The Mitigate menu lists only what I can do, with self-certification set apart
   In order to see at once what I can do about a deadline
   As a student
@@ -22,6 +22,7 @@ Feature: The Mitigate menu lists only what I can do, with self-certification set
       | student1 | M1     | student |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
+  @javascript
   Scenario: Self-certification already used here shows its line and Delete, not a greyed button
     Given a summative "assign" "A1" in "M1" is due "in 5 days"
     And the block_rhb stand-in treats "A1" as a coursework
@@ -39,6 +40,7 @@ Feature: The Mitigate menu lists only what I can do, with self-certification set
 
   # "All 3 used" needs mod_coursework's count: mitigate-menu-explains.feature (@mod_coursework) and
   # mitigation_test cover it. Here block_rhb gives no link and the block can't tell why.
+  @javascript
   Scenario: With no self-certification link, the menu says why above formal mitigation
     Given a summative "assign" "A1" in "M1" is due "in 5 days"
     And the block_rhb stand-in treats "A1" as a coursework
@@ -56,6 +58,7 @@ Feature: The Mitigate menu lists only what I can do, with self-certification set
     When I click on "Self-certification isn't available for this coursework. You can still request formal mitigation." in the Mitigate menu of "A1"
     Then the Mitigate menu of "A1" should still be open
 
+  @javascript
   Scenario: A live self-certification link and formal mitigation are split by a divider
     Given a summative "assign" "A1" in "M1" is due "in 5 days"
     And the block_rhb stand-in treats "A1" as a coursework
@@ -70,6 +73,7 @@ Feature: The Mitigate menu lists only what I can do, with self-certification set
       | ---                       | divider |      |
       | Request formal mitigation | live    |      |
 
+  @javascript
   Scenario: An assignment's menu has formal mitigation only, with no divider
     Given a summative "assign" "A1" in "M1" is due "in 5 days"
     And block_rhb offers "a link" for the request form

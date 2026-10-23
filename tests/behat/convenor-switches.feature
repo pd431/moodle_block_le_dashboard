@@ -1,4 +1,4 @@
-@block @block_le_dashboard @javascript
+@block @block_le_dashboard
 Feature: Admins can turn off the convenor's two tagging lines
   In order to keep the Module convenor view quiet where tagging is managed centrally
   As an admin
@@ -28,11 +28,13 @@ Feature: Admins can turn off the convenor's two tagging lines
     And a summative "workshop" "W1" in "M1" is due "tomorrow"
     And the My assessments index is up to date
 
+  @javascript
   Scenario: Both lines show by default
     When I log in as "convenor1" and view the "Module convenor view" for academic year "All years"
     Then I should see "You have 1 compatible but untagged activities across your courses." in the "My assessments" block
     And I should see "2 tagged activities need their settings checked across your courses." in the "My assessments" block
 
+  @javascript
   Scenario: An admin can turn off the untagged activities line
     Given the following config values are set as admin:
       | showuntagged | 0 | block_le_dashboard |
@@ -40,6 +42,7 @@ Feature: Admins can turn off the convenor's two tagging lines
     Then I should not see "compatible but untagged" in the "My assessments" block
     And I should see "2 tagged activities need their settings checked across your courses." in the "My assessments" block
 
+  @javascript
   Scenario: An admin can turn off the tagged activities to check line
     Given the following config values are set as admin:
       | showsetupchecks | 0 | block_le_dashboard |
