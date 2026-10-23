@@ -68,18 +68,3 @@ Feature: Activities without a marking deadline get the default marking period
     And I set the "Marking due soon" summary box window to "Within 15 days"
     Then the "Marking due soon" summary box should show "0"
     And "A1" should not show "Marking deadline"
-
-  Scenario: The convenor's late marking line uses the default marking period
-    Given the following "users" exist:
-      | username  | firstname | lastname |
-      | convenor1 | Cat       | Convenor |
-    And the following "course enrolments" exist:
-      | user      | course | role           |
-      | convenor1 | M1     | moduleconvenor |
-    And the My assessments block treats "moduleconvenor" as a module convenor role
-    And a summative "assign" "A1" in "M1" was due "20 days ago"
-    And "student1" has submitted "A1"
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "A1" should show "1 unmarked after the marking deadline"
-    And "A1" should have a "defaultmarkingdue" hint

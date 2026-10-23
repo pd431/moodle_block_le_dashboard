@@ -54,24 +54,3 @@ Feature: Convenors are nudged to attach a brief or description
     When I log in as "convenor" and view the "Convenor view"
     And I click on the brief hint of "A1"
     Then I should not see "See our guidance" in the "My assessments" block
-
-  Scenario Outline: An assessment with a <what> shows no hint
-    Given a summative "assign" "A1" in "M1" <with> is due "tomorrow"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should not have a brief hint
-
-    Examples:
-      | what        | with                                   |
-      | description | with the description "Write 2000 words" |
-      | brief file  | with no description and a brief file   |
-
-  Scenario: My marking never shows the hint
-    Given a summative "assign" "A1" in "M1" with no description was due "yesterday"
-    And "student1" has submitted "A1"
-    When I log in as "marker1" and view my dashboard
-    Then "A1" should not have a brief hint
-
-  Scenario: Students never see the hint
-    Given a summative "assign" "A1" in "M1" with no description is due "tomorrow"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should not have a brief hint

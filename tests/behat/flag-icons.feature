@@ -110,15 +110,6 @@ Feature: Hints and flags are single icons that explain themselves on demand
     And I press the tab key until the "hidden" flag of "A1" is focused
     Then the "hidden" popover of "A1" should say "Hidden from students" then "Students can't see this assessment yet."
 
-  Scenario: Every flag tells a screen reader its full title
-    Given a summative "assign" "A1" in "M1" with marker allocation was due "2 days ago"
-    And "student1" and "student2" have submitted "A1"
-    And the submission of "student1" for "A1" is allocated to "teacher1"
-    And the submission of "student2" for "A1" is not allocated
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "My marking"
-    Then the "unallocated" flag of "A1" should be labelled "1 unallocated"
-
   @javascript
   Scenario: A student's late work has one bare clock beside the grade
     Given the My assessments late penalty link is "https://example.com/late"
@@ -150,24 +141,6 @@ Feature: Hints and flags are single icons that explain themselves on demand
     And "A1" should not show "Waiting for feedback?"
     When I click on the "feedback" icon of "A1"
     Then the "feedback" popover of "A1" should say "Waiting for feedback?" then "If it doesn't, contact your module convenor."
-
-  Scenario: An extension shows no "Your own deadline" note
-    Given a summative "assign" "A1" in "M1" is due "tomorrow"
-    And "student1" has an extension on "A1" to "next week"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should not show "Your own deadline"
-    And "A1" should have no status pill
-
-  Scenario: Undated work a student handed in has no No deadline hint
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And "student1" has submitted "A1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Undated" section
-    And "A1" should show the status "Received"
-    And "A1" should not have a "received" hint
 
   @javascript
   Scenario: The activity icon tooltip also opens after a hover

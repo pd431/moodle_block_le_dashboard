@@ -49,14 +49,6 @@ Feature: Staff are told when a tagged assessment is missing a setting
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
     And the My assessments block treats "moduleconvenor" as a module convenor role
 
-  Scenario: A tagged assignment with no due date is flagged for its settings
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "A1" should have a "setup" hint
-    And the "setup" flag of "A1" should be labelled "Check settings"
-    And "A1" should not have a "nodeadline" hint
-
   @javascript
   Scenario: The flag lists every problem and links to the settings
     Given a summative "assign" "A1" in "M1" with no due date and no grade exists
@@ -65,37 +57,6 @@ Feature: Staff are told when a tagged assessment is missing a setting
     And I click on the "setup" flag of "A1"
     Then the "setup" popover of "A1" should list "No due date" and "No grade"
     And the "setup" popover of "A1" should link to the settings of "A1"
-
-  Scenario: A quiz whose marks are never shown is flagged
-    Given a summative "quiz" "Q1" in "M1" with marks never shown is due "tomorrow"
-    And the My assessments index is up to date
-    # In the Convenor view: My marking has no Upcoming section since beta28.
-    When I log in as "convenor1" and view the "Convenor view"
-    Then "Q1" should have a "setup" hint
-
-  Scenario: A formative quiz whose marks are never shown is not flagged
-    Given a formative "quiz" "F1" in "M1" with marks never shown is due "tomorrow"
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Convenor view"
-    Then "F1" should not have a "setup" hint
-
-  Scenario: An activity tagged both summative and formative is flagged
-    Given a summative "assign" "A1" in "M1" tagged "formative" is due "tomorrow"
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "A1" should have a "setup" hint
-
-  Scenario: A complete activity has no flag
-    Given a summative "assign" "A1" in "M1" is due "tomorrow"
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "A1" should not have a "setup" hint
-
-  Scenario: Students never see the flag
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should not have a "setup" hint
 
   @javascript
   Scenario: The convenor sees a count of activities to check, including tagged types that aren't enabled

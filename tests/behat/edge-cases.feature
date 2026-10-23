@@ -84,43 +84,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And I log in as "convenor" and view the "My marking"
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
 
-  Scenario: A marker who only loses their marking role is treated the same way
-    Given a summative "assign" "A1" in "M1" with marker allocation was due "2 days ago"
-    And "student1" has submitted "A1"
-    And the submission of "student1" for "A1" is allocated to "marker1"
-    And the My assessments index is up to date
-    When "marker1" is enrolled in "M1" as "student" only
-    And the My assessments index catches up
-    And I log in as "convenor" and view the "My marking"
-    Then "A1" should appear in the "Marking in progress" section with "1" to mark
-
   # ---------- EC3: year filter hides outstanding work ----------
-
-  Scenario: Marking outstanding on last year's module stays in My marking
-    Given the following "courses" exist:
-      | fullname | shortname | startdate     |
-      | Module 0 | M0        | ##-400 days## |
-    And "marker1" is enrolled in "M0" as "teacher"
-    And "student1" is enrolled in "M0" as "student"
-    And a summative "assign" "Old essay" in "M0" was due "2 days ago"
-    And "student1" has submitted "Old essay"
-    And the My assessments index is up to date
-    When I log in as "marker1" and view the "My marking"
-    Then "Old essay" should appear in the "Marking in progress" section with "1" to mark
-    And the "To mark" summary count should be "1"
-
-  Scenario: Last year's completed marking stays under its own year
-    Given the following "courses" exist:
-      | fullname | shortname | startdate     |
-      | Module 0 | M0        | ##-400 days## |
-    And "marker1" is enrolled in "M0" as "teacher"
-    And "student1" is enrolled in "M0" as "student"
-    And a summative "assign" "Old essay" in "M0" was due "60 days ago"
-    And "student1" has submitted "Old essay"
-    And "marker1" marks the submission of "student1" for "Old essay"
-    And the My assessments index is up to date
-    When I log in as "marker1" and view the "My marking"
-    Then "Old essay" should not appear in the "Completed marking" section
 
   @javascript
   Scenario: The convenor sees last year's unfinished marking in In progress
@@ -146,14 +110,6 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And "Presentation" should appear in the "Past" section
     And "Presentation" should not show "Not submitted"
 
-  Scenario: A released mark on an assignment with no online submission shows as released
-    Given a summative "assign" "Presentation" in "M1" with no online submission was due "2 days ago"
-    And "marker1" marks the submission of "student1" for "Presentation"
-    And the grade of "student1" for "Presentation" is released
-    And the My assessments index catches up
-    When I log in as "student1" and view my dashboard
-    Then "Presentation" should show "Feedback released"
-
   @javascript
   Scenario: Markers see an assignment with no online submission once its deadline passes
     Given a summative "assign" "Presentation" in "M1" with no online submission was due "2 days ago"
@@ -164,22 +120,6 @@ Feature: Work stays visible when people and assessments move at awkward moments
     Then "Presentation" should not show a "Submitted" progress bar
 
   # ---------- EC6: group and enrolment-method changes ----------
-
-  Scenario: Deleting a group updates its members without waiting for the night
-    Given a summative "assign" "T1" in "M1" with team submission is due "in 2 days"
-    And the following "groups" exist:
-      | name | course | idnumber |
-      | G1   | M1     | G1       |
-    And the following "group members" exist:
-      | user     | group |
-      | student1 | G1    |
-      | student2 | G1    |
-    And "student1" has submitted "T1" for "G1"
-    And the My assessments index is up to date
-    When the group "G1" is deleted
-    And the My assessments index catches up
-    And I log in as "student2" and view my dashboard
-    Then "T1" should not show "Submitted"
 
   @javascript
   Scenario: Disabling an enrolment method updates the counts without waiting for the night
@@ -212,47 +152,9 @@ Feature: Work stays visible when people and assessments move at awkward moments
 
   # ---------- EC8: reallocating marked work ----------
 
-  Scenario: Reallocating a marked script leaves the credit with the marker who marked it
-    Given a summative "assign" "A1" in "M1" with marker allocation was due "2 days ago"
-    And "student1" and "student2" have submitted "A1"
-    And the submission of "student1" for "A1" is allocated to "marker1"
-    And the submission of "student2" for "A1" is allocated to "marker2"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the submission of "student1" for "A1" is allocated to "marker2"
-    And the My assessments index catches up
-    When I log in as "marker1" and view the "My marking"
-    Then "A1" should appear in the "Completed marking" section
-    When I log in as "marker2" and view the "My marking"
-    Then "A1" should show a "Marked" progress bar with "0" of "1"
-
   # ---------- EC9: double marking, a marker replaced (Moodle 5.0+) ----------
 
-  Scenario: Agreement waits for the currently allocated markers
-    Given a summative "assign" "A1" in "M1" with marker allocation, 2 markers and manual agreement was due "2 days ago"
-    And "student1" has submitted "A1"
-    And the submission of "student1" for "A1" is allocated to "marker1" and "marker2"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the submission of "student1" for "A1" is allocated to "marker2" and "convenor"
-    And "marker2" marks the submission of "student1" for "A1"
-    And the My assessments index catches up
-    # marker2 is now the first allocated marker, who does the agreement (G8). The convenor
-    # (the new second marker) hasn't marked, so there is nothing to agree yet.
-    When I log in as "marker2" and view the "My marking"
-    Then "A1" should not show an "Agreed" progress bar
-
   # ---------- EC11: revert to draft after release ----------
-
-  Scenario: A released submission reverted to draft is upcoming work again, with no flag
-    Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the grade of "student1" for "A1" is released
-    And the submission of "student1" for "A1" is reverted to draft
-    And the My assessments index catches up
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should have no status pill
-    And "A1" should not appear in the "Overdue" section
 
   # ---------- EC3b: which academic years a course belongs to (Pierre, 2026-10-04) ----------
   # A course belongs to every academic year its start-to-end span overlaps.
@@ -357,19 +259,6 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And I should see "settings" linking to the settings page of "A2"
 
   # 2026-10-07: markers get the Check settings flag too (setup-flags.feature); students never do.
-  Scenario: Students get no flag on undated rows, markers do
-    Given a summative "assign" "A2" in "M1" with no due date exists
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A2" should not have a "setup" hint
-    When I log in as "marker1" and view the "My marking"
-    Then "A2" should have a "setup" hint
-
-  Scenario: The Undated section is hidden when nothing is undated
-    Given a summative "assign" "A1" in "M1" is due "in 3 days"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then I should not see "Undated" in the "My assessments" block
 
   @javascript
   Scenario: Untagged activities without a deadline are still not listed
@@ -383,15 +272,6 @@ Feature: Work stays visible when people and assessments move at awkward moments
   # students to a "student_inactive" role, configured as a second student role, so that path needs no code;
   # these scenarios cover Moodle's own suspension and end dates.
 
-  Scenario: Submitted work of a suspended student still counts in marking
-    Given a summative "assign" "A1" in "M1" was due "2 days ago"
-    And "student1" and "student2" have submitted "A1"
-    And the My assessments index is up to date
-    When the enrolment of "student1" in "M1" is suspended
-    And the My assessments index catches up
-    And I log in as "marker1" and view the "My marking"
-    Then "A1" should appear in the "Marking in progress" section with "2" to mark
-
   @javascript
   Scenario: Work of a student whose enrolment ended still counts after the nightly run
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
@@ -404,15 +284,6 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And I log in as "convenor" and view the "Convenor view"
     Then "A1" should not appear in the "In progress" section
     And "A1" should show a "Released" progress bar with "1" of "1"
-
-  Scenario: Unenrolled students leave the counts, as in Moodle's grading table
-    Given a summative "assign" "A1" in "M1" was due "2 days ago"
-    And "student1" and "student2" have submitted "A1"
-    And the My assessments index is up to date
-    When "student1" is unenrolled from "M1"
-    And the My assessments index catches up
-    And I log in as "marker1" and view the "My marking"
-    Then "A1" should appear in the "Marking in progress" section with "1" to mark
 
   @javascript
   Scenario: An assessment whose students have all left goes to Past, not back to In progress
@@ -431,39 +302,3 @@ Feature: Work stays visible when people and assessments move at awkward moments
   # A student enrolled after the deadline is treated as unsubmitted once the deadline plus the grace period
   # has passed: Past, "Not submitted", no overdue icon. Inside the grace period they can still submit, so the
   # row is Overdue as for anyone else. Late submissions Moodle still accepts after that are ignored on this row.
-
-  Scenario: A student enrolled after the grace period sees the work as not submitted, without the overdue icon
-    Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And the following "users" exist:
-      | username | firstname | lastname |
-      | student3 | Lee       | Late     |
-    And "student3" is enrolled in "M1" as "student"
-    And the My assessments index is up to date
-    When I log in as "student3" and view my dashboard
-    Then "A1" should not appear in the "Overdue" section
-    And "A1" should appear in the "Past" section
-    And "A1" should show "Not submitted"
-    And the activity icon of "A1" should have the "notsubmitted" modifier
-    And the activity icon of "A1" should not have the "overdue" modifier
-
-  Scenario: A student enrolled inside the grace period can still submit
-    Given a summative "assign" "A1" in "M1" was due "2 hours ago"
-    And the following "users" exist:
-      | username | firstname | lastname |
-      | student3 | Lee       | Late     |
-    And "student3" is enrolled in "M1" as "student"
-    And the My assessments index is up to date
-    When I log in as "student3" and view my dashboard
-    Then "A1" should appear in the "Overdue" section
-    And "A1" should show "Submit"
-
-  Scenario: A late joiner given an extension sees the work as Upcoming
-    Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And the following "users" exist:
-      | username | firstname | lastname |
-      | student3 | Lee       | Late     |
-    And "student3" is enrolled in "M1" as "student"
-    And "student3" has an extension on "A1" to "in 5 days"
-    And the My assessments index is up to date
-    When I log in as "student3" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section

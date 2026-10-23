@@ -1,4 +1,4 @@
-@block @block_le_dashboard @block_le_dashboard_crossdb @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: Every popover, tip and menu opens next to its control at every width
   In order to see what a hint, flag or menu says without hunting for it
   As a student, marker or module convenor, on a phone or a wide screen
@@ -45,6 +45,7 @@ Feature: Every popover, tip and menu opens next to its control at every width
     And "Allocated essay" is hidden from students
     And the My assessments index is up to date
 
+  @javascript
   Scenario Outline: Student view at <width> px
     Given I change viewport size to "<width>x900"
     When I log in as "student1" and view my dashboard
@@ -62,6 +63,7 @@ Feature: Every popover, tip and menu opens next to its control at every width
       | 390   |
       | 360   |
 
+  @javascript
   Scenario Outline: Marker view at <width> px
     Given I change viewport size to "<width>x900"
     When I log in as "convenor1" and view the "My marking"
@@ -75,6 +77,7 @@ Feature: Every popover, tip and menu opens next to its control at every width
       | 480   |
       | 360   |
 
+  @javascript
   Scenario Outline: Module convenor view at <width> px
     Given I change viewport size to "<width>x900"
     When I log in as "convenor1" and view the "Module convenor view" for academic year "All years"

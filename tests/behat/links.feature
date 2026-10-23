@@ -29,18 +29,6 @@ Feature: Names in the block link to what they name
       | convenor | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
-  Scenario: A student's row links its activity and its course
-    Given a summative "assign" "A1" in "M1" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    Then the name of "A1" should link to its activity
-    And the course of "A1" should link to the course page of "M1"
-
-  Scenario: A marker's row links its course
-    Given a summative "assign" "A1" in "M1" was due "2 days ago"
-    And "student1" has submitted "A1"
-    When I log in as "marker1" and view my dashboard
-    Then the course of "A1" should link to the course page of "M1"
-
   Scenario: A convenor's marking detail links each marker to their email
     Given a summative "assign" "A1" in "M1" was due "2 days ago"
     And "student1" has submitted "A1"

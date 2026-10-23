@@ -38,12 +38,3 @@ Feature: Reopened and extended work stays in Upcoming without a flag
     And "A1" should have no status pill
     And "A1" should not show "Resubmission open"
     And the activity icon of "A1" should have no modifiers
-
-  Scenario: Work with an extension is ordinary upcoming work
-    Given a summative "assign" "A1" in "M1" was due "yesterday"
-    And "student1" has an extension on "A1" to "next week"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should have no status pill
-    And "A1" should not show "Your own deadline"

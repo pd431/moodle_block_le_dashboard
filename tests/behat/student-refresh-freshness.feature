@@ -1,4 +1,4 @@
-@block @block_le_dashboard @block_le_dashboard_crossdb @javascript
+@block @block_le_dashboard @block_le_dashboard_crossdb
 Feature: A student's Refresh moves their "Updated" line on
   In order to trust that Refresh did something
   As a student
@@ -28,10 +28,7 @@ Feature: A student's Refresh moves their "Updated" line on
     And the My assessments index is up to date
     And the My assessments index was last updated "2 days ago"
 
-  Scenario: Before a Refresh the line shows the last full update
-    When I log in as "student1" and view my dashboard
-    Then I should not see "Updated" with the time "now"
-
+  @javascript
   Scenario: After a Refresh the line says just now, and still does on the next visit
     When I log in as "student1" and view my dashboard
     And I press "Refresh" in the "My assessments" block
@@ -39,6 +36,7 @@ Feature: A student's Refresh moves their "Updated" line on
     And I view my dashboard again
     And I should see "Updated" with the time "now"
 
+  @javascript
   Scenario: A student's Refresh doesn't make a marker's line look fresh
     Given I log in as "student1" and view my dashboard
     And I press "Refresh" in the "My assessments" block

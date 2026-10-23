@@ -1,4 +1,4 @@
-@block @block_le_dashboard @block_rhb @javascript
+@block @block_le_dashboard @block_rhb
 Feature: The Mitigate menu explains self-certification
   In order to know whether I can self-certify an extension, and what to do if I can't
   As a student
@@ -54,7 +54,7 @@ Feature: The Mitigate menu explains self-certification
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
     And block_rhb allows 3 self-certified extensions
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: A self-cert left shows the count, with both links under our labels
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "a link" for self-certification
@@ -69,7 +69,7 @@ Feature: The Mitigate menu explains self-certification
       | Request formal mitigation | live    |             |
     And "Self-certify an extension" in the Mitigate menu of "C1" should go to block_rhb's self-certification address
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: All self-certs used: the reason and what's still possible
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "nothing" for self-certification
@@ -83,7 +83,7 @@ Feature: The Mitigate menu explains self-certification
       | ---                                                                                             | divider |      |
       | Request formal mitigation                                                                       | live    |      |
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: Already self-certified here: the new deadline, and Delete mitigation stays
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And "student1" self-certified "C1" to "in 11 days"
@@ -98,6 +98,7 @@ Feature: The Mitigate menu explains self-certification
       | ---                                                                               | divider |      |
       | Request formal mitigation                                                         | live    |      |
 
+  @javascript
   Scenario: A quiz offers formal mitigation only
     Given a summative "quiz" "Q1" in "M1" is due "in 4 days"
     And the My assessments index is up to date
@@ -107,7 +108,7 @@ Feature: The Mitigate menu explains self-certification
       | item                       | state | note |
       | Request formal mitigation  | live  |      |
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: Coursework rhb gives no self-cert link for still offers Mitigate
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "nothing" for self-certification
@@ -120,7 +121,7 @@ Feature: The Mitigate menu explains self-certification
       | ---                                                                                              | divider |      |
       | Request formal mitigation                                                                        | live    |      |
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: rhb's answer wins over the block's own count
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "a link" for self-certification
@@ -143,7 +144,7 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     Then "C1" should not show "Mitigate"
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: An address block_rhb wraps oddly falls back to its own HTML
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "an unreadable link" for self-certification
@@ -152,7 +153,7 @@ Feature: The Mitigate menu explains self-certification
     And I press "Mitigate" in the "C1" row
     Then the Mitigate menu of "C1" should show block_rhb's self-certification HTML
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: The keyboard skips the reason line, and formal mitigation reads it out
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "nothing" for self-certification
@@ -189,7 +190,7 @@ Feature: The Mitigate menu explains self-certification
     When I log in as "student1" and view my dashboard
     Then "F1" should not show "Mitigate"
 
-  @mod_coursework
+  @mod_coursework @javascript
   Scenario: Delete mitigation is red with a bin, and asks for a second click in the same place
     Given a summative "coursework" "C1" in "M1" is due "in 4 days"
     And block_rhb offers "a delete link" for self-certification
@@ -210,6 +211,7 @@ Feature: The Mitigate menu explains self-certification
 
   # The same menu on sites without mod_coursework: the block_rhb stand-in treats an assignment as a coursework,
   # so CI checks the menu and Delete mitigation too. The count needs mod_coursework, so none shows here.
+  @javascript
   Scenario: Without mod_coursework: self-cert and formal mitigation under our labels
     Given a summative "assign" "A1" in "M1" is due "in 4 days"
     And the block_rhb stand-in treats "A1" as a coursework
@@ -223,6 +225,7 @@ Feature: The Mitigate menu explains self-certification
       | Request formal mitigation | live    |      |
     And "Self-certify an extension" in the Mitigate menu of "A1" should go to block_rhb's self-certification address
 
+  @javascript
   Scenario: Without mod_coursework: no self-cert link says why, and the keyboard goes to formal mitigation
     Given a summative "assign" "A1" in "M1" is due "in 4 days"
     And the block_rhb stand-in treats "A1" as a coursework
@@ -238,6 +241,7 @@ Feature: The Mitigate menu explains self-certification
     And I press the down key
     And the focused element is "Request formal mitigation" "link"
 
+  @javascript
   Scenario: Without mod_coursework: an unreadable self-cert link shows block_rhb's own HTML
     Given a summative "assign" "A1" in "M1" is due "in 4 days"
     And the block_rhb stand-in treats "A1" as a coursework
@@ -246,6 +250,7 @@ Feature: The Mitigate menu explains self-certification
     And I press "Mitigate" in the "A1" row
     Then the Mitigate menu of "A1" should show block_rhb's self-certification HTML
 
+  @javascript
   Scenario: Without mod_coursework: Delete mitigation is red with a bin, and asks for a second click
     Given a summative "assign" "A1" in "M1" is due "in 4 days"
     And the block_rhb stand-in treats "A1" as a coursework

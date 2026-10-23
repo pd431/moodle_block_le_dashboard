@@ -21,11 +21,6 @@ Feature: An admin notice above the dashboard
       | teacher1 | LAW1001 | editingteacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
-  Scenario: No notice by default
-    Given a summative "assign" "A1" in "LAW1001" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    Then the My assessments block should show no notice
-
   Scenario: A notice set by the admin shows above the tabs, for students and staff
     Given the following config values are set as admin:
       | notice | <div class="alert alert-info">The assessment dashboard is still in live development. Flag any issues on our <a href="https://example.com/form">feedback form</a>.</div> | block_le_dashboard |

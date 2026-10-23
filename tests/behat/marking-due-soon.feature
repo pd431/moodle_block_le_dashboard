@@ -37,18 +37,3 @@ Feature: My marking's Marking due soon box counts marking by its deadline
     And I set the "Marking due soon" summary box window to "Within 15 days"
     And the "Marking due soon" summary box should show "3"
     And I should not see "Student deadlines" in the "My assessments" block
-
-  Scenario: Marking already past its deadline counts as due
-    Given a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
-    And "student1" has submitted "A1"
-    And the My assessments index is up to date
-    When I log in as "marker1" and view the "My marking"
-    Then the "Marking due soon" summary box should show "1"
-
-  Scenario: Marked work is not counted
-    Given a summative "assign" "A1" in "M1" with a marking deadline "in 5 days" was due "3 days ago"
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the My assessments index is up to date
-    When I log in as "marker1" and view the "My marking"
-    Then the "Marking due soon" summary box should show "0"

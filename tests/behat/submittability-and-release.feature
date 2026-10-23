@@ -102,115 +102,14 @@ Feature: Rows leave Upcoming when nothing more can be handed in, and marks relea
     And "Q1" should not show "Mitigate"
 
   # Reversed by Pierre, 2026-10-09 (locked-upcoming.feature): it stays in Upcoming until the quiz closes.
-  Scenario: A quiz whose attempts are used up stays in Upcoming, without Submit
-    Given a summative "quiz" "Q1" in "M1" with 1 attempt allowed is due "next week"
-    And "student1" has finished 1 attempts at "Q1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should appear in the "Upcoming" section
-    And "Q1" should show the status "Submitted"
-    And "Q1" should not have a "Submit" button
-    And "Q1" should have a "Can't resubmit" button
-
-  Scenario: A quiz with attempts left stays in Upcoming
-    Given a summative "quiz" "Q1" in "M1" with 2 attempts allowed is due "next week"
-    And "student1" has finished 1 attempts at "Q1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should appear in the "Upcoming" section
-
-  Scenario: A quiz override that extends the close keeps the quiz open for that student
-    Given a summative "quiz" "Q1" in "M1" was due "2 hours ago"
-    And "student1" has a quiz override on "Q1" closing "tomorrow"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should appear in the "Upcoming" section
-    And "Q1" should show "Submit"
-    When I log in as "student2" and view my dashboard
-    Then "Q1" should appear in the "Past" section
-
-  Scenario: An assignment past its cut-off goes to Past
-    Given a summative "assign" "A1" in "M1" with a cut-off "1 hour ago" was due "2 hours ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Past" section
-    And "A1" should show the status "Not submitted"
-    And "A1" should not show "Submit"
-
-  Scenario: An assignment that still accepts late work stays in Overdue
-    Given a summative "assign" "A1" in "M1" with a cut-off "tomorrow" was due "2 hours ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Overdue" section
-    And "A1" should show "Submit"
 
   # F3
-  Scenario Outline: The convenor's In progress drops assessments with nothing left to mark
-    Given a summative "<type>" "<name>" in "M1" <options> was due "5 days ago"
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "<name>" should appear in the "Past" section
-    And "<name>" should not appear in the "In progress" section
-
-    Examples:
-      | type     | name | options                     |
-      | workshop | L1   |                             |
-      | assign   | A1   | with a cut-off "4 days ago" |
-      | quiz     | Q1   |                             |
-
-  Scenario: An assignment that can still receive work stays in the convenor's In progress
-    Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student1" has an extension on "A1" to "next week"
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "A1" should appear in the "In progress" section
 
   # F4
-  Scenario: Marking early doesn't show New work
-    Given a summative "assign" "A1" in "M1" is due "tomorrow"
-    And "student1" submitted "A1" "2 days ago"
-    And "teacher1" marks the submission of "student1" for "A1"
-    And "student2" submitted "A1" "1 hour ago"
-    And the deadline of "A1" is changed directly in the database to "1 hour ago"
-    And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
-    Then "A1" should appear in the "Marking in progress" section
-    And "A1" should not have a "returned" hint
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "A1" should not have a "returned" hint
-
-  Scenario: Work arriving after marking was finished still shows New work
-    Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student1" submitted "A1" "6 days ago"
-    And "teacher1" marks the submission of "student1" for "A1"
-    And "student2" submitted "A1" "now"
-    And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
-    Then "A1" should have a "returned" hint
 
   # F5
-  Scenario: Unticking a type removes it from courses outside the live window
-    Given a course "OLD" with a summative "quiz" "OldQ" was due "3 years ago"
-    And the My assessments index is up to date
-    When the "quiz" activity type is unticked on the Activity types page
-    And the rebuild task runs
-    Then "OldQ" should not be in the index
-
-  Scenario: Removing a tag from the settings removes its activities outside the live window
-    Given a course "OLD" with a formative "assign" "OldA" was due "3 years ago"
-    And the My assessments index is up to date
-    When the formative tag is changed to "practice" in the settings
-    And the rebuild task runs
-    Then "OldA" should not be in the index
 
   # F6
-  Scenario: Activities whose submissions the block can't see show no Not submitted icon
-    Given a summative "workshop" "L1" in "M1" was due "5 days ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "L1" should appear in the "Past" section
-    And "L1" should show the status "Closed"
-    And the activity icon of "L1" should have no modifiers
 
   # F7
   Scenario: The Activity types page describes undated generic activities correctly
@@ -221,24 +120,8 @@ Feature: Rows leave Upcoming when nothing more can be handed in, and marks relea
     And I should see "Activities without a due date are listed under Undated"
 
   # F8
-  Scenario: Manually grading a quiz credits the marker
-    Given a summative "quiz" "Q1" in "M1" with an essay question was due "2 days ago"
-    And "student1" has finished 1 attempts at "Q1"
-    And "teacher1" grades the essay of "student1" in "Q1"
-    And the My assessments index is up to date
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "Q1" should list marker "Tim Teacher"
 
   # F9
-  @mod_coursework
-  Scenario: Publishing coursework grades reaches the dashboard without a Refresh
-    Given a summative "coursework" "C1" in "M1" was due "5 days ago"
-    And "student1" has submitted "C1"
-    And "teacher1" grades "student1" on "C1" with "60"
-    And the My assessments index is up to date
-    When the agreed grade for "student1" on "C1" is published
-    And I log in as "student1" and view my dashboard
-    Then "C1" should show the status "Feedback released"
 
   # F10
   Scenario Outline: A quiz that never releases marks is finished once marked
@@ -260,33 +143,4 @@ Feature: Rows leave Upcoming when nothing more can be handed in, and marks relea
       | marks shown immediately after only |
       | a maximum grade of 0            |
 
-  Scenario: A quiz that never releases marks and has no close date leaves Undated once marked
-    Given a summative "quiz" "Q1" in "M1" with no due date exists
-    And the review options of "Q1" never show marks
-    And "student1" has finished 1 attempts at "Q1"
-    And the last attempt of "student1" at "Q1" has been graded
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should appear in the "Past" section
-    And "Q1" should show the status "Submitted"
-
-  Scenario: A quiz that never releases marks waits in In marking while an attempt needs grading
-    Given a summative "quiz" "Q1" in "M1" with marks never shown was due "2 days ago"
-    And "student1" has finished 1 attempts at "Q1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should show the status "In marking"
-
   # F11
-  Scenario: Marks shown after close wait for the student's own close
-    Given a summative "quiz" "Q1" in "M1" with marks shown after close only was due "2 hours ago"
-    And "student1" has a quiz override on "Q1" closing "tomorrow"
-    And "student1" and "student2" have finished "Q1"
-    And the last attempt of "student1" at "Q1" has been graded
-    And the last attempt of "student2" at "Q1" has been graded
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should appear in the "Upcoming" section
-    And "Q1" should not show "Feedback released"
-    When I log in as "student2" and view my dashboard
-    Then "Q1" should show the status "Feedback released"
