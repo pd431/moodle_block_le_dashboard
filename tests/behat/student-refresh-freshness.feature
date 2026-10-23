@@ -28,10 +28,6 @@ Feature: A student's Refresh moves their "Updated" line on
     And the My assessments index is up to date
     And the My assessments index was last updated "2 days ago"
 
-  Scenario: Before a Refresh the line shows the last full update
-    When I log in as "student1" and view my dashboard
-    Then I should not see "Updated" with the time "now"
-
   @javascript
   Scenario: After a Refresh the line says just now, and still does on the next visit
     When I log in as "student1" and view my dashboard

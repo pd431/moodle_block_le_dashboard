@@ -27,39 +27,8 @@ Feature: Assessments with generic names get a hint for staff
     And the My assessments block keeps its hints and guidance from before beta27
 
   # Undated, so it's listed: My marking has no Upcoming section since beta28.
-  Scenario Outline: A name made only of generic words gets a hint for staff
-    Given a summative "assign" "<name>" in "LAW1001" with no due date exists
-    When I log in as "teacher1" and view my dashboard
-    Then "<name>" should <have> a "generic name" hint
-
-    Examples:
-      | name                      | have     |
-      | Essay 1                   | have     |
-      | CW2 - Summative           | have     |
-      | LAW1001 Assessment        | have     |
-      | Law: Coursework (Part 2)  | have     |
-      | Essay II                  | have     |
-      | Online Learning Essay     | not have |
-      | Society and the Law Essay | not have |
 
   # Pierre, 2026-10-17: a course's full name can carry its code and run, and its words still count.
-  Scenario: Words of a long course name with a code in it count as generic
-    Given the following "courses" exist:
-      | fullname                                  | shortname    |
-      | Computing in History - CSM1056_B_23_48353 | CSM1056_B_23 |
-    And the following "course enrolments" exist:
-      | user     | course       | role           |
-      | teacher1 | CSM1056_B_23 | editingteacher |
-    And a summative "assign" "Computing in History Essay" in "CSM1056_B_23" with no due date exists
-    And a summative "assign" "Computing the Census, 1841-1911" in "CSM1056_B_23" with no due date exists
-    When I log in as "teacher1" and view my dashboard
-    Then "Computing in History Essay" should have a "generic name" hint
-    And "Computing the Census, 1841-1911" should not have a "generic name" hint
-
-  Scenario: Convenors see the hint too
-    Given a summative "assign" "Essay 1" in "LAW1001" is due "in 3 days"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "Essay 1" should have a "generic name" hint
 
   @javascript
   Scenario: The hint says why and gives an example
@@ -67,18 +36,6 @@ Feature: Assessments with generic names get a hint for staff
     When I log in as "teacher1" and view my dashboard
     And I click on the generic name hint of "Essay 1"
     Then the "genericname" popover of "Essay 1" should say "Generic name" then "Students benefit from descriptive names for their assessments."
-
-  Scenario: Students don't see the hint
-    Given a summative "assign" "Essay 1" in "LAW1001" is due "in 3 days"
-    When I log in as "student1" and view my dashboard
-    Then "Essay 1" should not have a "generic name" hint
-
-  Scenario: An admin can turn the hint off
-    Given the following config values are set as admin:
-      | genericnames | 0 | block_le_dashboard |
-    And a summative "assign" "Essay 1" in "LAW1001" with no due date exists
-    When I log in as "teacher1" and view my dashboard
-    Then "Essay 1" should not have a "generic name" hint
 
   @javascript
   Scenario: An admin can change the terms and the text

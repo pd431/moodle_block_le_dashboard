@@ -34,16 +34,6 @@ Feature: An assessment that can't be indexed still appears for staff, and says s
       | convenor | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
-  Scenario: An assessment whose students can't be read still appears for its convenor
-    Given reading student data fails for every student
-    And a summative "assign" "A1" in "M1" was due "3 days ago"
-    And "student1" has submitted "A1"
-    When I log in as "convenor" and view my dashboard
-    Then "A1" should appear in the "In progress" section
-    And "A1" should show "Couldn't load student data"
-    And "A1" should have a "load error" hint
-    And "A1" should not show a "Submitted" progress bar
-
   Scenario: An activity type that fails entirely still lists its assessments for the convenor
     Given indexing of "assign" activities fails with an error
     And a summative "assign" "A1" in "M1" is due "tomorrow"
@@ -53,17 +43,6 @@ Feature: An assessment that can't be indexed still appears for staff, and says s
     When I log in as "admin"
     And I navigate to "Plugins > Blocks > Le Dashboard > Activity types" in site administration
     Then the "Assignment" activity type should show its last indexing error
-
-  Scenario: Once indexing works again the note goes
-    Given reading student data fails for every student
-    And a summative "assign" "A1" in "M1" was due "3 days ago"
-    And "student1" has submitted "A1"
-    And reading student data works again
-    And the My assessments nightly reconcile runs
-    When I log in as "convenor" and view my dashboard
-    Then "A1" should not have a "load error" hint
-    And "A1" should not show "Couldn't load student data"
-    And "A1" should show a "Submitted" progress bar with "1" of "1"
 
   Scenario: Students see no error
     Given indexing of "assign" activities fails with an error

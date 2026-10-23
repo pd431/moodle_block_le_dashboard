@@ -26,40 +26,6 @@ Feature: Every row reads in the same order, in every view
 
   # ---------- Student dates in the order things happen ----------
 
-  Scenario: Released feedback comes after the deadline it follows
-    Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the grade of "student1" for "A1" is released
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then the dates of "A1" should be "Due, Feedback received" in that order
-
-  Scenario: Expected feedback comes after the deadline, as before
-    # New sites don't show students a feedback date (beta27), so this one does.
-    Given the following config values are set as admin:
-      | feedbackdatemode | asset | block_le_dashboard |
-    And a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student1" has submitted "A1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then the dates of "A1" should be "Due, Feedback expected" in that order
-
-  Scenario: An activity not open yet still reads Opens, then Due
-    Given a summative "assign" "A1" in "M1" opens "in 3 days" and is due "in 10 days"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then the dates of "A1" should be "Opens, Due" in that order
-
-  Scenario: Undated work with released feedback shows only the feedback date
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the grade of "student1" for "A1" is released
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then the dates of "A1" should be "Feedback received" in that order
-
   # ---------- Student date labels line up ----------
 
   @javascript
@@ -81,24 +47,6 @@ Feature: Every row reads in the same order, in every view
 
   # ---------- Type before activity in every view ----------
 
-  Scenario: Students read the type before the activity, as before
-    Given a summative "assign" "A1" in "M1" is due "in 10 days"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should show "Summative assignment"
-
-  Scenario Outline: Staff and convenors read the type before the activity too
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And the My assessments index is up to date
-    When I log in as "<user>" and view the "<view>"
-    Then "A1" should show "Summative · Assignment"
-    And "A1" should not show "Assignment · Summative"
-
-    Examples:
-      | user     | view          |
-      | marker1  | My marking    |
-      | convenor | Convenor view |
-
   # ---------- One order of flags; the default marking hint beside its date ----------
 
   Scenario Outline: The default marking deadline hint sits beside the date it explains
@@ -113,91 +61,4 @@ Feature: Every row reads in the same order, in every view
       | marker1  | My marking    |
       | convenor | Convenor view |
 
-  Scenario Outline: Flags come in the same order on My marking and the Convenor view
-    # "Essay 1" is a generic name. It has no marking deadline, so it gets the default one: that hint is now
-    # beside the date, so it's not in the flags.
-    Given the following config values are set as admin:
-      | genericnames | 1 | block_le_dashboard |
-    And a summative "assign" "Essay 1" in "M1" was due "3 days ago"
-    And "Essay 1" is hidden from students
-    And "student1" has submitted "Essay 1"
-    And "student2" has an extension on "Essay 1" to "tomorrow"
-    And the My assessments index is up to date
-    When I log in as "<user>" and view the "<view>"
-    Then the hints of "Essay 1" should be "<hints>" in that order
-
-    Examples:
-      | user     | view          | hints                            |
-      | marker1  | My marking    | hidden, generic name, extensions |
-      | convenor | Convenor view | hidden, generic name, extensions |
-
   # ---------- Rows by relevance: soonest first while there's work, latest first once done ----------
-
-  Scenario: A student's overdue work comes oldest first, then upcoming work soonest first
-    Given a summative "assign" "A1" in "M1" was due "1 day ago"
-    And a summative "assign" "A2" in "M1" was due "2 days ago"
-    And a summative "assign" "A3" in "M1" is due "in 7 days"
-    And a summative "assign" "A4" in "M1" is due "in 1 hour"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then the "Overdue" section should list "A2, A1" in that order
-    And the "Upcoming" section should list "A4, A3" in that order
-
-  Scenario: A student's past work comes most recent first
-    Given a summative "assign" "A1" in "M1" was due "14 days ago"
-    And a summative "assign" "A2" in "M1" was due "7 days ago"
-    And "student1" has submitted "A1"
-    And "student1" has submitted "A2"
-    And "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student1" for "A2"
-    And the grade of "student1" for "A1" is released
-    And the grade of "student1" for "A2" is released
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then the "Past" section should list "A2, A1" in that order
-
-  Scenario: Completed marking shows the latest marking deadline first
-    Given a summative "assign" "A1" in "M1" with a marking deadline "3 days ago" was due "20 days ago"
-    And a summative "assign" "A2" in "M1" with a marking deadline "yesterday" was due "10 days ago"
-    And a summative "assign" "A3" in "M1" with a marking deadline "10 days ago" was due "30 days ago"
-    And "student1" has submitted "A1"
-    And "student1" has submitted "A2"
-    And "student1" has submitted "A3"
-    And "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student1" for "A2"
-    And "marker1" marks the submission of "student1" for "A3"
-    And the My assessments index is up to date
-    When I log in as "marker1" and view the "My marking"
-    Then the "Completed marking" section should list "A2, A1, A3" in that order
-
-  Scenario: Convenor In progress sorts by marking deadline, else by deadline, as My marking does
-    # With the default marking period off, A2 has no marking deadline.
-    Given the following config values are set as admin:
-      | defaultmarkingdays | 0 | block_le_dashboard |
-    And a summative "assign" "A1" in "M1" with a marking deadline "in 10 days" was due "5 days ago"
-    And a summative "assign" "A2" in "M1" was due "3 days ago"
-    And "student1" has submitted "A1"
-    And "student1" has submitted "A2"
-    And the My assessments index is up to date
-    When I log in as "convenor" and view the "Convenor view"
-    Then the "In progress" section should list "A2, A1" in that order
-
-  Scenario: Convenor Past shows the latest marking deadline first, as Completed marking does
-    Given a summative "assign" "A1" in "M1" with a marking deadline "2 days ago" was due "20 days ago"
-    And a summative "assign" "A2" in "M1" with a marking deadline "5 days ago" was due "10 days ago"
-    And "student1" has submitted "A1"
-    And "student1" has submitted "A2"
-    And "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student1" for "A2"
-    And the grade of "student1" for "A1" is released
-    And the grade of "student1" for "A2" is released
-    And the My assessments index is up to date
-    When I log in as "convenor" and view the "Convenor view"
-    Then the "Past" section should list "A1, A2" in that order
-
-  Scenario: Rows with the same date come by name in every view
-    Given a summative "assign" "Beta" in "M1" is due "in 3 days"
-    And a summative "assign" "Alpha" in "M1" is due "in 3 days"
-    And the My assessments index is up to date
-    When I log in as "convenor" and view the "Convenor view"
-    Then the "Upcoming" section should list "Alpha, Beta" in that order

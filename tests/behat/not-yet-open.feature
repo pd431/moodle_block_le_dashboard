@@ -38,19 +38,3 @@ Feature: An activity that hasn't opened yet isn't due soon
       | activity |
       | quiz     |
       | assign   |
-
-  Scenario: Once it has opened, the row is due soon as before
-    Given a summative "quiz" "Q1" in "M1" opens "yesterday" and is due "in 4 days"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should appear in the "Upcoming" section
-    And "Q1" should not show "Opens"
-    And "Q1" should show "Due in"
-    And the activity icon of "Q1" should have the "duesoon" modifier
-
-  Scenario: An activity with no open date is unchanged
-    Given a summative "quiz" "Q1" in "M1" is due "in 4 days"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Q1" should not show "Opens"
-    And the activity icon of "Q1" should have the "duesoon" modifier

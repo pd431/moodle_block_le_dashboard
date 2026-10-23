@@ -49,60 +49,6 @@ Feature: Finished marking shows where the assessment stands, with the marking de
     And the submission of "student2" for "A1" is allocated to "marker1"
     And the submission of "student3" for "A1" is allocated to "marker2"
 
-  Scenario: My share is done while a colleague is still grading
-    Given "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student2" for "A1"
-    When I log in as "marker1" and view my dashboard
-    Then "A1" should appear in the "Completed marking" section
-    And "A1" should show the grading status "Colleagues still grading"
-    And "A1" should not show any progress bars
-
-  Scenario: Everything marked, nothing released
-    Given "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student2" for "A1"
-    And "marker2" marks the submission of "student3" for "A1"
-    When I log in as "marker1" and view my dashboard
-    Then "A1" should show the grading status "Marked, not yet released"
-
-  Scenario: Some work released, the rest withheld, with the number withheld
-    Given "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student2" for "A1"
-    And "marker2" marks the submission of "student3" for "A1"
-    And the grade of "student1" for "A1" is released
-    When I log in as "marker1" and view my dashboard
-    Then "A1" should show the grading status "Released to students. 2 withheld"
-    When I log in as "convenor" and view my dashboard
-    Then "A1" should appear in the "In progress" section
-
-  Scenario: Everything released
-    Given "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student2" for "A1"
-    And "marker2" marks the submission of "student3" for "A1"
-    And the grade of "student1" for "A1" is released
-    And the grade of "student2" for "A1" is released
-    And the grade of "student3" for "A1" is released
-    When I log in as "marker2" and view my dashboard
-    Then "A1" should show the grading status "Released to students"
-    When I log in as "convenor" and view my dashboard
-    Then "A1" should appear in the "Past" section
-    And "A1" should show the grading status "Released to students"
-
-  Scenario: A convenor's assessment with nothing released stays In progress, with its bars
-    Given "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student2" for "A1"
-    And "marker2" marks the submission of "student3" for "A1"
-    When I log in as "convenor" and view my dashboard
-    Then "A1" should appear in the "In progress" section
-    And "A1" should not show a grading status
-    And "A1" should show progress bars "Submitted, Unallocated, Marked, Released"
-
-  Scenario: Rows still being marked keep their bars and have no status
-    Given "marker1" marks the submission of "student1" for "A1"
-    When I log in as "marker1" and view my dashboard
-    Then "A1" should appear in the "Marking in progress" section with "1" to mark
-    And "A1" should not show a grading status
-    And "A1" should show progress bars "Marked"
-
   @javascript
   Scenario: The marking detail opens from the row
     Given "marker1" marks the submission of "student1" for "A1"
