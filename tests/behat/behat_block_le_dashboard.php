@@ -1036,6 +1036,16 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Time passes until the deadline is one second behind.
+     *
+     * @When /^the deadline of "(?P<name>[^"]*)" has just passed$/
+     * @param string $name
+     */
+    public function the_deadline_has_just_passed(string $name): void {
+        steps::instance()->the_deadline_has_just_passed($name);
+    }
+
+    /**
      * Changes a deadline without any event.
      *
      * @Given /^the deadline of "(?P<name>[^"]*)" is changed directly in the database to "(?P<when>[^"]*)"$/
