@@ -118,13 +118,17 @@ final class scope_test extends \advanced_testcase {
             }
         }
         $yearcourses = array_map('intval', $DB->get_fieldset_sql(
-            'SELECT c.id FROM {course} c WHERE ' . scope::year_sql('c'), scope::year_params($year)));
+            'SELECT c.id FROM {course} c WHERE ' . scope::year_sql('c'),
+            scope::year_params($year)
+        ));
         $this->assertNotEmpty($yearcourses);
         $this->assertNotCount(count($courses), $yearcourses);
         foreach ([$year, null] as $chosen) {
             [$sql, $params] = scope::in_year_sql('c', $chosen);
             $insql = array_flip(array_map('intval', $DB->get_fieldset_sql(
-                "SELECT c.cmid FROM {block_le_dashboard_cm} c WHERE $sql", $params)));
+                "SELECT c.cmid FROM {block_le_dashboard_cm} c WHERE $sql",
+                $params
+            )));
             $shown = 0;
             foreach ($DB->get_records('block_le_dashboard_cm') as $cm) {
                 $inphp = scope::in_year($cm, $yearcourses, $chosen);

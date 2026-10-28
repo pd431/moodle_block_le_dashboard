@@ -552,8 +552,8 @@ final class views_test extends \advanced_testcase {
         $excuse('s2', 'deferred');
         $DB->set_field('block_le_dashboard_mark', 'counted', 0, ['cmid' => $cmid]);
         $this->assertArrayNotHasKey('Overdue essay', self::rows((new staff($this->u['marker']->id))->export(), 'tomark'));
-        $this->assertSame('exempt', self::rows((new student($this->u['s2']->id))->export(), 'past')['Overdue essay']
-            ['status']['key']);
+        $past = self::rows((new student($this->u['s2']->id))->export(), 'past');
+        $this->assertSame('exempt', $past['Overdue essay']['status']['key']);
     }
 
     /**

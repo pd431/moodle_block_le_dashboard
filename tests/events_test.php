@@ -59,8 +59,10 @@ final class events_test extends \advanced_testcase {
             $this->assertArrayHasKey($event, $internal, "$event is not observed after commit");
             $this->assertFalse($internal[$event], "$event is not observed after commit");
         }
-        foreach (['\courseworksubmission_file\event\assessable_uploaded', '\mod_coursework\event\coursework_mitigation_added',
-            '\mod_coursework\event\coursework_mitigation_removed'] as $event) {
+        foreach (
+            ['\courseworksubmission_file\event\assessable_uploaded', '\mod_coursework\event\coursework_mitigation_added',
+            '\mod_coursework\event\coursework_mitigation_removed'] as $event
+        ) {
             $this->assertContains($event, $events);
         }
         $this->assertSame([], preg_grep('~\\extension_~', $events));

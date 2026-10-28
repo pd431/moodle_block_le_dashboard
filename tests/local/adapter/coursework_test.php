@@ -72,8 +72,8 @@ final class coursework_test extends \advanced_testcase {
                 $DB->insert_record(self::TABLE, ['courseworkid' => $cw, 'submissionid' => $sub, 'status' => $status]);
             }
             $open = marking_row::FLAG_OPEN;
-            $this->assertSame([101 => $open, 102 => marking_row::FLAG_WITHHELD, 103 => $open, 104 => $open],
-                self::call('flagged_submissions', 7));
+            $expected = [101 => $open, 102 => marking_row::FLAG_WITHHELD, 103 => $open, 104 => $open];
+            $this->assertSame($expected, self::call('flagged_submissions', 7));
             $this->assertSame([102 => marking_row::FLAG_WITHHELD], self::call('flagged_submissions', 7, [102, 107]));
             $this->assertSame([105 => $open], self::call('flagged_submissions', 8));
             $this->assertSame([], self::call('flagged_submissions', 8, []));
@@ -179,8 +179,9 @@ final class coursework_test extends \advanced_testcase {
         $flagged = [11 => marking_row::FLAG_WITHHELD, 12 => marking_row::FLAG_OPEN];
         $this->assertSame(['user:1' => true], self::call('uncounted', $units, $submissions, $flagged));
         // Exempt or deferred students too, with or without a submission.
-        $this->assertSame(['user:1' => true, 'user:3' => true], self::call('uncounted', $units, $submissions, $flagged,
-            ['user:3' => ['excused' => 'deferred'], 'user:2' => ['extension' => [5, false]]]));
+        $mitigations = ['user:3' => ['excused' => 'deferred'], 'user:2' => ['extension' => [5, false]]];
+        $uncounted = self::call('uncounted', $units, $submissions, $flagged, $mitigations);
+        $this->assertSame(['user:1' => true, 'user:3' => true], $uncounted);
     }
 
     /**
@@ -188,8 +189,8 @@ final class coursework_test extends \advanced_testcase {
      */
     public function test_flag_state(): void {
         [$none, $open, $withheld] = [marking_row::FLAG_NONE, marking_row::FLAG_OPEN, marking_row::FLAG_WITHHELD];
-        foreach (['0' => $open, '1' => $none, '2' => $none, ' 2 ' => $none, '3' => $withheld, '7' => $open, '' => $open]
-                as $status => $state) {
+        $states = ['0' => $open, '1' => $none, '2' => $none, ' 2 ' => $none, '3' => $withheld, '7' => $open, '' => $open];
+        foreach ($states as $status => $state) {
             $this->assertSame($state, coursework::flag_state((string)$status), "status '$status'");
         }
         $this->assertSame($open, coursework::flag_state(null));
@@ -211,8 +212,9 @@ final class coursework_test extends \advanced_testcase {
     public function test_reads_one_name_per_fact(): void {
         global $CFG;
         $source = file_get_contents($CFG->dirroot . '/blocks/le_dashboard/classes/local/adapter/coursework.php');
-        foreach (['use_groups' => 'usegroups', 'finalised' => 'finalisedstatus', 'stage_identifier' => 'stageidentifier',
-                'personal_deadline' => 'personaldeadline\b(?!_)'] as $read => $notread) {
+        $names = ['use_groups' => 'usegroups', 'finalised' => 'finalisedstatus', 'stage_identifier' => 'stageidentifier',
+            'personal_deadline' => 'personaldeadline\b(?!_)'];
+        foreach ($names as $read => $notread) {
             $this->assertStringContainsString($read, $source);
             $this->assertDoesNotMatchRegularExpression("~(?<![_a-z])$notread~", $source, "reads $notread");
         }
@@ -257,8 +259,8 @@ final class coursework_test extends \advanced_testcase {
                 'user:4' => ['excused' => 'deferred'],
                 'user:5' => ['excused' => 'exempt', 'extension' => [600, true]],
             ], self::call('mitigations', 7));
-            $this->assertSame(['user:2' => ['extension' => [300, false]], 'user:4' => ['excused' => 'deferred']],
-                self::call('mitigations', 7, [['user', 2], ['user', 4]]));
+            $expected = ['user:2' => ['extension' => [300, false]], 'user:4' => ['excused' => 'deferred']];
+            $this->assertSame($expected, self::call('mitigations', 7, [['user', 2], ['user', 4]]));
         });
     }
 
@@ -335,8 +337,8 @@ final class coursework_test extends \advanced_testcase {
      */
     public function test_stage_map_with_attendance(): void {
         $cw = (object)['numberofmarkers' => 2, 'moderationenabled' => 0];
-        $this->assertSame(['marker1' => 'assessor_1', 'marker2' => 'assessor_2', 'agreed' => 'final_agreed_1'],
-            coursework::stage_map($cw));
+        $expected = ['marker1' => 'assessor_1', 'marker2' => 'assessor_2', 'agreed' => 'final_agreed_1'];
+        $this->assertSame($expected, coursework::stage_map($cw));
         $this->assertSame(['attendance' => null, 'marker1' => 'assessor_1', 'marker2' => 'assessor_2',
             'agreed' => 'final_agreed_1'], coursework::stage_map($cw, true));
     }
@@ -358,8 +360,8 @@ final class coursework_test extends \advanced_testcase {
             ['group:3', 'attendance', true, true, true, null, 1],
         ], $got);
         $this->assertNull(self::call('attendance_rows', ['user:2' => true], [], null)[0]->allocatedto);
-        $this->assertSame([true, false], array_map(fn($r) => $r->counted,
-            self::call('attendance_rows', ['user:1' => true, 'user:2' => true], [], null, ['user:2' => true])));
+        $rows = self::call('attendance_rows', ['user:1' => true, 'user:2' => true], [], null, ['user:2' => true]);
+        $this->assertSame([true, false], array_map(fn($r) => $r->counted, $rows));
     }
 
     /**

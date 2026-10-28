@@ -138,8 +138,10 @@ final class classifier_test extends \basic_testcase {
      */
     public function test_student_exempt(): void {
         foreach (['exempt', 'deferred'] as $mitigation) {
-            foreach ([[self::NOW + DAYSECS, 0, c::UPCOMING], [self::NOW - DAYSECS, 0, c::PAST], [self::NOW - DAYSECS, 1, c::PAST],
-                    [null, 0, c::UNDATED]] as [$due, $submitted, $section]) {
+            foreach (
+                [[self::NOW + DAYSECS, 0, c::UPCOMING], [self::NOW - DAYSECS, 0, c::PAST], [self::NOW - DAYSECS, 1, c::PAST],
+                    [null, 0, c::UNDATED]] as [$due, $submitted, $section]
+            ) {
                 $row = (object)['due' => $due, 'cutoff' => null, 'submitted' => $submitted, 'timereleased' => null,
                     'mitigation' => $mitigation];
                 $this->assertSame([$section, c::STATUS_EXEMPT], c::student($row, self::NOW, 90), "$mitigation, due $due");

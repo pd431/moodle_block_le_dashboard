@@ -279,8 +279,11 @@ class coursework extends base {
     protected static function mitigations(int $courseworkid, ?array $only = null): array {
         global $DB;
         [$onlysql, $params] = self::allocatable_sql($only);
-        [$typesql, $typeparams] = $DB->get_in_or_equal(['extension', ...array_keys(self::EXCUSING_TYPES)],
-            SQL_PARAMS_NAMED, 'mt');
+        [$typesql, $typeparams] = $DB->get_in_or_equal(
+            ['extension', ...array_keys(self::EXCUSING_TYPES)],
+            SQL_PARAMS_NAMED,
+            'mt'
+        );
         $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, type, extended_deadline, selfcert
                                         FROM {coursework_mitigations}
                                        WHERE courseworkid = :cwid AND type $typesql $onlysql

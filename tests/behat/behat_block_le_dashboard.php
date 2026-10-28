@@ -933,8 +933,10 @@ class behat_block_le_dashboard extends behat_base {
     public function i_submit_a_file_to(string $name): void {
         $this->getSession()->visit($this->locate_path('/mod/assign/view.php?id=' . $this->cm($name)->id));
         $this->execute('behat_forms::press_button', [get_string('addsubmission', 'assign')]);
-        $this->execute('behat_repository_upload::i_upload_file_to_filemanager',
-            ['lib/tests/fixtures/empty.txt', get_string('pluginname', 'assignsubmission_file')]);
+        $this->execute(
+            'behat_repository_upload::i_upload_file_to_filemanager',
+            ['lib/tests/fixtures/empty.txt', get_string('pluginname', 'assignsubmission_file')]
+        );
         $this->execute('behat_forms::press_button', [get_string('savechanges')]);
     }
 
