@@ -40,6 +40,17 @@ Feature: The index never misses or fights over a change
     And I view my dashboard
     Then "A1" should show the status "Submitted"
 
+  @javascript @_file_upload
+  Scenario: A file handed in just before the deadline is in Past the second after it, without a Refresh
+    Given a summative "assign" "A2" in "M1" with file submissions is due "in 1 minute"
+    And the My assessments index is up to date
+    When I log in as "student1"
+    And I submit a file to "A2"
+    And the deadline of "A2" has just passed
+    And I view my dashboard
+    Then "A2" should appear in the "Past" section
+    And "A2" should show the status "In marking"
+
   @javascript
   Scenario: A student's Refresh changes only that student's rows
     Given "student2" has submitted "A1" without the index being told

@@ -1211,8 +1211,27 @@ final class steps {
      * @param int $minutes
      */
     public function minutes_pass(int $minutes): void {
+        $this->seconds_pass($minutes * MINSECS);
+    }
+
+    /**
+     * Time passes until an assessment's deadline is one second behind, as minutes_pass().
+     *
+     * @param string $name
+     */
+    public function the_deadline_has_just_passed(string $name): void {
         global $DB;
-        $shift = $minutes * MINSECS;
+        $due = (int)$DB->get_field('block_le_dashboard_cm', 'due', ['cmid' => $this->cm($name)->id], MUST_EXIST);
+        $this->seconds_pass(max(0, $due - time() + 1));
+    }
+
+    /**
+     * Time passes: stored dates move back by some seconds.
+     *
+     * @param int $shift
+     */
+    protected function seconds_pass(int $shift): void {
+        global $DB;
         // The index and the activities' own times move together, so a re-index agrees.
         $fields = [
             'block_le_dashboard_cm' => ['due', 'cutoff', 'markingdue', 'timeindexed'],

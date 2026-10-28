@@ -901,6 +901,20 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The logged-in student hands in a file through the assignment's page.
+     *
+     * @When /^I submit a file to "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_submit_a_file_to(string $name): void {
+        $this->getSession()->visit($this->locate_path('/mod/assign/view.php?id=' . $this->cm($name)->id));
+        $this->execute('behat_forms::press_button', [get_string('addsubmission', 'assign')]);
+        $this->execute('behat_repository_upload::i_upload_file_to_filemanager',
+            ['lib/tests/fixtures/empty.txt', get_string('pluginname', 'assignsubmission_file')]);
+        $this->execute('behat_forms::press_button', [get_string('savechanges')]);
+    }
+
+    /**
      * Opens the dashboard without running pending index tasks.
      *
      * @When /^I view my dashboard$/
@@ -1019,6 +1033,16 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_nightly_reconcile_runs(): void {
         steps::instance()->the_nightly_reconcile_runs();
+    }
+
+    /**
+     * Time passes until the deadline is one second behind.
+     *
+     * @When /^the deadline of "(?P<name>[^"]*)" has just passed$/
+     * @param string $name
+     */
+    public function the_deadline_has_just_passed(string $name): void {
+        steps::instance()->the_deadline_has_just_passed($name);
     }
 
     /**
