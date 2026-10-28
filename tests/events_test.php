@@ -47,6 +47,26 @@ final class events_test extends \advanced_testcase {
     }
 
     /**
+     * Coursework's events are the ones Exeter's build fires, each handled after commit (CS2, PR2).
+     */
+    public function test_coursework_events(): void {
+        global $CFG;
+        $observers = [];
+        require($CFG->dirroot . '/blocks/le_dashboard/db/events.php');
+        $internal = array_column($observers, 'internal', 'eventname');
+        $events = local\adapter\coursework::events();
+        foreach ($events as $event) {
+            $this->assertArrayHasKey($event, $internal, "$event is not observed after commit");
+            $this->assertFalse($internal[$event], "$event is not observed after commit");
+        }
+        foreach (['\courseworksubmission_file\event\assessable_uploaded', '\mod_coursework\event\coursework_mitigation_added',
+            '\mod_coursework\event\coursework_mitigation_removed'] as $event) {
+            $this->assertContains($event, $events);
+        }
+        $this->assertSame([], preg_grep('~\\extension_~', $events));
+    }
+
+    /**
      * The events an adapter says are about the student they name (B4) are among the events it relies on.
      */
     public function test_related_user_events_are_adapter_events(): void {

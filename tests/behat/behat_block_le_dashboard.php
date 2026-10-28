@@ -936,6 +936,40 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A student uploads a file to a coursework and the file sub-plugin's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" uploads a file to coursework "(?P<name>[^"]*)" and the upload event fires$/
+     * @param string $username
+     * @param string $name
+     */
+    public function uploads_a_file_and_the_event_fires(string $username, string $name): void {
+        steps::instance()->uploads_a_file_and_the_event_fires($username, $name);
+    }
+
+    /**
+     * A student self-certifies through block_rhb and coursework's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" self-certifies "(?P<name>[^"]*)" to "(?P<when>[^"]*)" and the mitigation added event fires$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function self_certifies_and_the_event_fires(string $username, string $name, string $when): void {
+        steps::instance()->self_certifies_and_the_event_fires($username, $name, $when);
+    }
+
+    /**
+     * A student's self-certification is removed and coursework's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" removes the self-certification of "(?P<name>[^"]*)" and the mitigation removed event fires$/
+     * @param string $username
+     * @param string $name
+     */
+    public function removes_the_self_certification_and_the_event_fires(string $username, string $name): void {
+        steps::instance()->removes_the_self_certification_and_the_event_fires($username, $name);
+    }
+
+    /**
      * A student's index row is as it was saved.
      *
      * @Then /^the index row of "(?P<user>[^"]*)" for "(?P<name>[^"]*)" should be unchanged$/
@@ -3258,6 +3292,17 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function a_course_reindex_should_be_queued(string $shortname, string $not = ''): void {
         steps::instance()->a_course_reindex_should_be_queued($shortname, $not);
+    }
+
+    /**
+     * Whether a re-index of an assessment is waiting.
+     *
+     * @Then /^a re-index of "(?P<name>[^"]*)" should (?P<not>not )?be queued$/
+     * @param string $name
+     * @param string $not
+     */
+    public function a_reindex_should_be_queued(string $name, string $not = ''): void {
+        steps::instance()->a_reindex_should_be_queued($name, $not);
     }
 
     /**

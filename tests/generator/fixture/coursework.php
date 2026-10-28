@@ -27,6 +27,9 @@ namespace block_le_dashboard\fixture;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class coursework extends base {
+    /** @var int The mitigation remove_extension() took away last. */
+    private static int $removed = 0;
+
     #[\Override]
     public function modname(): string {
         return 'coursework';
@@ -178,6 +181,32 @@ final class coursework extends base {
             'extended_deadline' => $until, 'type' => 'extension', 'selfcert' => 1, 'timecreated' => time()];
         $DB->insert_record('coursework_mitigations', $record);
         self::queue($cm);
+    }
+
+    #[\Override]
+    public function remove_extension(\cm_info $cm, int $userid): void {
+        global $DB;
+        $params = self::submission_params($cm, $userid) + ['type' => 'extension'];
+        self::$removed = (int)$DB->get_field('coursework_mitigations', 'MAX(id)', $params);
+        $DB->delete_records('coursework_mitigations', $params);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function event_fires(\cm_info $cm, int $userid, string $event): void {
+        global $DB;
+        $params = self::submission_params($cm, $userid);
+        [$class, $objectid] = match ($event) {
+            'upload' => ['\courseworksubmission_file\event\assessable_uploaded',
+                $DB->get_field('coursework_submissions', 'id', $params, MUST_EXIST)],
+            'mitigation added' => ['\mod_coursework\event\coursework_mitigation_added',
+                $DB->get_field('coursework_mitigations', 'MAX(id)', $params + ['type' => 'extension'])],
+            'mitigation removed' => ['\mod_coursework\event\coursework_mitigation_removed', self::$removed],
+        };
+        // Built as block_rhb and the file sub-plugin build them. Should Exeter's classes want more in
+        // 'other', create() says which here.
+        $class::create(['context' => \context_module::instance($cm->id), 'objectid' => (int)$objectid,
+            'relateduserid' => $userid, 'userid' => $userid, 'other' => []])->trigger();
     }
 
     #[\Override]

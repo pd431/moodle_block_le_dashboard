@@ -1077,6 +1077,57 @@ final class steps {
     }
 
     /**
+     * A student uploads a file to a coursework and the file sub-plugin's event fires; nothing else tells the index.
+     *
+     * @param string $username
+     * @param string $name
+     */
+    public function uploads_a_file_and_the_event_fires(string $username, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->submit($cm, self::userid($username));
+        self::only_the_event_tells($cm, self::userid($username), 'upload');
+    }
+
+    /**
+     * A student self-certifies through block_rhb and coursework's event fires; nothing else tells the index.
+     *
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function self_certifies_and_the_event_fires(string $username, string $name, string $when): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->extend($cm, self::userid($username), phrases::time($when), true);
+        self::only_the_event_tells($cm, self::userid($username), 'mitigation added');
+    }
+
+    /**
+     * A student's self-certification is removed through block_rhb and coursework's event fires; nothing else
+     * tells the index.
+     *
+     * @param string $username
+     * @param string $name
+     */
+    public function removes_the_self_certification_and_the_event_fires(string $username, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->remove_extension($cm, self::userid($username));
+        self::only_the_event_tells($cm, self::userid($username), 'mitigation removed');
+    }
+
+    /**
+     * Drops the re-index the fixture queued for a change, then fires the activity's own event for it.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param string $event
+     */
+    private static function only_the_event_tells(\cm_info $cm, int $userid, string $event): void {
+        global $DB;
+        $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\reindex']);
+        self::fixture($cm)->event_fires($cm, $userid, $event);
+    }
+
+    /**
      * A student's index row is as it was saved.
      *
      * @param string $username
@@ -1696,15 +1747,36 @@ final class steps {
      * @param string $not
      */
     public function a_course_reindex_should_be_queued(string $shortname, string $not = ''): void {
+        self::reindex_queued('courseid', (int)self::course($shortname)->id, $shortname, $not);
+    }
+
+    /**
+     * Whether a re-index of an assessment is waiting.
+     *
+     * @param string $name
+     * @param string $not
+     */
+    public function a_reindex_should_be_queued(string $name, string $not = ''): void {
+        self::reindex_queued('cmid', (int)$this->cm($name)->id, $name, $not);
+    }
+
+    /**
+     * Whether a re-index of a course or an assessment is waiting.
+     *
+     * @param string $key courseid or cmid
+     * @param int $id
+     * @param string $what
+     * @param string $not
+     */
+    private static function reindex_queued(string $key, int $id, string $what, string $not): void {
         global $DB;
-        $courseid = (int)self::course($shortname)->id;
         $queued = false;
         foreach ($DB->get_records('task_adhoc', ['classname' => '\\' . \block_le_dashboard\task\reindex::class]) as $task) {
             $data = json_decode($task->customdata);
-            $queued = $queued || (isset($data->courseid) && (int)$data->courseid === $courseid);
+            $queued = $queued || (isset($data->$key) && (int)$data->$key === $id);
         }
         if ($queued === (bool)$not) {
-            throw new failed("A re-index of $shortname is " . ($queued ? '' : 'not ') . 'queued');
+            throw new failed("A re-index of $what is " . ($queued ? '' : 'not ') . 'queued');
         }
     }
 

@@ -49,6 +49,11 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   attendance). Attendance is its first marking stage, taken for a student once coursework has a submission row for
   them, as marks entry creates one; then coursework's own stages. A coursework with no submission types recorded is
   standard. The signal that attendance was taken is inferred from Exeter's data, not confirmed.
+- **CS2** Coursework is observed by the events Exeter's event log shows firing: the file sub-plugin's
+  assessable_uploaded, and coursework_mitigation_added and _removed for a self-certification made or taken back
+  through block_rhb. Each names the student, so their rows update at once (F4). extension_created, _updated and
+  _deleted are gone: they belong to a coursework_extensions table Exeter's build doesn't have. Every coursework
+  event is handled after its transaction commits (PR2), coursework_deadline_changed included.
 
 ## D: logic overhaul design v2 (2026-10-02)
 

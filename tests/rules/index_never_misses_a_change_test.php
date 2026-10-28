@@ -260,4 +260,132 @@ final class index_never_misses_a_change_test extends view_testcase {
         $this->step('And the My assessments index catches up');
         $this->step('Then the index should show "Z1 resit"');
     }
+
+    /**
+     * A file uploaded to a coursework shows as submitted straight away
+     */
+    public function test_a_file_uploaded_to_a_coursework_shows_as_submitted_straight_away(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'marker1', 'firstname' => 'Mo', 'lastname' => 'Marker'],
+            ['username' => 'convenor', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'marker1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And a summative "assign" "A1" in "M1" is due "in 1 hour"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('Given a summative "coursework" "C1" in "M1" with file submission is due "in 1 hour"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When I log in as "student1"');
+        $this->step('And "student1" uploads a file to coursework "C1" and the upload event fires');
+        $this->step('And I view my dashboard');
+        $this->step('Then "C1" should show the status "Submitted"');
+    }
+
+    /**
+     * A self-certification applied through block_rhb shows straight away
+     */
+    public function test_a_self_certification_applied_through_block_rhb_shows_straight_away(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'marker1', 'firstname' => 'Mo', 'lastname' => 'Marker'],
+            ['username' => 'convenor', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'marker1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And a summative "assign" "A1" in "M1" is due "in 1 hour"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('Given a summative "coursework" "C1" in "M1" is due "in 1 hour"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When I log in as "student1"');
+        $this->step('And "student1" self-certifies "C1" to "in 3 days" and the mitigation added event fires');
+        $this->step('And I view my dashboard');
+        $this->step('Then "C1" should show the due date "in 3 days"');
+        $this->step('And the activity icon of "C1" should have the "selfcert" modifier');
+    }
+
+    /**
+     * A self-certification removed through block_rhb shows straight away
+     */
+    public function test_a_self_certification_removed_through_block_rhb_shows_straight_away(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'marker1', 'firstname' => 'Mo', 'lastname' => 'Marker'],
+            ['username' => 'convenor', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'marker1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And a summative "assign" "A1" in "M1" is due "in 1 hour"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('Given a summative "coursework" "C1" in "M1" is due "in 1 hour"');
+        $this->step('And "student1" self-certified "C1" to "in 3 days"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When I log in as "student1"');
+        $this->step('And "student1" removes the self-certification of "C1" and the mitigation removed event fires');
+        $this->step('And I view my dashboard');
+        $this->step('Then "C1" should show the due date "in 1 hour"');
+        $this->step('And the activity icon of "C1" should not have the "selfcert" modifier');
+    }
+
+    /**
+     * After a coursework event, everyone else's rows follow in the queued task
+     */
+    public function test_after_a_coursework_event_everyone_elses_rows_follow_in_the_queued_task(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'marker1', 'firstname' => 'Mo', 'lastname' => 'Marker'],
+            ['username' => 'convenor', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'marker1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And a summative "assign" "A1" in "M1" is due "in 1 hour"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('Given a summative "coursework" "C1" in "M1" with file submission is due "in 1 hour"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When "student1" uploads a file to coursework "C1" and the upload event fires');
+        $this->step('Then a re-index of "C1" should be queued');
+        $this->step('When the My assessments index catches up');
+        $this->step('And I log in as "convenor" and view the "Convenor view"');
+        $this->step('Then "C1" should show a "Submitted" progress bar with "1" of "2"');
+    }
 }

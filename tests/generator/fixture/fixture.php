@@ -198,6 +198,23 @@ interface fixture {
     public function extend(\cm_info $cm, int $userid, int $until, bool $selfcert = false): void;
 
     /**
+     * Takes a student's extension away again.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     */
+    public function remove_extension(\cm_info $cm, int $userid): void;
+
+    /**
+     * Fires the activity's own event for a change already made, as the activity's page would.
+     *
+     * @param \cm_info $cm
+     * @param int $userid The student the change was for, who made it.
+     * @param string $event "upload", "mitigation added" or "mitigation removed"
+     */
+    public function event_fires(\cm_info $cm, int $userid, string $event): void;
+
+    /**
      * A per-student deadline override (a quiz override closing later).
      *
      * @param \cm_info $cm

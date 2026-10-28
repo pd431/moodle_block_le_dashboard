@@ -68,12 +68,13 @@ class coursework extends base {
 
     #[\Override]
     public static function events(): array {
+        // The mitigation events are block_rhb's self-certification; the upload is the file sub-plugin's (CS2).
         return [
             '\mod_coursework\event\assessable_submitted',
             '\mod_coursework\event\coursework_deadline_changed',
-            '\mod_coursework\event\extension_created',
-            '\mod_coursework\event\extension_updated',
-            '\mod_coursework\event\extension_deleted',
+            '\mod_coursework\event\coursework_mitigation_added',
+            '\mod_coursework\event\coursework_mitigation_removed',
+            '\courseworksubmission_file\event\assessable_uploaded',
             '\mod_coursework\event\personaldeadline_created',
             '\mod_coursework\event\personaldeadline_updated',
             '\mod_coursework\event\feedback_changed',

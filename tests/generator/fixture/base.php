@@ -206,6 +206,16 @@ abstract class base implements fixture {
     }
 
     #[\Override]
+    public function remove_extension(\cm_info $cm, int $userid): void {
+        $this->unsupported('Removing extensions on');
+    }
+
+    #[\Override]
+    public function event_fires(\cm_info $cm, int $userid, string $event): void {
+        $this->unsupported("The $event event of");
+    }
+
+    #[\Override]
     public function override(\cm_info $cm, int $userid, int $due): void {
         $this->unsupported('Overriding the deadline of');
     }
