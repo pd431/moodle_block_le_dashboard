@@ -122,5 +122,17 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026102801, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026102802) {
+        // Staff views show an assessment by its deadlines or its course's year (Pierre, 2026-10-28): the latest
+        // deadline any student has is indexed. Rows get it at their next index: re-index.
+        $table = new xmldb_table('block_le_dashboard_cm');
+        $field = new xmldb_field('latestdue', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'due');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026102802, 'le_dashboard', 'block');
+    }
+
     return true;
 }

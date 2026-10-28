@@ -84,4 +84,63 @@ final class scope_test extends \advanced_testcase {
         set_user_preference('block_le_dashboard_view', scope::STUDENT, $user);
         $this->assertSame(scope::STAFF, scope::default_view($user->id, [scope::STAFF, scope::CONVENOR]));
     }
+
+    /**
+     * An assessment belongs to a year by its deadlines or its course (EC3): the SQL and PHP forms agree over
+     * every row shape, and All years restricts nothing.
+     */
+    public function test_in_year_forms_agree(): void {
+        global $DB;
+        $this->resetAfterTest();
+        $year = (object)['timestart' => 1788220800, 'timeend' => 1819756800];
+        $times = ['none' => null, 'before' => $year->timestart - DAYSECS, 'start' => $year->timestart,
+            'inside' => $year->timestart + 60 * DAYSECS, 'end' => $year->timeend, 'after' => $year->timeend + DAYSECS];
+        $courses = [];
+        foreach ($times as $start) {
+            foreach ($times as $end) {
+                if ($start !== null && $end !== null && $end < $start) {
+                    continue;
+                }
+                // Written directly: the course form refuses an end date without a start date, old courses have them.
+                $courseid = (int)$this->getDataGenerator()->create_course()->id;
+                $DB->update_record('course', (object)['id' => $courseid, 'startdate' => $start ?? 0, 'enddate' => $end ?? 0]);
+                $courses[] = $courseid;
+            }
+        }
+        $n = 0;
+        foreach ($courses as $courseid) {
+            foreach ($times as $due) {
+                foreach ($times as $latest) {
+                    $DB->insert_record('block_le_dashboard_cm', (object)['cmid' => ++$n, 'courseid' => $courseid,
+                        'modname' => 'assign', 'adapter' => 'assign', 'name' => "A$n", 'assesstype' => 'summative',
+                        'due' => $due, 'latestdue' => $latest, 'stages' => 'marked', 'timeindexed' => 1]);
+                }
+            }
+        }
+        $yearcourses = array_map('intval', $DB->get_fieldset_sql(
+            'SELECT c.id FROM {course} c WHERE ' . scope::year_sql('c'), scope::year_params($year)));
+        $this->assertNotEmpty($yearcourses);
+        $this->assertNotCount(count($courses), $yearcourses);
+        foreach ([$year, null] as $chosen) {
+            [$sql, $params] = scope::in_year_sql('c', $chosen);
+            $insql = array_flip(array_map('intval', $DB->get_fieldset_sql(
+                "SELECT c.cmid FROM {block_le_dashboard_cm} c WHERE $sql", $params)));
+            $shown = 0;
+            foreach ($DB->get_records('block_le_dashboard_cm') as $cm) {
+                $inphp = scope::in_year($cm, $yearcourses, $chosen);
+                $this->assertSame($inphp, isset($insql[(int)$cm->cmid]), json_encode($cm));
+                $shown += $inphp ? 1 : 0;
+            }
+            if ($chosen) {
+                $this->assertGreaterThan(0, $shown);
+                $this->assertLessThan($n, $shown);
+            } else {
+                $this->assertSame($n, $shown);
+            }
+        }
+        // The fragment can appear twice in one query.
+        [$one, $p1] = scope::in_year_sql('a', $year);
+        [$two, $p2] = scope::in_year_sql('b', $year);
+        $this->assertEmpty(array_intersect_key($p1, $p2));
+    }
 }

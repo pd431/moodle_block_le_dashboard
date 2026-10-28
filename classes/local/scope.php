@@ -135,27 +135,72 @@ class scope {
      * its end year; with neither, no year (it shows under All years only).
      *
      * @param string $alias
+     * @param string $prefix Parameter name prefix, so the fragment can sit in a query beside another.
      * @return string
      */
-    public static function year_sql(string $alias): string {
+    public static function year_sql(string $alias, string $prefix = 'y'): string {
         $c = $alias;
-        return "(($c.startdate > 0 AND $c.enddate > 0 AND $c.startdate < :yend1 AND $c.enddate >= :ystart1)
-                 OR ($c.startdate > 0 AND $c.enddate = 0 AND $c.startdate >= :ystart2 AND $c.startdate < :yend2)
-                 OR ($c.startdate = 0 AND $c.enddate > 0 AND $c.enddate >= :ystart3 AND $c.enddate < :yend3))";
+        $s = ':' . $prefix . 'start';
+        $e = ':' . $prefix . 'end';
+        return "(($c.startdate > 0 AND $c.enddate > 0 AND $c.startdate < {$e}1 AND $c.enddate >= {$s}1)
+                 OR ($c.startdate > 0 AND $c.enddate = 0 AND $c.startdate >= {$s}2 AND $c.startdate < {$e}2)
+                 OR ($c.startdate = 0 AND $c.enddate > 0 AND $c.enddate >= {$s}3 AND $c.enddate < {$e}3))";
     }
 
     /**
      * Parameters for year_sql().
      *
      * @param \stdClass $year timestart, timeend
+     * @param string $prefix As given to year_sql().
      * @return array
      */
-    public static function year_params(\stdClass $year): array {
+    public static function year_params(\stdClass $year, string $prefix = 'y'): array {
         $params = [];
         foreach ([1, 2, 3] as $i) {
-            $params['ystart' . $i] = (int)$year->timestart;
-            $params['yend' . $i] = (int)$year->timeend;
+            $params[$prefix . 'start' . $i] = (int)$year->timestart;
+            $params[$prefix . 'end' . $i] = (int)$year->timeend;
         }
         return $params;
+    }
+
+    /**
+     * SQL for an indexed assessment (block_le_dashboard_cm, by alias) belonging to an academic year (EC3): its
+     * default deadline or the latest deadline any student has falls in the year, or its course belongs to the
+     * year (year_sql()). No restriction for All years. in_year() is the same rule in PHP.
+     *
+     * @param string $alias
+     * @param \stdClass|null $year timestart, timeend; null for All years.
+     * @return array [sql, params]
+     */
+    public static function in_year_sql(string $alias, ?\stdClass $year): array {
+        static $n = 0;
+        if (!$year) {
+            return ['1 = 1', []];
+        }
+        $p = 'iy' . ++$n;
+        $c = $alias;
+        $sql = "(($c.due >= :{$p}d1 AND $c.due < :{$p}d2)
+                 OR ($c.latestdue >= :{$p}l1 AND $c.latestdue < :{$p}l2)
+                 OR $c.courseid IN (SELECT {$p}c.id FROM {course} {$p}c WHERE " . self::year_sql($p . 'c', $p) . '))';
+        $start = (int)$year->timestart;
+        $end = (int)$year->timeend;
+        return [$sql, ["{$p}d1" => $start, "{$p}d2" => $end, "{$p}l1" => $start, "{$p}l2" => $end]
+            + self::year_params($year, $p)];
+    }
+
+    /**
+     * The PHP twin of in_year_sql(), for one row.
+     *
+     * @param \stdClass $cm Index row: due, latestdue, courseid.
+     * @param int[] $yearcourses Courses belonging to the year by year_sql().
+     * @param \stdClass|null $year
+     * @return bool
+     */
+    public static function in_year(\stdClass $cm, array $yearcourses, ?\stdClass $year): bool {
+        if (!$year) {
+            return true;
+        }
+        $within = fn($time) => $time !== null && (int)$time >= (int)$year->timestart && (int)$time < (int)$year->timeend;
+        return $within($cm->due) || $within($cm->latestdue) || in_array((int)$cm->courseid, $yearcourses, true);
     }
 }

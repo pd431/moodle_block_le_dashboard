@@ -31,6 +31,7 @@
         <FIELD NAME="assesstype" TYPE="char" LENGTH="10" NOTNULL="true" SEQUENCE="false" COMMENT="summative or formative, from tags"/>
         <FIELD NAME="opens" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="due" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Default deadline"/>
+        <FIELD NAME="latestdue" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Latest deadline any student has (extension, override, personal deadline); null when none"/>
         <FIELD NAME="cutoff" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="Default cut-off, after which nothing can be submitted"/>
         <FIELD NAME="markingdue" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
         <FIELD NAME="hiddenfromstudents" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>

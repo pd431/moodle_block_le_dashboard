@@ -191,6 +191,8 @@ class writer {
                 'gradedisplay' => $row->gradedisplay === null ? null : \core_text::substr($row->gradedisplay, 0, 255),
             ];
         }
+        // Staff views place an assessment in a year by this too, so a long extension keeps it in view (EC3).
+        $record->latestdue = $dues ? max($dues) : null;
         $mark = [];
         $seen = [];
         [$groupdues, $shutout] = $this->group_dues($markrows, $dues, $cmrow->due, $students);
@@ -269,6 +271,11 @@ class writer {
                 if ($mark) {
                     $DB->insert_records(indexer::MARK, $mark);
                 }
+                if ($only !== null) {
+                    // Some students' rows changed, so the latest deadline is read back from all of them (EC3).
+                    $latest = $DB->get_field_sql('SELECT MAX(due) FROM {' . indexer::STU . '} WHERE cmid = ?', [$cmid]);
+                    $DB->set_field(indexer::CM, 'latestdue', $latest ?: null, ['cmid' => $cmid]);
+                }
                 $transaction->allow_commit();
                 break;
             } catch (\Throwable $e) {
@@ -335,6 +342,8 @@ class writer {
             'assesstype' => $type,
             'opens' => $cmrow?->opens,
             'due' => $cmrow?->due,
+            // The latest deadline any student has, set once the student rows are built (EC3).
+            'latestdue' => null,
             'cutoff' => $cmrow?->cutoff,
             'markingdue' => $cmrow?->markingdue,
             'hiddenfromstudents' => (!$cm->visible || ($section && !$section->visible)) ? 1 : 0,
