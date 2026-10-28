@@ -24,11 +24,8 @@ use block_le_dashboard\local\index\student_row;
  * Adapter for mod_coursework. Optional: the block works without coursework installed.
  *
  * Every coursework-specific rule lives in this file. It reads coursework's
- * tables directly because coursework's models are heavy per row, and it
- * tolerates both schemas seen so far:
- * - the ULCC 2022-era plugin the site runs today (stage_identifier,
- *   personal_deadline, coursework_mitigations with type 'extension');
- * - the UCL 5.0 plugin (stageidentifier, personaldeadline, coursework_extensions).
+ * tables directly because coursework's models are heavy per row, by the names
+ * Exeter's coursework uses, one name per fact (CS0).
  *
  * Rules (design-v2 decisions):
  * - D2: a personal deadline replaces the default deadline, even when earlier;
@@ -56,9 +53,6 @@ class coursework extends base {
     /** Coursework's identifier for the moderation stage. */
     const STAGE_MODERATOR = 'moderator';
 
-    /** @var array Column-name cache per table. */
-    protected static array $columns = [];
-
     #[\Override]
     public function modname(): string {
         return 'coursework';
@@ -76,34 +70,6 @@ class coursework extends base {
             '\mod_coursework\event\personaldeadline_updated',
             '\mod_coursework\event\feedback_changed',
         ];
-    }
-
-    /**
-     * The first of the candidate columns that exists in the table, or null.
-     *
-     * @param string $table
-     * @param string[] $candidates
-     * @return string|null
-     */
-    protected static function column(string $table, array $candidates): ?string {
-        global $DB;
-        $dbman = $DB->get_manager();
-        if (!isset(self::$columns[$table])) {
-            self::$columns[$table] = $dbman->table_exists($table) ? array_keys($DB->get_columns($table)) : [];
-        }
-        foreach ($candidates as $c) {
-            if (in_array($c, self::$columns[$table])) {
-                return $c;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Forgets cached column names (tests install and remove tables).
-     */
-    public static function reset_caches(): void {
-        self::$columns = [];
     }
 
     /**
@@ -171,13 +137,13 @@ class coursework extends base {
     }
 
     /**
-     * Whether students hand work in as groups: use_groups in Exeter's coursework, usegroups elsewhere.
+     * Whether students hand work in as groups.
      *
      * @param \stdClass $cw
      * @return bool
      */
     protected static function uses_groups(\stdClass $cw): bool {
-        return !empty($cw->use_groups) || !empty($cw->usegroups);
+        return !empty($cw->use_groups);
     }
 
     /**
@@ -279,7 +245,7 @@ class coursework extends base {
     }
 
     /**
-     * Extensions by allocatable, from whichever table this coursework version has.
+     * Extensions by allocatable: mitigations of type extension, the latest per allocatable.
      *
      * @param int $courseworkid
      * @param array|null $only Only these allocatables, or null for all.
@@ -287,22 +253,12 @@ class coursework extends base {
      */
     protected static function extensions(int $courseworkid, ?array $only = null): array {
         $out = [];
-        $add = function (string $key, \stdClass $r) use (&$out) {
+        $rows = self::by_allocatable('coursework_mitigations', $courseworkid, 'extended_deadline, selfcert',
+            "AND type = 'extension'", $only);
+        foreach ($rows as $key => $r) {
             $due = (int)$r->extended_deadline;
             if ($due > ($out[$key][0] ?? 0)) {
                 $out[$key] = [$due, !empty($r->selfcert)];
-            }
-        };
-        if (self::column('coursework_mitigations', ['extended_deadline'])) {
-            $type = self::column('coursework_mitigations', ['type']) ? "AND type = 'extension'" : '';
-            $fields = 'extended_deadline' . (self::column('coursework_mitigations', ['selfcert']) ? ', selfcert' : '');
-            foreach (self::by_allocatable('coursework_mitigations', $courseworkid, $fields, $type, $only) as $k => $r) {
-                $add($k, $r);
-            }
-        }
-        if (self::column('coursework_extensions', ['extended_deadline'])) {
-            foreach (self::by_allocatable('coursework_extensions', $courseworkid, 'extended_deadline', '', $only) as $k => $r) {
-                $add($k, $r);
             }
         }
         return $out;
@@ -315,21 +271,19 @@ class coursework extends base {
      *
      * @param int $courseworkid
      * @param array|null $only Only these allocatables, or null for all.
-     * @return \stdClass[] "type:id" => submission, with finalised (null where the version has no such column)
+     * @return \stdClass[] "type:id" => submission, with finalised
      */
     protected static function submissions(int $courseworkid, ?array $only = null): array {
         global $DB;
-        $finalised = self::column('coursework_submissions', ['finalisedstatus', 'finalised']);
-        $marked = "f.grade IS NOT NULL AND f.grade <> ''"
-            . (self::column('coursework_feedbacks', ['finalised']) ? ' AND f.finalised = 1' : '');
-        $hasmark = self::column('coursework_feedbacks', ['submissionid'])
-            ? " OR EXISTS (SELECT 1 FROM {coursework_feedbacks} f WHERE f.submissionid = s.id AND $marked)" : '';
-        $finalisedsql = $finalised ? "s.$finalised" : 'NULL';
         [$onlysql, $params] = self::allocatable_sql($only, 's.');
         $rs = $DB->get_recordset_sql("SELECT s.id, s.allocatableid, s.allocatabletype, s.timesubmitted,
-                                             s.firstpublished, s.lastpublished, $finalisedsql AS finalised
+                                             s.firstpublished, s.lastpublished, s.finalised
                                         FROM {coursework_submissions} s
-                                       WHERE s.courseworkid = :cwid AND (s.timesubmitted > 0$hasmark) $onlysql
+                                       WHERE s.courseworkid = :cwid
+                                             AND (s.timesubmitted > 0 OR EXISTS (SELECT 1
+                                                    FROM {coursework_feedbacks} f
+                                                   WHERE f.submissionid = s.id AND f.grade IS NOT NULL AND f.grade <> ''
+                                                         AND f.finalised = 1)) $onlysql
                                     ORDER BY s.id", ['cwid' => $courseworkid] + $params);
         $out = [];
         foreach ($rs as $r) {
@@ -351,15 +305,14 @@ class coursework extends base {
     }
 
     /**
-     * Whether feedback counts as marking done: a grade that isn't blank, and finalised where this
-     * coursework version records it (Pierre's schema: the reliable "graded" signal).
+     * Whether feedback counts as marking done: a grade that isn't blank, and finalised (the reliable
+     * "graded" signal).
      *
-     * @param \stdClass|null $f Feedback, with grade and, if the version has it, finalised.
+     * @param \stdClass|null $f Feedback, with grade and finalised.
      * @return bool
      */
     protected static function marked(?\stdClass $f): bool {
-        return $f !== null && $f->grade !== null && trim((string)$f->grade) !== ''
-            && (!property_exists($f, 'finalised') || !empty($f->finalised));
+        return $f !== null && $f->grade !== null && trim((string)$f->grade) !== '' && !empty($f->finalised);
     }
 
     #[\Override]
@@ -380,8 +333,7 @@ class coursework extends base {
         // re-index mustn't read the whole coursework).
         $only = self::only($allocatables);
 
-        $pdcol = self::column('coursework_person_deadlines', ['personal_deadline', 'personaldeadline']);
-        $personal = $pdcol ? self::by_allocatable('coursework_person_deadlines', $cw->id, $pdcol, '', $only) : [];
+        $personal = self::by_allocatable('coursework_person_deadlines', $cw->id, 'personal_deadline', '', $only);
         $extensions = self::extensions($cw->id, $only);
         $submissions = self::submissions($cw->id, $only);
         $finalgrades = $this->final_grades($cw, $only === null ? null : array_map(fn($s) => (int)$s->id, $submissions));
@@ -394,8 +346,8 @@ class coursework extends base {
             $key = implode(':', $allocatables[$userid]);
             $row->allocatedto = array_values(array_unique($pairs[$key] ?? []));
             // D2: a personal deadline replaces the default, earlier or later.
-            if (isset($personal[$key]) && !empty($personal[$key]->$pdcol)) {
-                $row->due = (int)$personal[$key]->$pdcol;
+            if (!empty($personal[$key]->personal_deadline)) {
+                $row->due = (int)$personal[$key]->personal_deadline;
                 if ($row->cutoff !== null) {
                     $row->cutoff = $row->due;
                 }
@@ -447,14 +399,10 @@ class coursework extends base {
      */
     protected static function has_assessor_pairs(int $courseworkid): bool {
         global $DB;
-        $stagecol = self::column('coursework_allocation_pairs', ['stageidentifier', 'stage_identifier']);
-        if (!$stagecol) {
-            return false;
-        }
-        $moderator = self::column('coursework_allocation_pairs', ['moderator']) ? ' AND (moderator IS NULL OR moderator = 0)' : '';
         return $DB->record_exists_select(
             'coursework_allocation_pairs',
-            "courseworkid = :cwid AND NOT " . $DB->sql_like($stagecol, ':mod') . $moderator,
+            "courseworkid = :cwid AND NOT " . $DB->sql_like('stage_identifier', ':mod')
+                . " AND (moderator IS NULL OR moderator = 0)",
             ['cwid' => $courseworkid, 'mod' => self::STAGE_MODERATOR . '%']
         );
     }
@@ -467,14 +415,9 @@ class coursework extends base {
      */
     protected static function has_moderator_pairs(int $courseworkid): bool {
         global $DB;
-        $stagecol = self::column('coursework_allocation_pairs', ['stageidentifier', 'stage_identifier']);
-        if (!$stagecol) {
-            return false;
-        }
-        $moderator = self::column('coursework_allocation_pairs', ['moderator']) ? ' OR moderator = 1' : '';
         return $DB->record_exists_select(
             'coursework_allocation_pairs',
-            "courseworkid = :cwid AND (" . $DB->sql_like($stagecol, ':mod') . $moderator . ")",
+            "courseworkid = :cwid AND (" . $DB->sql_like('stage_identifier', ':mod') . " OR moderator = 1)",
             ['cwid' => $courseworkid, 'mod' => self::STAGE_MODERATOR . '%']
         );
     }
@@ -488,14 +431,9 @@ class coursework extends base {
      */
     protected static function allocation_pairs(int $courseworkid, ?array $only = null): array {
         global $DB;
-        $stagecol = self::column('coursework_allocation_pairs', ['stageidentifier', 'stage_identifier']);
-        if (!$stagecol) {
-            return [];
-        }
         $pairs = [];
-        $moderator = self::column('coursework_allocation_pairs', ['moderator']) ? ', moderator' : ', 0 AS moderator';
         [$onlysql, $params] = self::allocatable_sql($only);
-        $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, assessorid, $stagecol AS stage $moderator
+        $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, assessorid, stage_identifier AS stage, moderator
                                         FROM {coursework_allocation_pairs}
                                        WHERE courseworkid = :cwid $onlysql", ['cwid' => $courseworkid] + $params);
         foreach ($rs as $p) {
@@ -515,18 +453,17 @@ class coursework extends base {
     const OPEN_FLAG_STATUSES = ['0', '1', '3'];
 
     /**
-     * Whether the coursework uses plagiarism flags: off only where the setting exists and is off.
+     * Whether the coursework uses plagiarism flags.
      *
      * @param \stdClass $cw
      * @return bool
      */
     protected static function flags_enabled(\stdClass $cw): bool {
-        return !property_exists($cw, 'plagiarismflagenabled') || !empty($cw->plagiarismflagenabled);
+        return !empty($cw->plagiarismflagenabled);
     }
 
     /**
      * Submissions with an open plagiarism (academic conduct) flag, from mod_coursework's own table.
-     * Without the table there are none.
      *
      * @param int $courseworkid
      * @param int[]|null $submissionids Only these submissions, or null for all.
@@ -534,7 +471,7 @@ class coursework extends base {
      */
     protected static function flagged_submissions(int $courseworkid, ?array $submissionids = null): array {
         global $DB;
-        if (!self::column('coursework_plagiarism_flags', ['submissionid']) || $submissionids === []) {
+        if ($submissionids === []) {
             return [];
         }
         [$statussql, $params] = $DB->get_in_or_equal(self::OPEN_FLAG_STATUSES, SQL_PARAMS_NAMED, 'st');
@@ -577,19 +514,17 @@ class coursework extends base {
      */
     protected function final_grades(\stdClass $cw, ?array $submissionids = null): array {
         global $DB;
-        $stagecol = self::column('coursework_feedbacks', ['stageidentifier', 'stage_identifier']);
-        if (!$stagecol || $submissionids === []) {
+        if ($submissionids === []) {
             return [];
         }
         [$subsql, $params] = self::submission_sql($submissionids, 's.id');
         $final = (int)$cw->numberofmarkers > 1 ? self::STAGE_AGREED : self::STAGE_FIRST;
-        $finalised = self::column('coursework_feedbacks', ['finalised']) ? ' AND f.finalised = 1' : '';
         return $DB->get_records_sql_menu(
             "SELECT f.submissionid, f.grade
                                             FROM {coursework_feedbacks} f
                                             JOIN {coursework_submissions} s ON s.id = f.submissionid
-                                           WHERE s.courseworkid = :cwid AND f.$stagecol = :stage AND f.grade IS NOT NULL
-                                                 AND f.grade <> ''$finalised $subsql",
+                                           WHERE s.courseworkid = :cwid AND f.stage_identifier = :stage AND f.grade IS NOT NULL
+                                                 AND f.grade <> '' AND f.finalised = 1 $subsql",
             ['cwid' => $cw->id, 'stage' => $final] + $params
         );
     }
@@ -621,35 +556,26 @@ class coursework extends base {
         }
         $subids = $only === null ? null : array_map(fn($s) => (int)$s->id, array_values($submissions));
 
-        $stagecol = self::column('coursework_feedbacks', ['stageidentifier', 'stage_identifier']);
-
         // Feedback by submission and stage.
         $feedback = [];
-        if ($stagecol) {
-            $finalised = self::column('coursework_feedbacks', ['finalised']) ? ', f.finalised' : '';
-            [$subsql, $params] = self::submission_sql($subids, 's.id');
-            $rs = $DB->get_recordset_sql("SELECT f.id, f.submissionid, f.$stagecol AS stage, f.assessorid, f.grade,
-                                                 f.timemodified, f.ismoderation $finalised
-                                            FROM {coursework_feedbacks} f
-                                            JOIN {coursework_submissions} s ON s.id = f.submissionid
-                                           WHERE s.courseworkid = :cwid $subsql", ['cwid' => $cw->id] + $params);
-            foreach ($rs as $f) {
-                $moderation = !empty($f->ismoderation) || str_starts_with((string)$f->stage, self::STAGE_MODERATOR);
-                $stage = $moderation ? self::STAGE_MODERATOR : $f->stage;
-                $feedback[(int)$f->submissionid][$stage] = $f;
-            }
-            $rs->close();
+        [$subsql, $params] = self::submission_sql($subids, 's.id');
+        $rs = $DB->get_recordset_sql("SELECT f.id, f.submissionid, f.stage_identifier AS stage, f.assessorid, f.grade,
+                                             f.timemodified, f.ismoderation, f.finalised
+                                        FROM {coursework_feedbacks} f
+                                        JOIN {coursework_submissions} s ON s.id = f.submissionid
+                                       WHERE s.courseworkid = :cwid $subsql", ['cwid' => $cw->id] + $params);
+        foreach ($rs as $f) {
+            $moderation = !empty($f->ismoderation) || str_starts_with((string)$f->stage, self::STAGE_MODERATOR);
+            $stage = $moderation ? self::STAGE_MODERATOR : $f->stage;
+            $feedback[(int)$f->submissionid][$stage] = $f;
         }
+        $rs->close();
         // Moderation agreements count as moderation done.
-        $agreed = [];
-        if (self::column('coursework_mod_agreements', ['feedbackid'])) {
-            [$subsql, $params] = self::submission_sql($subids, 's.id');
-            $agreed = $DB->get_records_sql_menu("SELECT DISTINCT f.submissionid, a.moderatorid
-                                                   FROM {coursework_mod_agreements} a
-                                                   JOIN {coursework_feedbacks} f ON f.id = a.feedbackid
-                                                   JOIN {coursework_submissions} s ON s.id = f.submissionid
-                                                  WHERE s.courseworkid = :cwid $subsql", ['cwid' => $cw->id] + $params);
-        }
+        $agreed = $DB->get_records_sql_menu("SELECT DISTINCT f.submissionid, a.moderatorid
+                                               FROM {coursework_mod_agreements} a
+                                               JOIN {coursework_feedbacks} f ON f.id = a.feedbackid
+                                               JOIN {coursework_submissions} s ON s.id = f.submissionid
+                                              WHERE s.courseworkid = :cwid $subsql", ['cwid' => $cw->id] + $params);
         // Moderator pairs say which units are sampled for moderation, with or without marker allocation.
         $sampling = in_array(self::STAGE_MODERATOR, $map) && self::has_moderator_pairs((int)$cw->id);
         $pairs = $cmrow->hasallocation || $sampling ? self::allocation_pairs((int)$cw->id, $only) : [];
@@ -728,27 +654,19 @@ class coursework extends base {
 
     /**
      * Self-certified extensions the student has used since a time, from the mitigations table by the same
-     * reading as extensions(): only rows of type extension where the table has a type, and only rows the
-     * selfcert column marks, so a schema without that column has none.
+     * reading as extensions(): rows of type extension that selfcert marks.
      *
      * @param int $userid
      * @param int $since
-     * @return int|null Null without the table.
+     * @return int|null
      */
     #[\Override]
     public function selfcert_used(int $userid, int $since): ?int {
         global $DB;
-        if (!self::column('coursework_mitigations', ['id'])) {
-            return null;
-        }
-        if (!self::column('coursework_mitigations', ['selfcert'])) {
-            return 0;
-        }
-        $type = self::column('coursework_mitigations', ['type']) ? "type = 'extension' AND" : '';
         return $DB->count_records_sql(
             "SELECT COUNT(1)
                FROM {coursework_mitigations}
-              WHERE $type selfcert = 1 AND allocatabletype = 'user'
+              WHERE type = 'extension' AND selfcert = 1 AND allocatabletype = 'user'
                 AND allocatableid = :userid AND timecreated > :since",
             ['userid' => $userid, 'since' => $since]
         );

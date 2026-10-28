@@ -7,7 +7,7 @@ from the maintainability audit; a bare `F` code is from the support map audit or
 as the sections say.
 
 Sources, by series: **A** dev architecture audit (2026-10-06); **B** support map audit of beta22 and the rc6
-test checklist (2026-10-05, codes carried from rc6); **D** logic overhaul design v2 (2026-10-02); **EC** edge
+test checklist (2026-10-05, codes carried from rc6); **CS** coursework schema at Exeter (2026-10-28); **D** logic overhaul design v2 (2026-10-02); **EC** edge
 case review (2026-10-03); **F** support map audit fixes (2026-10-06), performance review (2026-10-04) and
 maintainability audit (2026-10-22); **G** workflow gaps review (2026-10-03); **P** rc6 performance review
 (2026-09-30); **PR** production readiness review (2026-10-05); **R** Pierre's answers to the v1 design
@@ -37,6 +37,14 @@ review (2026-10-02).
 - **B42** A cleared plagiarism case no longer flags the coursework: rc6 counted statuses 0 to 3, and 2 is
   "cleared" (rc6 checklist; Pierre's rc7 commit, 2026-10-07). The other statuses are still inferred from rc6.
 - **B43** The plagiarism flag shows in every section, not only Live (rc6 checklist).
+
+## CS: coursework schema at Exeter (2026-10-28)
+
+Pierre's mod_coursework schema reference, checked against ele-test, and his rulings on it.
+
+- **CS0** The coursework adapter reads Exeter's coursework by the reference's names, one name per fact
+  (use_groups, finalised, stage_identifier, personal_deadline, coursework_mitigations). Coursework is not a
+  public plugin: there is no other build to tolerate, and the guesses between builds were wrong as often as right.
 
 ## D: logic overhaul design v2 (2026-10-02)
 

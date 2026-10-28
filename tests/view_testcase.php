@@ -229,7 +229,6 @@ abstract class view_testcase extends \advanced_testcase {
     protected static function forget(): void {
         local\guidance::reset_caches();
         local\mitigation::reset_caches();
-        local\adapter\coursework::reset_caches();
     }
 
     /**

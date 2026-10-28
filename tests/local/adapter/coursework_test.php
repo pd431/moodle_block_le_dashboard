@@ -17,8 +17,8 @@
 namespace block_le_dashboard\local\adapter;
 
 /**
- * The coursework adapter's plagiarism flags, against a stand-in for mod_coursework's flags table,
- * since mod_coursework can't be installed where these tests run.
+ * The coursework adapter against stand-ins for mod_coursework's tables, named as Exeter's coursework names them
+ * (CS0), since mod_coursework can't be installed where these tests run.
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
@@ -43,17 +43,8 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
-     * Forgets the adapter's cached table columns, so it sees the table appear or go.
-     */
-    protected static function forget_columns(): void {
-        $p = new \ReflectionProperty(coursework::class, 'columns');
-        $p->setAccessible(true);
-        $p->setValue(null, []);
-    }
-
-    /**
      * Open flags count once per submission; cleared ones (status outside the open list), rows
-     * without a submission and other courseworks don't. Without the table, nothing is flagged.
+     * without a submission and other courseworks don't.
      */
     public function test_flagged_submissions(): void {
         global $DB;
@@ -63,9 +54,6 @@ final class coursework_test extends \advanced_testcase {
         if ($dbman->table_exists(self::TABLE)) {
             $this->markTestSkipped('mod_coursework is installed: its own tests cover the real table');
         }
-        self::forget_columns();
-        $this->assertSame([], self::call('flagged_submissions', 7));
-
         $table = new \xmldb_table(self::TABLE);
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
         $table->add_field('courseworkid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
@@ -81,12 +69,10 @@ final class coursework_test extends \advanced_testcase {
             foreach ($rows as [$cw, $sub, $status]) {
                 $DB->insert_record(self::TABLE, ['courseworkid' => $cw, 'submissionid' => $sub, 'status' => $status]);
             }
-            self::forget_columns();
             $this->assertSame([101 => true, 102 => true], self::call('flagged_submissions', 7));
             $this->assertSame([105 => true], self::call('flagged_submissions', 8));
         } finally {
             $dbman->drop_table($table);
-            self::forget_columns();
         }
     }
 
@@ -122,13 +108,11 @@ final class coursework_test extends \advanced_testcase {
                 $dbman->create_table($table);
                 $made[] = $table;
             }
-            self::forget_columns();
             $body();
         } finally {
             foreach ($made as $table) {
                 $dbman->drop_table($table);
             }
-            self::forget_columns();
         }
     }
 
@@ -181,17 +165,54 @@ final class coursework_test extends \advanced_testcase {
 
     /**
      * Exeter's coursework names the group setting use_groups; attendance is its courseworktype; flags follow
-     * plagiarismflagenabled where the setting exists.
+     * plagiarismflagenabled.
      */
     public function test_settings(): void {
         $this->assertTrue(self::call('uses_groups', (object)['use_groups' => 1]));
-        $this->assertTrue(self::call('uses_groups', (object)['usegroups' => 1]));
         $this->assertFalse(self::call('uses_groups', (object)['use_groups' => 0]));
         $this->assertTrue(self::call('by_attendance', (object)['courseworktype' => 'Attendance']));
         $this->assertFalse(self::call('by_attendance', (object)['courseworktype' => 'standard']));
-        $this->assertTrue(self::call('flags_enabled', (object)[]));
         $this->assertTrue(self::call('flags_enabled', (object)['plagiarismflagenabled' => 1]));
         $this->assertFalse(self::call('flags_enabled', (object)['plagiarismflagenabled' => 0]));
+    }
+
+    /**
+     * One name per fact, the reference's (CS0): no other build's column or table, and no checks for which exists.
+     */
+    public function test_reads_one_name_per_fact(): void {
+        global $CFG;
+        $source = file_get_contents($CFG->dirroot . '/blocks/le_dashboard/classes/local/adapter/coursework.php');
+        foreach (['use_groups' => 'usegroups', 'finalised' => 'finalisedstatus', 'stage_identifier' => 'stageidentifier',
+                'personal_deadline' => 'personaldeadline\b(?!_)'] as $read => $notread) {
+            $this->assertStringContainsString($read, $source);
+            $this->assertDoesNotMatchRegularExpression("~(?<![_a-z])$notread~", $source, "reads $notread");
+        }
+        $this->assertStringNotContainsString('coursework_extensions', $source);
+        foreach (['get_columns', 'table_exists', 'field_exists', 'property_exists', 'column('] as $check) {
+            $this->assertStringNotContainsString($check, $source, "checks which column exists with $check");
+        }
+    }
+
+    /**
+     * Extensions come from the mitigations table, type extension only, the last recorded per allocatable, with
+     * whether it was self-certified.
+     */
+    public function test_extensions(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_mitigations' => [['courseworkid', 'allocatableid', 'extended_deadline', 'selfcert', 'timecreated'],
+                ['allocatabletype', 'type']],
+        ], function () use ($DB) {
+            $add = fn($user, $type, $until, $selfcert) => $DB->insert_record('coursework_mitigations', ['courseworkid' => 7,
+                'allocatableid' => $user, 'allocatabletype' => 'user', 'type' => $type, 'extended_deadline' => $until,
+                'selfcert' => $selfcert, 'timecreated' => 1]);
+            $add(1, 'extension', 500, 1);
+            $add(1, 'extension', 400, 0);
+            $add(2, 'extension', 300, 0);
+            $add(3, 'permanent', 0, 0);
+            $this->assertSame(['user:1' => [400, false], 'user:2' => [300, false]], self::call('extensions', 7));
+            $this->assertSame(['user:2' => [300, false]], self::call('extensions', 7, [['user', 2], ['user', 3]]));
+        });
     }
 
     /**

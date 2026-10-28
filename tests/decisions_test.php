@@ -32,7 +32,7 @@ final class decisions_test extends \basic_testcase {
         global $CFG;
         $root = $CFG->dirroot . '/blocks/le_dashboard';
         $decisions = file_get_contents("$root/DECISIONS.md");
-        preg_match_all('~^- \*\*((?:A|B|D|EC|F|G|P|PR|R)\d+)\*\*~m', $decisions, $m);
+        preg_match_all('~^- \*\*((?:A|B|CS|D|EC|F|G|P|PR|R)\d+)\*\*~m', $decisions, $m);
         $listed = array_flip($m[1]);
         $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator("$root/classes", \FilesystemIterator::SKIP_DOTS));
         $missing = [];
@@ -46,7 +46,7 @@ final class decisions_test extends \basic_testcase {
                 if (preg_match('~\b20\d\d-\d\d-\d\d\b~', $token[1])) {
                     $dated[] = "$path:{$token[2]}";
                 }
-                preg_match_all('~(?<![A-Za-z0-9])(A|B|D|EC|F|G|P|PR|R)(\d+)\b~', $token[1], $codes, PREG_SET_ORDER);
+                preg_match_all('~(?<![A-Za-z0-9])(A|B|CS|D|EC|F|G|P|PR|R)(\d+)\b~', $token[1], $codes, PREG_SET_ORDER);
                 foreach ($codes as $code) {
                     if (!isset($listed[$code[0]])) {
                         $missing[$code[0]] = "{$code[0]} ($path:{$token[2]})";

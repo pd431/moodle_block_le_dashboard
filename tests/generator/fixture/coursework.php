@@ -60,18 +60,17 @@ final class coursework extends base {
     public function submit(\cm_info $cm, int $userid, ?int $time = null): void {
         global $DB;
         self::plugin_gen('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-            'allocatableid' => $userid, 'allocatabletype' => 'user',
-            'finalisedstatus' => \mod_coursework\models\submission::FINALISED_STATUS_FINALISED]);
-        if ($time !== null) {
-            $DB->set_field('coursework_submissions', 'timesubmitted', $time, self::submission_params($cm, $userid));
-        }
+            'allocatableid' => $userid, 'allocatabletype' => 'user']);
+        $params = self::submission_params($cm, $userid);
+        $DB->set_field('coursework_submissions', 'finalised', 1, $params);
+        $DB->set_field('coursework_submissions', 'timesubmitted', $time ?? time(), $params);
         self::queue($cm);
     }
 
     #[\Override]
     public function save_draft(\cm_info $cm, int $userid): void {
         self::plugin_gen('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-            'allocatableid' => $userid, 'allocatabletype' => 'user', 'finalised' => 0, 'finalisedstatus' => 0]);
+            'allocatableid' => $userid, 'allocatabletype' => 'user', 'finalised' => 0]);
         self::queue($cm);
     }
 
@@ -151,9 +150,8 @@ final class coursework extends base {
             $this->unsupported('Extensions (other than self-certified) on');
         }
         $record = ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user',
-            'extended_deadline' => $until, 'type' => 'extension', 'selfcert' => 1,
-            'timecreated' => time(), 'timemodified' => time()];
-        $DB->insert_record('coursework_mitigations', array_intersect_key($record, $DB->get_columns('coursework_mitigations')));
+            'extended_deadline' => $until, 'type' => 'extension', 'selfcert' => 1, 'timecreated' => time()];
+        $DB->insert_record('coursework_mitigations', $record);
         self::queue($cm);
     }
 
@@ -174,12 +172,10 @@ final class coursework extends base {
     #[\Override]
     public function used_self_certs(int $userid, int $count): void {
         global $DB;
-        $columns = $DB->get_columns('coursework_mitigations');
         for ($i = 0; $i < $count; $i++) {
-            $record = ['courseworkid' => 0, 'allocatableid' => $userid, 'allocatabletype' => 'user',
-                'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
-                'timecreated' => time(), 'timemodified' => time()];
-            $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
+            $DB->insert_record('coursework_mitigations', ['courseworkid' => 0, 'allocatableid' => $userid,
+                'allocatabletype' => 'user', 'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
+                'timecreated' => time()]);
         }
     }
 
@@ -193,7 +189,7 @@ final class coursework extends base {
      */
     private static function allocation(\cm_info $cm, int $userid, int $markerid, string $stage): void {
         self::plugin_gen('mod_coursework')->create_allocation(['courseworkid' => $cm->instance, 'allocatableid' => $userid,
-            'allocatabletype' => 'user', 'assessorid' => $markerid, 'stageidentifier' => $stage, 'ismanual' => 1]);
+            'allocatabletype' => 'user', 'assessorid' => $markerid, 'stage_identifier' => $stage, 'ismanual' => 1]);
     }
 
     /**
