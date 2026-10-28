@@ -2135,14 +2135,26 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * A row's due date.
+     * A row's due date, labelled Due or, under an extension, Extended deadline.
      *
      * @Then /^"(?P<name>[^"]*)" should show the due date "(?P<when>[^"]*)"$/
      * @param string $name
      * @param string $when
      */
     public function should_show_the_due_date(string $name, string $when): void {
-        $this->row_date($this->row($name), $name, get_string('date_due', 'block_le_dashboard'), $when);
+        // A student's deadline under an extension is labelled as the extended one (CS5).
+        $row = $this->row($name);
+        $label = get_string('date_due', 'block_le_dashboard');
+        $extended = get_string('date_extendeddeadline', 'block_le_dashboard');
+        try {
+            $this->row_date($row, $name, $label, $when);
+        } catch (\Throwable $e) {
+            try {
+                $this->row_date($row, $name, $extended, $when);
+            } catch (\Throwable $other) {
+                throw $e;
+            }
+        }
     }
 
     /**

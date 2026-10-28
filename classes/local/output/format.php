@@ -105,14 +105,17 @@ class format {
      *
      * @param string $key Date key; the label is the date_{key} string, if there is one.
      * @param int $time
+     * @param string|null $label Another date's label for this one: a student's deadline under an extension is
+     *                           labelled "Extended deadline" (extendeddeadline, CS5).
      * @return array
      */
-    public static function date(string $key, int $time): array {
+    public static function date(string $key, int $time, ?string $label = null): array {
         $sm = get_string_manager();
+        $label = $label ?? $key;
         return [
             'key' => $key,
-            'label' => $sm->string_exists('date_' . $key, 'block_le_dashboard')
-                ? get_string('date_' . $key, 'block_le_dashboard') : null,
+            'label' => $sm->string_exists('date_' . $label, 'block_le_dashboard')
+                ? get_string('date_' . $label, 'block_le_dashboard') : null,
             'text' => self::datetime($time),
             'iso' => date('c', $time),
         ];

@@ -68,6 +68,10 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   without a submission, and are in no hint. The student sees "Exempt" by the date alone (Upcoming, then Past,
   never Overdue), one icon whose tip says a mitigation applies, and no actions, not even Mitigate. An exemption
   or deferral wins over an extension; on a group it applies to every member, as extensions do.
+- **CS5** A student's deadline moved by an extension or a self-certification is labelled "Extended deadline" on
+  their row, not "Due" (Pierre: "should trigger 'extended deadline' instead of due"). Any activity type, since the
+  index records the mitigation the same way for all. Staff rows are unchanged: their extensions hint already
+  names the latest extended deadline.
 
 ## D: logic overhaul design v2 (2026-10-02)
 

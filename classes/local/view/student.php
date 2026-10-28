@@ -348,8 +348,9 @@ class student extends base {
             $dates[] = format::date('opens', (int)$r->opens);
         }
         if ($r->due) {
-            // An extension is ordinary upcoming work: no note.
-            $dates[] = format::date('due', (int)$r->due);
+            // An extension is ordinary upcoming work: no note, but its date says it is the extended one (CS5).
+            $extended = in_array($r->mitigation, [student_row::MITIGATION_EXTENSION, student_row::MITIGATION_SELFCERT], true);
+            $dates[] = format::date('due', (int)$r->due, $extended ? 'extendeddeadline' : null);
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
