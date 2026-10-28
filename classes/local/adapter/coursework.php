@@ -38,6 +38,8 @@ use block_le_dashboard\local\index\student_row;
  * - A stage after the first is "ready" (marking_row::$submitted) only when
  *   the stages it depends on are marked: agreement after every assessor,
  *   moderation after the final grade.
+ * - CS1: a coursework whose only submission type is marks entry takes nothing
+ *   online. Attendance is its first stage, then coursework's own.
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
@@ -52,6 +54,12 @@ class coursework extends base {
 
     /** Coursework's identifier for the moderation stage. */
     const STAGE_MODERATOR = 'moderator';
+
+    /** The block's stage key for attendance, which coursework has no identifier for (CS1). */
+    const STAGE_ATTENDANCE = 'attendance';
+
+    /** The submission sub-plugin that records marks without anything handed in (CS1). */
+    const MARKS_ENTRY = 'marksentry';
 
     #[\Override]
     public function modname(): string {
@@ -73,14 +81,16 @@ class coursework extends base {
     }
 
     /**
-     * Coursework's marking stage identifiers mapped to the block's stage keys, in order.
+     * Coursework's marking stage identifiers mapped to the block's stage keys, in order. Attendance comes first
+     * where nothing is handed in online (CS1); coursework has no identifier for it.
      *
      * @param \stdClass $cw
-     * @return string[] block stage key => coursework stage identifier
+     * @param bool $attendance
+     * @return array block stage key => coursework stage identifier (null for attendance)
      */
-    public static function stage_map(\stdClass $cw): array {
+    public static function stage_map(\stdClass $cw, bool $attendance = false): array {
         $markers = max(1, (int)$cw->numberofmarkers);
-        $map = [];
+        $map = $attendance ? [self::STAGE_ATTENDANCE => null] : [];
         if ($markers === 1) {
             $map['marked'] = self::STAGE_FIRST;
         } else {
@@ -111,29 +121,35 @@ class coursework extends base {
             // Allocated only once markers are: allocation on with only moderator pairs (or none yet) would
             // leave every unit unallocated and all the work with the convenor (Pierre's data).
             hasallocation: !empty($cw->allocationenabled) && self::has_assessor_pairs((int)$cw->id),
-            stages: array_keys(self::stage_map($cw)),
-            submissions: !self::by_attendance($cw),
+            stages: array_keys(self::stage_map($cw, self::marks_entry_only((int)$cw->id))),
+            submissions: !self::marks_entry_only((int)$cw->id),
         );
     }
 
-    /** Coursework type values meaning students attend rather than hand work in online. */
-    const ATTENDANCE_TYPES = ['attendance'];
+    /**
+     * The submission types the coursework has, by sub-plugin name (file, marksentry, onlinetext, panopto).
+     *
+     * @param int $courseworkid
+     * @return string[]
+     */
+    protected static function submission_types(int $courseworkid): array {
+        global $DB;
+        return $DB->get_fieldset_sql("SELECT DISTINCT p.name
+                                        FROM {coursework_sub_plugin_cwk} c
+                                        JOIN {coursework_sub_plugin} p ON p.id = c.subpluginid
+                                       WHERE c.courseworkid = :cwid", ['cwid' => $courseworkid]);
+    }
 
     /**
-     * Whether the coursework is assessed by attendance: nothing is handed in online. Exeter's coursework
-     * keeps this in courseworktype (Pierre's schema; the value is unconfirmed); the other
-     * columns are kept for versions that name it differently.
+     * Whether nothing is handed in online: marks entry is the only submission type (CS1). A coursework with no
+     * types recorded is standard.
      *
-     * @param \stdClass $cw
+     * @param int $courseworkid
      * @return bool
      */
-    protected static function by_attendance(\stdClass $cw): bool {
-        foreach (['courseworktype', 'submissiontype', 'submissionmethod'] as $field) {
-            if (isset($cw->$field) && in_array(\core_text::strtolower((string)$cw->$field), self::ATTENDANCE_TYPES)) {
-                return true;
-            }
-        }
-        return false;
+    protected static function marks_entry_only(int $courseworkid): bool {
+        $types = self::submission_types($courseworkid);
+        return $types && !array_diff($types, [self::MARKS_ENTRY]);
     }
 
     /**
@@ -271,19 +287,20 @@ class coursework extends base {
      *
      * @param int $courseworkid
      * @param array|null $only Only these allocatables, or null for all.
+     * @param bool $anyrow Every row, handed in or not: marks entry makes one when attendance is taken (CS1).
      * @return \stdClass[] "type:id" => submission, with finalised
      */
-    protected static function submissions(int $courseworkid, ?array $only = null): array {
+    protected static function submissions(int $courseworkid, ?array $only = null, bool $anyrow = false): array {
         global $DB;
         [$onlysql, $params] = self::allocatable_sql($only, 's.');
+        $handedin = $anyrow ? '' : "AND (s.timesubmitted > 0 OR EXISTS (SELECT 1
+                                                    FROM {coursework_feedbacks} f
+                                                   WHERE f.submissionid = s.id AND f.grade IS NOT NULL AND f.grade <> ''
+                                                         AND f.finalised = 1))";
         $rs = $DB->get_recordset_sql("SELECT s.id, s.allocatableid, s.allocatabletype, s.timesubmitted,
                                              s.firstpublished, s.lastpublished, s.finalised
                                         FROM {coursework_submissions} s
-                                       WHERE s.courseworkid = :cwid
-                                             AND (s.timesubmitted > 0 OR EXISTS (SELECT 1
-                                                    FROM {coursework_feedbacks} f
-                                                   WHERE f.submissionid = s.id AND f.grade IS NOT NULL AND f.grade <> ''
-                                                         AND f.finalised = 1)) $onlysql
+                                       WHERE s.courseworkid = :cwid $handedin $onlysql
                                     ORDER BY s.id", ['cwid' => $courseworkid] + $params);
         $out = [];
         foreach ($rs as $r) {
@@ -541,6 +558,11 @@ class coursework extends base {
             }
             return $rows;
         }
+        $attendance = in_array(self::STAGE_ATTENDANCE, $cmrow->stages);
+        if (!$cmrow->submissions && !$attendance) {
+            // Tagged as done in person with no attendance stage: marked from the gradebook, as other types.
+            return self::no_submission_units($cm, $userids);
+        }
         $cw = $this->instance($cm);
         $map = self::stage_map($cw);
         // Only units with at least one indexed student count.
@@ -550,9 +572,11 @@ class coursework extends base {
             $units[$type . ':' . $id] = true;
         }
         $only = self::only($allocatables);
-        $submissions = self::submissions($cw->id, $only);
+        $submissions = self::submissions($cw->id, $only, $attendance);
+        $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id, $only) : [];
+        $rows = $attendance ? self::attendance_rows($units, $submissions, $cmrow->hasallocation ? $pairs : null) : [];
         if (!$submissions) {
-            return [];
+            return $rows;
         }
         $subids = $only === null ? null : array_map(fn($s) => (int)$s->id, array_values($submissions));
 
@@ -578,10 +602,11 @@ class coursework extends base {
                                               WHERE s.courseworkid = :cwid $subsql", ['cwid' => $cw->id] + $params);
         // Moderator pairs say which units are sampled for moderation, with or without marker allocation.
         $sampling = in_array(self::STAGE_MODERATOR, $map) && self::has_moderator_pairs((int)$cw->id);
-        $pairs = $cmrow->hasallocation || $sampling ? self::allocation_pairs((int)$cw->id, $only) : [];
+        if (!$cmrow->hasallocation && $sampling) {
+            $pairs = self::allocation_pairs((int)$cw->id, $only);
+        }
         $flagged = self::flags_enabled($cw) ? self::flagged_submissions((int)$cw->id, $subids) : [];
 
-        $rows = [];
         foreach ($submissions as $key => $s) {
             if (!isset($units[$key])) {
                 continue;
@@ -637,6 +662,39 @@ class coursework extends base {
             }
         }
         return $rows;
+    }
+
+    /**
+     * The attendance stage (CS1): every unit is ready at its deadline, and attendance is taken once coursework has
+     * a submission row for it. Allocated, where markers are, to the first marker.
+     *
+     * @param true[] $units "type:id" => true, the units with an indexed student
+     * @param \stdClass[] $submissions "type:id" => submission, every row
+     * @param array|null $pairs Allocation pairs, or null without allocation.
+     * @return marking_row[]
+     */
+    protected static function attendance_rows(array $units, array $submissions, ?array $pairs): array {
+        $rows = [];
+        foreach (array_keys($units) as $key) {
+            [$type, $id] = explode(':', $key);
+            $rows[] = new marking_row(
+                unitid: (int)$id,
+                unittype: $type === 'group' ? marking_row::UNIT_GROUP : marking_row::UNIT_USER,
+                stage: self::STAGE_ATTENDANCE,
+                allocatedto: $pairs === null ? null : ($pairs[$key][self::STAGE_FIRST] ?? null),
+                submitted: true,
+                marked: isset($submissions[$key]),
+                released: isset($submissions[$key]) && self::released($submissions[$key]),
+                // Ready at the unit's deadline: the indexer moves it there.
+                timeready: 1,
+            );
+        }
+        return $rows;
+    }
+
+    #[\Override]
+    public function marks_without_submissions(): bool {
+        return true;
     }
 
     #[\Override]

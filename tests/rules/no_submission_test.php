@@ -273,9 +273,9 @@ final class no_submission_test extends view_testcase {
     }
 
     /**
-     * Coursework assessed by attendance has no online submission
+     * A marks-entry coursework is shown like work done in person
      */
-    public function test_coursework_assessed_by_attendance_has_no_online_submission(): void {
+    public function test_a_marks_entry_coursework_is_shown_like_work_done_in_person(): void {
         $this->step('Given the following "courses" exist:', [
             ['fullname' => 'Module 1', 'shortname' => 'M1'],
         ]);
@@ -296,11 +296,140 @@ final class no_submission_test extends view_testcase {
         $this->step('And the My assessments block keeps its hints and guidance from before beta27');
         $this->step('And the My assessments block treats "moduleconvenor" as a module convenor role');
         $this->step('And the "workshop" activity type is enabled in My assessments');
-        $this->step('Given a summative "coursework" "Presentation" in "M1" with submission type attendance was due "2 '
-            . 'days ago"');
+        $this->step('Given a summative "coursework" "Mid-Term Test" in "M1" with marks entry only was due "2 days ago"');
         $this->step('And the My assessments index is up to date');
         $this->step('When I log in as "student1" and view my dashboard');
-        $this->step('Then "Presentation" should show the status "Awaiting feedback"');
-        $this->step('And "Presentation" should not show "Not submitted"');
+        $this->step('Then "Mid-Term Test" should appear in the "Past" section');
+        $this->step('And "Mid-Term Test" should show the status "Awaiting feedback"');
+        $this->step('And "Mid-Term Test" should not appear in the "Overdue" section');
+        $this->step('And "Mid-Term Test" should not have a "Submit" button');
+        $this->step('And "Mid-Term Test" should have a "nosubmission" hint');
+    }
+
+    /**
+     * A marks-entry coursework records attendance first, then coursework's marking stages
+     */
+    public function test_a_marks_entry_coursework_records_attendance_first_then_courseworks_marking_stages(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'teacher1', 'firstname' => 'Tim', 'lastname' => 'Teacher'],
+            ['username' => 'convenor1', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'teacher1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor1', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And the My assessments block keeps its hints and guidance from before beta27');
+        $this->step('And the My assessments block treats "moduleconvenor" as a module convenor role');
+        $this->step('And the "workshop" activity type is enabled in My assessments');
+        $this->step('Given a summative "coursework" "Mid-Term Test" in "M1" with marks entry only and 2 markers was '
+            . 'due "2 days ago"');
+        $this->step('And "teacher1" marks the submission of "student1" for "Mid-Term Test"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When I log in as "convenor1" and view my dashboard');
+        $this->step('Then "Mid-Term Test" should appear in the "In progress" section');
+        $this->step('And "Mid-Term Test" should show an "Attended" progress bar with "1" of "2"');
+        $this->step('And "Mid-Term Test" should show a "Marker 1" progress bar with "1" of "1"');
+        $this->step('And "Mid-Term Test" should show a "Marker 2" progress bar with "0" of "1"');
+        $this->step('And "Mid-Term Test" should have a "nosubmission" hint');
+    }
+
+    /**
+     * A coursework with no submission types recorded is standard
+     */
+    public function test_a_coursework_with_no_submission_types_recorded_is_standard(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'teacher1', 'firstname' => 'Tim', 'lastname' => 'Teacher'],
+            ['username' => 'convenor1', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'teacher1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor1', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And the My assessments block keeps its hints and guidance from before beta27');
+        $this->step('And the My assessments block treats "moduleconvenor" as a module convenor role');
+        $this->step('And the "workshop" activity type is enabled in My assessments');
+        $this->step('Given a summative "coursework" "Legacy" in "M1" with no submission types recorded was due "2 days ago"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When I log in as "student1" and view my dashboard');
+        $this->step('Then "Legacy" should appear in the "Overdue" section');
+    }
+
+    /**
+     * A coursework with file submission is still submission based
+     */
+    public function test_a_coursework_with_file_submission_is_still_submission_based(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'teacher1', 'firstname' => 'Tim', 'lastname' => 'Teacher'],
+            ['username' => 'convenor1', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'teacher1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor1', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And the My assessments block keeps its hints and guidance from before beta27');
+        $this->step('And the My assessments block treats "moduleconvenor" as a module convenor role');
+        $this->step('And the "workshop" activity type is enabled in My assessments');
+        $this->step('Given a summative "coursework" "Essay" in "M1" with file submission was due "2 days ago"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When I log in as "student1" and view my dashboard');
+        $this->step('Then "Essay" should appear in the "Overdue" section');
+        $this->step('And "Essay" should show the status "Not submitted"');
+    }
+
+    /**
+     * A coursework with marks entry and file submission is submission based
+     */
+    public function test_a_coursework_with_marks_entry_and_file_submission_is_submission_based(): void {
+        $this->step('Given the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
+            ['username' => 'teacher1', 'firstname' => 'Tim', 'lastname' => 'Teacher'],
+            ['username' => 'convenor1', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'teacher1', 'course' => 'M1', 'role' => 'editingteacher'],
+            ['user' => 'convenor1', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And the My assessments block keeps its hints and guidance from before beta27');
+        $this->step('And the My assessments block treats "moduleconvenor" as a module convenor role');
+        $this->step('And the "workshop" activity type is enabled in My assessments');
+        $this->step('Given a summative "coursework" "Report" in "M1" with marks entry and file submission was due "2 days ago"');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When I log in as "student1" and view my dashboard');
+        $this->step('Then "Report" should appear in the "Overdue" section');
     }
 }

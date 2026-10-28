@@ -10,8 +10,8 @@ Feature: Assessments with no online submission
   #
   # As built:
   # - One shared flag, cm_row::$submissions = false, stored as nosubmission on the index. It covers an
-  #   assignment with no submission types (EC5), coursework whose submission type is attendance (the
-  #   field name is unverified without the plugin), mod_attendance, and any activity tagged with an
+  #   assignment with no submission types (EC5), coursework whose only submission type is marks entry
+  #   (Pierre, 2026-10-28: marks entry is attendance), mod_attendance, and any activity tagged with an
   #   In-person tag. That is a new setting under Tags, default "inperson". The tag goes on as well as a
   #   summative or formative tag.
   # - Student: Upcoming until the date with View, never Submit. One bare fa-person-chalkboard icon,

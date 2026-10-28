@@ -223,9 +223,9 @@ class behat_block_le_dashboard extends behat_base {
      * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation,
      * marking workflow, reopened attempts, a cut-off "...", manual agreement, tagged "..." (a second tag),
      * N attempts allowed, marks never shown, marks shown immediately after only, marks shown after
-     * close only, a maximum grade of 0 (quiz), submission type attendance (coursework), required Submit
-     * (assign: students must click Submit, which makes the submission final). Also: opens "..." and (when
-     * submissions open).
+     * close only, a maximum grade of 0 (quiz), marks entry only, file submission or no submission types
+     * recorded (coursework), required Submit (assign: students must click Submit, which makes the submission
+     * final). Also: opens "..." and (when submissions open).
      *
      * @Given /^an? (?P<tag>summative|formative|"[^"]+") "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag

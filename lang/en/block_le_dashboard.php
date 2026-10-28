@@ -332,6 +332,7 @@ $string['showmore'] = 'Show more';
 $string['staffrole'] = 'Marker roles';
 $string['staffrole_desc'] = 'People with one of these roles in a course see My marking for it.';
 $string['stage_agreed'] = 'Agreed';
+$string['stage_attendance'] = 'Attended';
 $string['stage_marked'] = 'Marked';
 $string['stage_markern'] = 'Marker {$a}';
 $string['stage_moderated'] = 'Moderated';

@@ -45,6 +45,10 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
 - **CS0** The coursework adapter reads Exeter's coursework by the reference's names, one name per fact
   (use_groups, finalised, stage_identifier, personal_deadline, coursework_mitigations). Coursework is not a
   public plugin: there is no other build to tolerate, and the guesses between builds were wrong as often as right.
+- **CS1** A coursework whose only submission type is marks entry takes nothing online (Pierre: marks entry is
+  attendance). Attendance is its first marking stage, taken for a student once coursework has a submission row for
+  them, as marks entry creates one; then coursework's own stages. A coursework with no submission types recorded is
+  standard. The signal that attendance was taken is inferred from Exeter's data, not confirmed.
 
 ## D: logic overhaul design v2 (2026-10-02)
 

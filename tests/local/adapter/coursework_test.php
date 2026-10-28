@@ -164,14 +164,11 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
-     * Exeter's coursework names the group setting use_groups; attendance is its courseworktype; flags follow
-     * plagiarismflagenabled.
+     * Exeter's coursework names the group setting use_groups; flags follow plagiarismflagenabled.
      */
     public function test_settings(): void {
         $this->assertTrue(self::call('uses_groups', (object)['use_groups' => 1]));
         $this->assertFalse(self::call('uses_groups', (object)['use_groups' => 0]));
-        $this->assertTrue(self::call('by_attendance', (object)['courseworktype' => 'Attendance']));
-        $this->assertFalse(self::call('by_attendance', (object)['courseworktype' => 'standard']));
         $this->assertTrue(self::call('flags_enabled', (object)['plagiarismflagenabled' => 1]));
         $this->assertFalse(self::call('flags_enabled', (object)['plagiarismflagenabled' => 0]));
     }
@@ -188,6 +185,10 @@ final class coursework_test extends \advanced_testcase {
             $this->assertDoesNotMatchRegularExpression("~(?<![_a-z])$notread~", $source, "reads $notread");
         }
         $this->assertStringNotContainsString('coursework_extensions', $source);
+        // Whether anything is handed in online comes from the submission types (CS1), not these columns.
+        foreach (['courseworktype', 'submissiontype', 'submissionmethod'] as $column) {
+            $this->assertStringNotContainsString($column, $source);
+        }
         foreach (['get_columns', 'table_exists', 'field_exists', 'property_exists', 'column('] as $check) {
             $this->assertStringNotContainsString($check, $source, "checks which column exists with $check");
         }
@@ -252,6 +253,84 @@ final class coursework_test extends \advanced_testcase {
                 ['user:2' => ['assessor_1' => 12, 'moderator' => 13]],
                 self::call('allocation_pairs', 7, [['user', 2]])
             );
+        });
+    }
+
+    /**
+     * Marks entry as the only submission type means nothing is handed in online (CS1); file, online text or
+     * Panopto alongside it, or no types recorded at all, means work is handed in.
+     */
+    public function test_marks_entry_only(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_sub_plugin' => [[], ['name']],
+            'coursework_sub_plugin_cwk' => [['courseworkid', 'subpluginid'], []],
+        ], function () use ($DB) {
+            $ids = [];
+            foreach (['file', 'marksentry', 'onlinetext', 'panopto'] as $name) {
+                $ids[$name] = $DB->insert_record('coursework_sub_plugin', ['name' => $name]);
+            }
+            $types = [1 => ['marksentry'], 2 => ['marksentry', 'file'], 3 => ['file'], 5 => ['panopto']];
+            foreach ($types as $cw => $names) {
+                foreach ($names as $name) {
+                    $DB->insert_record('coursework_sub_plugin_cwk', ['courseworkid' => $cw, 'subpluginid' => $ids[$name]]);
+                }
+            }
+            $this->assertTrue(self::call('marks_entry_only', 1));
+            $this->assertFalse(self::call('marks_entry_only', 2));
+            $this->assertFalse(self::call('marks_entry_only', 3));
+            $this->assertFalse(self::call('marks_entry_only', 4));
+            $this->assertFalse(self::call('marks_entry_only', 5));
+        });
+    }
+
+    /**
+     * Attendance comes first where nothing is handed in online, then coursework's own stages (CS1).
+     */
+    public function test_stage_map_with_attendance(): void {
+        $cw = (object)['numberofmarkers' => 2, 'moderationenabled' => 0];
+        $this->assertSame(['marker1' => 'assessor_1', 'marker2' => 'assessor_2', 'agreed' => 'final_agreed_1'],
+            coursework::stage_map($cw));
+        $this->assertSame(['attendance' => null, 'marker1' => 'assessor_1', 'marker2' => 'assessor_2',
+            'agreed' => 'final_agreed_1'], coursework::stage_map($cw, true));
+    }
+
+    /**
+     * Every unit is ready at the attendance stage at its deadline, and taken once coursework has a submission row
+     * for it, handed in or not; allocated to the first marker where markers are allocated (CS1).
+     */
+    public function test_attendance_rows(): void {
+        $units = ['user:1' => true, 'user:2' => true, 'group:3' => true];
+        $subs = ['user:1' => (object)['firstpublished' => 0, 'lastpublished' => 0, 'timesubmitted' => 0],
+            'group:3' => (object)['firstpublished' => 9, 'lastpublished' => 0, 'timesubmitted' => 0]];
+        $rows = self::call('attendance_rows', $units, $subs, ['user:2' => ['assessor_1' => 40]]);
+        $got = array_map(fn($r) => [$r->unittype . ':' . $r->unitid, $r->stage, $r->submitted, $r->marked, $r->released,
+            $r->allocatedto, $r->timeready], $rows);
+        $this->assertSame([
+            ['user:1', 'attendance', true, true, false, null, 1],
+            ['user:2', 'attendance', true, false, false, 40, 1],
+            ['group:3', 'attendance', true, true, true, null, 1],
+        ], $got);
+        $this->assertNull(self::call('attendance_rows', ['user:2' => true], [], null)[0]->allocatedto);
+    }
+
+    /**
+     * Where attendance is taken, every submission row counts, handed in or not (CS1).
+     */
+    public function test_submissions_any_row(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_submissions' => [['courseworkid', 'allocatableid', 'timesubmitted', 'firstpublished',
+                'lastpublished', 'finalised'], ['allocatabletype']],
+            'coursework_feedbacks' => [['submissionid', 'assessorid', 'finalised'], ['grade', 'stage_identifier']],
+        ], function () use ($DB) {
+            foreach ([[1, 100], [2, 0]] as [$user, $time]) {
+                $DB->insert_record('coursework_submissions', ['courseworkid' => 7, 'allocatableid' => $user,
+                    'allocatabletype' => 'user', 'timesubmitted' => $time, 'firstpublished' => 0, 'lastpublished' => 0,
+                    'finalised' => 0]);
+            }
+            $this->assertSame(['user:1'], array_keys(self::call('submissions', 7)));
+            $this->assertSame(['user:1', 'user:2'], array_keys(self::call('submissions', 7, null, true)));
         });
     }
 }

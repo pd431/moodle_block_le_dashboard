@@ -50,10 +50,30 @@ final class coursework extends base {
             'allocationenabled' => str_contains($opts, 'marker allocation') ? 1 : 0,
             'moderationenabled' => str_contains($opts, 'moderation') ? 1 : 0,
             'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue];
-        if (str_contains($opts, 'submission type attendance')) {
-            $record['submissiontype'] = 'attendance';
-        }
         return $record;
+    }
+
+    /**
+     * The submission types: "with marks entry only", "with file submission", "with marks entry and file submission",
+     * or "with no submission types recorded"; otherwise whatever coursework's generator gives.
+     *
+     * @param \stdClass $instance
+     * @param string $opts
+     */
+    #[\Override]
+    protected function after_create(\stdClass $instance, string $opts): void {
+        global $DB;
+        $types = array_keys(array_filter(['marksentry' => str_contains($opts, 'marks entry'),
+            'file' => str_contains($opts, 'file submission')]));
+        if (!$types && !str_contains($opts, 'no submission types recorded')) {
+            return;
+        }
+        $DB->delete_records('coursework_sub_plugin_cwk', ['courseworkid' => $instance->id]);
+        foreach ($types as $type) {
+            $DB->insert_record('coursework_sub_plugin_cwk', self::filled('coursework_sub_plugin_cwk', [
+                'courseworkid' => $instance->id,
+                'subpluginid' => $DB->get_field('coursework_sub_plugin', 'id', ['name' => $type], MUST_EXIST)]));
+        }
     }
 
     #[\Override]
@@ -110,6 +130,11 @@ final class coursework extends base {
         bool $final = false,
         string $stage = 'assessor_1'
     ): void {
+        global $DB;
+        if (!$DB->record_exists('coursework_submissions', self::submission_params($cm, $userid))) {
+            // Marks entry creates the submission row as the mark goes in.
+            $this->save_draft($cm, $userid);
+        }
         self::plugin_gen('mod_coursework')->create_feedback(['courseworkid' => $cm->instance, 'allocatableid' => $userid,
             'assessorid' => $markerid, 'stage_identifier' => $stage, 'grade' => $grade, 'isfinalgrade' => $final ? 1 : 0,
             'finalised' => 1]);
@@ -159,13 +184,8 @@ final class coursework extends base {
     public function flag_plagiarism(\cm_info $cm, int $userid, string $status = '0'): void {
         global $DB;
         $submissionid = $DB->get_field('coursework_submissions', 'id', self::submission_params($cm, $userid), MUST_EXIST);
-        $record = ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status];
-        foreach ($DB->get_columns('coursework_plagiarism_flags') as $column) {
-            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
-                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
-            }
-        }
-        $DB->insert_record('coursework_plagiarism_flags', $record);
+        $DB->insert_record('coursework_plagiarism_flags', self::filled('coursework_plagiarism_flags',
+            ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status]));
         self::queue($cm);
     }
 
@@ -190,6 +210,23 @@ final class coursework extends base {
     private static function allocation(\cm_info $cm, int $userid, int $markerid, string $stage): void {
         self::plugin_gen('mod_coursework')->create_allocation(['courseworkid' => $cm->instance, 'allocatableid' => $userid,
             'allocatabletype' => 'user', 'assessorid' => $markerid, 'stage_identifier' => $stage, 'ismanual' => 1]);
+    }
+
+    /**
+     * A record with every other required column of the table filled with an empty value.
+     *
+     * @param string $table
+     * @param array $record
+     * @return array
+     */
+    private static function filled(string $table, array $record): array {
+        global $DB;
+        foreach ($DB->get_columns($table) as $column) {
+            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
+                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
+            }
+        }
+        return $record;
     }
 
     /**
