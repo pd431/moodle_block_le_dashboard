@@ -1189,6 +1189,20 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Opens one view for an academic year, without logging in again.
+     *
+     * @When /^I view the "(?P<view>[^"]*)" for academic year "(?P<year>[^"]*)"$/
+     * @param string $view
+     * @param string $year
+     */
+    public function i_view_for_year(string $view, string $year): void {
+        $this->i_view_my_dashboard_again();
+        $this->open_view($view);
+        $this->execute('behat_forms::i_set_the_field_to', [get_string('academicyear', 'block_le_dashboard'), $year]);
+        $this->wait_for_pending_js();
+    }
+
+    /**
      * Clicks a view's tab, unless it is the only (or already active) view.
      *
      * @param string $view
@@ -1391,6 +1405,16 @@ class behat_block_le_dashboard extends behat_base {
                 $this->getSession()
             );
         }
+    }
+
+    /**
+     * Clears an assessment's latest individual deadline in the index, as rows indexed before beta31 have it.
+     *
+     * @Given /^the index row of "(?P<name>[^"]*)" has no latest individual deadline$/
+     * @param string $name
+     */
+    public function the_index_row_has_no_latest_due(string $name): void {
+        steps::instance()->the_index_row_has_no_latest_due($name);
     }
 
     /**

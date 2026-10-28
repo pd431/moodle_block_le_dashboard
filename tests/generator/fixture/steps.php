@@ -1372,6 +1372,16 @@ final class steps {
     }
 
     /**
+     * Clears an assessment's latest individual deadline in the index, as rows indexed before beta31 have it.
+     *
+     * @param string $name
+     */
+    public function the_index_row_has_no_latest_due(string $name): void {
+        global $DB;
+        $DB->set_field('block_le_dashboard_cm', 'latestdue', null, ['cmid' => $this->cm($name)->id]);
+    }
+
+    /**
      * Sets the brief guidance link.
      *
      * @param string $url

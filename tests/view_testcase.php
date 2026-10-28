@@ -360,6 +360,16 @@ abstract class view_testcase extends \advanced_testcase {
     }
 
     /**
+     * One view for an academic year.
+     *
+     * @param string $view
+     * @param string $year
+     */
+    protected function i_view_for_year(string $view, string $year): void {
+        $this->render(self::view_or_default($view), self::year_id($year));
+    }
+
+    /**
      * An academic year's id from the picker's label.
      *
      * @param string $label

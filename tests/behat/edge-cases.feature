@@ -7,6 +7,7 @@ Feature: Work stays visible when people and assessments move at awkward moments
   # From /mnt/project-files/edge-cases/edge-cases.feature, approved by the coordinator 2026-10-04
   # for EC1, EC3, EC5, EC6, EC7, EC8, EC9 and EC11, and EC3b with Pierre's answer (findings in
   # edge-cases/findings.md). EC2, EC4 and EC10 follow Pierre's decisions, approved for beta11.
+  # EC3's scenarios moved to staff-year-scope.feature when its exception for outstanding marking went (beta31).
   # Adjusted while building:
   # - EC1: a marker's marked work still shows the Unallocated bar, at "0 of 1": the bar shows
   #   whenever an allocated activity has submissions, and what matters is that marked work
@@ -83,21 +84,6 @@ Feature: Work stays visible when people and assessments move at awkward moments
     And the My assessments nightly reconcile runs
     And I log in as "convenor" and view the "My marking"
     Then "A1" should appear in the "Marking in progress" section with "1" to mark
-
-  # ---------- EC3: year filter hides outstanding work ----------
-
-  @javascript
-  Scenario: The convenor sees last year's unfinished marking in In progress
-    Given the following "courses" exist:
-      | fullname | shortname | startdate     |
-      | Module 0 | M0        | ##-400 days## |
-    And "convenor" is enrolled in "M0" as "moduleconvenor"
-    And "student1" is enrolled in "M0" as "student"
-    And a summative "assign" "Old essay" in "M0" was due "2 days ago"
-    And "student1" has submitted "Old essay"
-    And the My assessments index is up to date
-    When I log in as "convenor" and view the "Convenor view"
-    Then "Old essay" should appear in the "In progress" section
 
   # ---------- EC5: assignments with no online submission ----------
 

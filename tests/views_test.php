@@ -275,19 +275,6 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
-     * Pierre, 2026-10-06 (beta14): a course from another year shows "Course (2024/25)", not the raw placeholder.
-     */
-    public function test_course_in_other_year(): void {
-        global $DB;
-        $course = $DB->get_record('course', ['shortname' => 'M1']);
-        $DB->set_field('course', 'startdate', mktime(0, 0, 0, 10, 1, 2024), ['id' => $course->id]);
-        $method = new \ReflectionMethod(convenor::class, 'with_year');
-        $text = $method->invoke(new convenor($this->u['convenor']->id), 'Module 1', (int)$course->id);
-        $this->assertStringStartsWith('Module 1 (', $text);
-        $this->assertStringNotContainsString('{$a', $text);
-    }
-
-    /**
      * PR3: names with "&" are escaped once, by the template, and search finds them.
      */
     public function test_names_escaped_once(): void {

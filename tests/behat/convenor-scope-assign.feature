@@ -42,9 +42,10 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     And the academic year "2026/27" starts on "2026-09-01"
 
   @javascript
-  Scenario: Only modules in the selected academic year are shown
+  # A2 is on last year's module and was due last year; one due this year would show by its date (EC3).
+  Scenario: Only assessments of the selected academic year are shown
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And a summative "assign" "A2" in "M2" was due "3 days ago"
+    And a summative "assign" "A2" in "M2" was due "2025-10-20 12:00"
     When I log in as "convenor" and view the "Convenor view" for academic year "2026/27"
     Then I should see "A1" in the "My assessments" block
     And I should not see "A2" in the "My assessments" block

@@ -113,43 +113,6 @@ final class edge_cases_test extends view_testcase {
     }
 
     /**
-     * Marking outstanding on last year's module stays in My marking
-     */
-    public function test_marking_outstanding_on_last_year_s_module_stays_in_my_marking(): void {
-        $this->step('Given the following "courses" exist:', [
-            ['fullname' => 'Module 1', 'shortname' => 'M1'],
-        ]);
-        $this->step('And the following "users" exist:', [
-            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
-            ['username' => 'student2', 'firstname' => 'Sue', 'lastname' => 'Student'],
-            ['username' => 'marker1', 'firstname' => 'Mo', 'lastname' => 'Marker'],
-            ['username' => 'marker2', 'firstname' => 'Max', 'lastname' => 'Marker'],
-            ['username' => 'convenor', 'firstname' => 'Cara', 'lastname' => 'Convenor'],
-        ]);
-        $this->step('And the following "course enrolments" exist:', [
-            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
-            ['user' => 'student2', 'course' => 'M1', 'role' => 'student'],
-            ['user' => 'marker1', 'course' => 'M1', 'role' => 'teacher'],
-            ['user' => 'marker2', 'course' => 'M1', 'role' => 'teacher'],
-            ['user' => 'convenor', 'course' => 'M1', 'role' => 'moduleconvenor'],
-        ]);
-        $this->step('And "convenor" is enrolled in "M1" as "teacher"');
-        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
-            . '"formative"');
-        $this->step('Given the following "courses" exist:', [
-            ['fullname' => 'Module 0', 'shortname' => 'M0', 'startdate' => '##-400 days##'],
-        ]);
-        $this->step('And "marker1" is enrolled in "M0" as "teacher"');
-        $this->step('And "student1" is enrolled in "M0" as "student"');
-        $this->step('And a summative "assign" "Old essay" in "M0" was due "2 days ago"');
-        $this->step('And "student1" has submitted "Old essay"');
-        $this->step('And the My assessments index is up to date');
-        $this->step('When I log in as "marker1" and view the "My marking"');
-        $this->step('Then "Old essay" should appear in the "Marking in progress" section with "1" to mark');
-        $this->step('And the "To mark" summary count should be "1"');
-    }
-
-    /**
      * Last year's completed marking stays under its own year
      */
     public function test_last_year_s_completed_marking_stays_under_its_own_year(): void {

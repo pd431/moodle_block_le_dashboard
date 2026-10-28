@@ -61,7 +61,6 @@ Options:
   -h, --help  Print this help.';
 $string['clirebuild_locked'] = 'Another index run is still working and didn\'t stop within 15 minutes. Try again later.';
 $string['confirmdeleteyear'] = 'Delete the academic year "{$a}"? If it is the default year, the default goes back to the current year.';
-$string['courseinyear'] = '{$a->course} ({$a->year})';
 $string['date_due'] = 'Due';
 $string['date_extendeddeadline'] = 'Extended deadline';
 $string['date_feedbackexpected'] = 'Feedback expected';

@@ -91,7 +91,11 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   is unallocated while unmarked, so it falls to the convenor; work they marked stays theirs.
 - **EC2** An assessment with no due date is listed under Undated, with a hint for convenors, rather than
   vanishing.
-- **EC3** Marking still to do ignores the year filter; a row outside the selected year says its year.
+- **EC3** The staff and convenor views show an assessment in the selected year when its default deadline or the
+  latest deadline any student has (an extension, override or personal deadline) falls in the year, or when its
+  course belongs to the year (EC3b). Nothing outside it is shown or counted, outstanding marking included; All
+  years shows everything. Changed by Pierre on 2026-10-28, replacing the exception that kept outstanding marking
+  of other years in view with its course's year in brackets.
 - **EC4** Students whose enrolment ended or was suspended keep their rows, flagged inactive, so their
   submitted work is still marked; unenrolled students leave.
 - **EC5** An assignment with no online submission behaves like the generic tier for students (no Submitted
