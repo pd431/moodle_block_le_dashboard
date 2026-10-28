@@ -740,6 +740,30 @@ final class steps {
     }
 
     /**
+     * A mitigation of one of the activity's own types (coursework: permanent or temporary).
+     *
+     * @param string $username
+     * @param string $type
+     * @param string $name
+     */
+    public function has_a_mitigation_on(string $username, string $type, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->mitigate($cm, self::userid($username), $type);
+    }
+
+    /**
+     * A student's mitigation of a type is taken away.
+     *
+     * @param string $type
+     * @param string $username
+     * @param string $name
+     */
+    public function the_mitigation_is_removed(string $type, string $username, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->remove_mitigation($cm, self::userid($username), $type);
+    }
+
+    /**
      * Does nothing, for scenario outlines where one example needs no event.
      */
     public function nothing_happens(): void {
@@ -1110,7 +1134,7 @@ final class steps {
      */
     public function removes_the_self_certification_and_the_event_fires(string $username, string $name): void {
         $cm = $this->cm($name);
-        self::fixture($cm)->remove_extension($cm, self::userid($username));
+        self::fixture($cm)->remove_mitigation($cm, self::userid($username));
         self::only_the_event_tells($cm, self::userid($username), 'mitigation removed');
     }
 

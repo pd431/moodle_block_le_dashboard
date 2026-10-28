@@ -529,6 +529,47 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * CS4: an exempt or deferred student reads "Exempt" with no actions and the exemption's icon, and leaves the
+     * convenor's Submitted bar; their marking units leave every count.
+     */
+    public function test_exempt_student(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $convenorbar = function () {
+            $rows = [];
+            foreach ((new convenor($this->u['convenor']->id))->export()['sections'] as $section) {
+                $rows += array_column($section['rows'], null, 'name');
+            }
+            return array_column($rows['Overdue essay']['bars'], null, 'key')['submitted'];
+        };
+        $this->assertSame([1, 2], [$convenorbar()['value'], $convenorbar()['max']]);
+        $excuse = function (string $name, string $mitigation) use ($DB, $cmid) {
+            $params = ['cmid' => $cmid, 'userid' => $this->u[$name]->id];
+            $DB->set_field('block_le_dashboard_stu', 'mitigation', $mitigation, $params);
+            $DB->set_field('block_le_dashboard_stu', 'expected', 0, $params);
+        };
+        $excuse('s1', 'exempt');
+
+        $row = self::rows((new student($this->u['s1']->id))->export(), 'past')['Overdue essay'];
+        $this->assertSame('exempt', $row['status']['key']);
+        $this->assertSame('Exempt', $row['status']['label']);
+        $this->assertSame([], $row['actions']);
+        $this->assertArrayNotHasKey('mitigation', $row);
+        $this->assertSame('exempt', $row['mitigationoverlay']['state']);
+        $this->assertNull($row['overlay']);
+        $this->assertStringContainsString(get_string('tip_exempt', 'block_le_dashboard'), $row['tip']);
+        $this->assertSame([1, 1], [$convenorbar()['value'], $convenorbar()['max']]);
+
+        // The marker's only unit is s2's: deferred, it leaves their marking.
+        $this->assertArrayHasKey('Overdue essay', self::rows((new staff($this->u['marker']->id))->export(), 'tomark'));
+        $excuse('s2', 'deferred');
+        $DB->set_field('block_le_dashboard_mark', 'counted', 0, ['cmid' => $cmid]);
+        $this->assertArrayNotHasKey('Overdue essay', self::rows((new staff($this->u['marker']->id))->export(), 'tomark'));
+        $this->assertSame('exempt', self::rows((new student($this->u['s2']->id))->export(), 'past')['Overdue essay']
+            ['status']['key']);
+    }
+
+    /**
      * CS3: withheld work is in no marking count, but stays in the academic conduct flag with its own sentence; a
      * marker whose only work there is withheld keeps the assessment under Completed marking, with no bars.
      */

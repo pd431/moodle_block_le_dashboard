@@ -129,6 +129,8 @@ $ma-state-tones: (
         "inmarking": "info",
         "awaiting": "info",
         "released": "info",
+        // Exempt or deferred (CS4): nothing to do, so no call to action.
+        "exempt": "info",
         // Staff grading status on finished rows (Pierre, 2026-10-07): staff only, so attention is fine.
         "grading": "info",
         "unreleased": "attention",

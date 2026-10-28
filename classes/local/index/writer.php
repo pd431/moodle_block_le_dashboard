@@ -182,6 +182,9 @@ class writer {
                 'canaccess' => $canaccess ? 1 : 0,
                 'active' => isset($active[$userid]) ? 1 : 0,
                 'enrolstart' => $starts[$userid] ?? null,
+                // Exempt or deferred students leave the counts of who is expected to hand in (CS4). In the table's
+                // column order, as rows kept from the last index are.
+                'expected' => student_row::excused($row->mitigation) ? 0 : 1,
                 'submitted' => $row->submitted === null ? null : ($row->submitted ? 1 : 0),
                 'timesubmitted' => $row->timesubmitted,
                 'timereleased' => $row->timereleased,

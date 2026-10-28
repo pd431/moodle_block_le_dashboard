@@ -198,12 +198,22 @@ interface fixture {
     public function extend(\cm_info $cm, int $userid, int $until, bool $selfcert = false): void;
 
     /**
-     * Takes a student's extension away again.
+     * Gives a student a mitigation of one of the activity's own types (coursework: permanent or temporary).
      *
      * @param \cm_info $cm
      * @param int $userid
+     * @param string $type
      */
-    public function remove_extension(\cm_info $cm, int $userid): void;
+    public function mitigate(\cm_info $cm, int $userid, string $type): void;
+
+    /**
+     * Takes a student's mitigation of a type away again (an extension by default).
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param string $type
+     */
+    public function remove_mitigation(\cm_info $cm, int $userid, string $type = 'extension'): void;
 
     /**
      * Fires the activity's own event for a change already made, as the activity's page would.

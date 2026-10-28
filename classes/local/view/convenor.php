@@ -101,11 +101,11 @@ class convenor extends base {
         $cms = array_column(array_values($cms), null, 'cmid');
 
         // Students who can access, and how many submitted (R4: as of indexing). Students who left
-        // are not counted here, though their submitted work is still marked (EC4).
+        // are not counted here, though their submitted work is still marked (EC4); nor are exempt or deferred ones.
+        $expected = marking_rules::EXPECTED;
         $students = $DB->get_records_sql("SELECT s.cmid,
-                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
-                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
-                                                          THEN 1 ELSE 0 END) AS submitted
+                                                 SUM(CASE WHEN $expected THEN 1 ELSE 0 END) AS total,
+                                                 SUM(CASE WHEN $expected AND s.submitted = 1 THEN 1 ELSE 0 END) AS submitted
                                             FROM {block_le_dashboard_stu} s
                                             JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            WHERE c.courseid $insql

@@ -170,13 +170,17 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
-     * Withheld work is in no marking count (CS3); open flags and units without a submission are.
+     * Withheld work (CS3) and exempt or deferred students (CS4) are in no marking count; open flags,
+     * extensions and units without a submission are.
      */
     public function test_uncounted(): void {
         $units = ['user:1' => true, 'user:2' => true, 'user:3' => true];
         $submissions = ['user:1' => (object)['id' => 11], 'user:2' => (object)['id' => 12]];
         $flagged = [11 => marking_row::FLAG_WITHHELD, 12 => marking_row::FLAG_OPEN];
         $this->assertSame(['user:1' => true], self::call('uncounted', $units, $submissions, $flagged));
+        // Exempt or deferred students too, with or without a submission.
+        $this->assertSame(['user:1' => true, 'user:3' => true], self::call('uncounted', $units, $submissions, $flagged,
+            ['user:3' => ['excused' => 'deferred'], 'user:2' => ['extension' => [5, false]]]));
     }
 
     /**
@@ -223,24 +227,38 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
-     * Extensions come from the mitigations table, type extension only, the last recorded per allocatable, with
-     * whether it was self-certified.
+     * Mitigations by allocatable (CS4): the last extension recorded, with whether it was self-certified; permanent
+     * is exempt and temporary deferred, and an exemption wins whichever came first. Other types are ignored.
      */
-    public function test_extensions(): void {
+    public function test_mitigations(): void {
         global $DB;
         $this->with_tables([
             'coursework_mitigations' => [['courseworkid', 'allocatableid', 'extended_deadline', 'selfcert', 'timecreated'],
                 ['allocatabletype', 'type']],
         ], function () use ($DB) {
-            $add = fn($user, $type, $until, $selfcert) => $DB->insert_record('coursework_mitigations', ['courseworkid' => 7,
-                'allocatableid' => $user, 'allocatabletype' => 'user', 'type' => $type, 'extended_deadline' => $until,
-                'selfcert' => $selfcert, 'timecreated' => 1]);
+            $add = fn($user, $type, $until = 0, $selfcert = 0, $cw = 7) => $DB->insert_record('coursework_mitigations', [
+                'courseworkid' => $cw, 'allocatableid' => $user, 'allocatabletype' => 'user', 'type' => $type,
+                'extended_deadline' => $until, 'selfcert' => $selfcert, 'timecreated' => 1]);
             $add(1, 'extension', 500, 1);
-            $add(1, 'extension', 400, 0);
-            $add(2, 'extension', 300, 0);
-            $add(3, 'permanent', 0, 0);
-            $this->assertSame(['user:1' => [400, false], 'user:2' => [300, false]], self::call('extensions', 7));
-            $this->assertSame(['user:2' => [300, false]], self::call('extensions', 7, [['user', 2], ['user', 3]]));
+            $add(1, 'extension', 400);
+            $add(2, 'extension', 300);
+            $add(3, 'permanent');
+            $add(3, 'temporary');
+            $add(4, 'temporary');
+            $add(5, 'temporary');
+            $add(5, 'permanent');
+            $add(5, 'extension', 600, 1);
+            $add(6, 'somethingelse');
+            $add(7, 'permanent', 0, 0, 8);
+            $this->assertSame([
+                'user:1' => ['extension' => [400, false]],
+                'user:2' => ['extension' => [300, false]],
+                'user:3' => ['excused' => 'exempt'],
+                'user:4' => ['excused' => 'deferred'],
+                'user:5' => ['excused' => 'exempt', 'extension' => [600, true]],
+            ], self::call('mitigations', 7));
+            $this->assertSame(['user:2' => ['extension' => [300, false]], 'user:4' => ['excused' => 'deferred']],
+                self::call('mitigations', 7, [['user', 2], ['user', 4]]));
         });
     }
 

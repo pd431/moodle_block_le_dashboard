@@ -592,6 +592,30 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A mitigation of one of the activity's own types (coursework: permanent or temporary).
+     *
+     * @Given /^"(?P<user>[^"]*)" has an? "(?P<type>[^"]*)" mitigation on "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $type
+     * @param string $name
+     */
+    public function has_a_mitigation_on(string $username, string $type, string $name): void {
+        steps::instance()->has_a_mitigation_on($username, $type, $name);
+    }
+
+    /**
+     * A student's mitigation of a type is taken away.
+     *
+     * @When /^the "(?P<type>[^"]*)" mitigation of "(?P<user>[^"]*)" on "(?P<name>[^"]*)" is removed$/
+     * @param string $type
+     * @param string $username
+     * @param string $name
+     */
+    public function the_mitigation_is_removed(string $type, string $username, string $name): void {
+        steps::instance()->the_mitigation_is_removed($type, $username, $name);
+    }
+
+    /**
      * Does nothing, for scenario outlines where one example needs no event.
      *
      * @Given /^nothing happens$/

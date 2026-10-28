@@ -62,6 +62,12 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   them with the open ones and says in its own sentence that they left the workload, and a marker whose units
   are all withheld keeps the assessment under Completed marking with that flag (Pierre, 16:13 and 16:17). One
   flag, not two: both counts come from the same coursework table. Settles B42.
+- **CS4** A coursework mitigation of type permanent (exemption) or temporary (deferral) means nothing is expected of
+  the student there (Pierre: "can be treated as complete", and for staff "drop off the denominator altogether").
+  They leave every count of who should hand in (stu.expected = 0) and every marking count (counted = 0), with or
+  without a submission, and are in no hint. The student sees "Exempt" by the date alone (Upcoming, then Past,
+  never Overdue), one icon whose tip says a mitigation applies, and no actions, not even Mitigate. An exemption
+  or deferral wins over an extension; on a group it applies to every member, as extensions do.
 
 ## D: logic overhaul design v2 (2026-10-02)
 

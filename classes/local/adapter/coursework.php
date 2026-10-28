@@ -42,6 +42,8 @@ use block_le_dashboard\local\index\student_row;
  *   online. Attendance is its first stage, then coursework's own.
  * - CS3: a cleared plagiarism flag is no flag; withheld work is in no marking
  *   count, but stays in the flag.
+ * - CS4: an exempt or deferred student is expected to hand nothing in, and is in no
+ *   count.
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
@@ -263,23 +265,36 @@ class coursework extends base {
         return ['AND (' . implode(' OR ', $parts) . ')', $params];
     }
 
+    /** Coursework's mitigation types that excuse the student, and what each means here (CS4). */
+    const EXCUSING_TYPES = ['permanent' => student_row::MITIGATION_EXEMPT, 'temporary' => student_row::MITIGATION_DEFERRED];
+
     /**
-     * Extensions by allocatable: mitigations of type extension, the latest per allocatable.
+     * Mitigations by allocatable: the latest extension, and any exemption or deferral (an exemption wins) (CS4).
      *
      * @param int $courseworkid
      * @param array|null $only Only these allocatables, or null for all.
-     * @return array[] "type:id" => [extended deadline, whether it was self-certified]
+     * @return array[] "type:id" => ['extension' => [extended deadline, whether self-certified]] and/or
+     *                 ['excused' => student_row::MITIGATION_EXEMPT or MITIGATION_DEFERRED]
      */
-    protected static function extensions(int $courseworkid, ?array $only = null): array {
+    protected static function mitigations(int $courseworkid, ?array $only = null): array {
+        global $DB;
+        [$onlysql, $params] = self::allocatable_sql($only);
+        [$typesql, $typeparams] = $DB->get_in_or_equal(['extension', ...array_keys(self::EXCUSING_TYPES)],
+            SQL_PARAMS_NAMED, 'mt');
+        $rs = $DB->get_recordset_sql("SELECT id, allocatableid, allocatabletype, type, extended_deadline, selfcert
+                                        FROM {coursework_mitigations}
+                                       WHERE courseworkid = :cwid AND type $typesql $onlysql
+                                    ORDER BY id", ['cwid' => $courseworkid] + $typeparams + $params);
         $out = [];
-        $rows = self::by_allocatable('coursework_mitigations', $courseworkid, 'extended_deadline, selfcert',
-            "AND type = 'extension'", $only);
-        foreach ($rows as $key => $r) {
-            $due = (int)$r->extended_deadline;
-            if ($due > ($out[$key][0] ?? 0)) {
-                $out[$key] = [$due, !empty($r->selfcert)];
+        foreach ($rs as $r) {
+            $key = $r->allocatabletype . ':' . $r->allocatableid;
+            if ($r->type === 'extension') {
+                $out[$key]['extension'] = [(int)$r->extended_deadline, !empty($r->selfcert)];
+            } else if (($out[$key]['excused'] ?? null) !== student_row::MITIGATION_EXEMPT) {
+                $out[$key]['excused'] = self::EXCUSING_TYPES[$r->type];
             }
         }
+        $rs->close();
         return $out;
     }
 
@@ -354,7 +369,7 @@ class coursework extends base {
         $only = self::only($allocatables);
 
         $personal = self::by_allocatable('coursework_person_deadlines', $cw->id, 'personal_deadline', '', $only);
-        $extensions = self::extensions($cw->id, $only);
+        $mitigations = self::mitigations($cw->id, $only);
         $submissions = self::submissions($cw->id, $only);
         $finalgrades = $this->final_grades($cw, $only === null ? null : array_map(fn($s) => (int)$s->id, $submissions));
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id, $only) : [];
@@ -373,9 +388,13 @@ class coursework extends base {
                 }
                 $row->individual = true;
             }
-            // An extension can only move it later.
-            if (!empty($extensions[$key]) && $extensions[$key][0] > (int)$row->due) {
-                [$row->due, $selfcert] = $extensions[$key];
+            $extension = $mitigations[$key]['extension'] ?? null;
+            if (isset($mitigations[$key]['excused'])) {
+                // Exempt or deferred: nothing is expected, whatever the extension (CS4). The dates stay.
+                $row->mitigation = $mitigations[$key]['excused'];
+            } else if ($extension && $extension[0] > (int)$row->due) {
+                // An extension can only move it later.
+                [$row->due, $selfcert] = $extension;
                 if ($row->cutoff !== null) {
                     $row->cutoff = $row->due;
                 }
@@ -593,7 +612,7 @@ class coursework extends base {
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id, $only) : [];
         $subids = $only === null ? null : array_map(fn($s) => (int)$s->id, array_values($submissions));
         $flagged = self::flags_enabled($cw) ? self::flagged_submissions((int)$cw->id, $subids) : [];
-        $uncounted = self::uncounted($units, $submissions, $flagged);
+        $uncounted = self::uncounted($units, $submissions, $flagged, self::mitigations((int)$cw->id, $only));
         $rows = $attendance
             ? self::attendance_rows($units, $submissions, $cmrow->hasallocation ? $pairs : null, $uncounted) : [];
         if (!$submissions) {
@@ -685,19 +704,22 @@ class coursework extends base {
     }
 
     /**
-     * The units in no marking count: work whose results are withheld (CS3). Their rows stay, so the academic
-     * conduct flag still counts them and they come back when the flag changes.
+     * The units in no marking count: work whose results are withheld (CS3), and exempt or deferred students
+     * (CS4). Their rows stay, so the academic conduct flag still counts withheld work, and either comes back when
+     * the flag or the mitigation changes.
      *
      * @param true[] $units "type:id" => true
      * @param \stdClass[] $submissions "type:id" => submission
      * @param int[] $flagged submission id => marking_row::FLAG_ constant
+     * @param array[] $mitigations As mitigations().
      * @return true[] "type:id" => true
      */
-    protected static function uncounted(array $units, array $submissions, array $flagged): array {
+    protected static function uncounted(array $units, array $submissions, array $flagged, array $mitigations = []): array {
         $out = [];
         foreach (array_keys($units) as $key) {
             $s = $submissions[$key] ?? null;
-            if ($s && ($flagged[(int)$s->id] ?? null) === marking_row::FLAG_WITHHELD) {
+            $withheld = $s && ($flagged[(int)$s->id] ?? null) === marking_row::FLAG_WITHHELD;
+            if ($withheld || isset($mitigations[$key]['excused'])) {
                 $out[$key] = true;
             }
         }
@@ -754,7 +776,7 @@ class coursework extends base {
 
     /**
      * Self-certified extensions the student has used since a time, from the mitigations table by the same
-     * reading as extensions(): rows of type extension that selfcert marks.
+     * reading as mitigations(): rows of type extension that selfcert marks.
      *
      * @param int $userid
      * @param int $since

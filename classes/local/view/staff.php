@@ -225,7 +225,8 @@ class staff extends base {
     }
 
     /**
-     * Assessments in my staff courses with no deadline (EC2), for Undated. Students who left are not counted (EC4).
+     * Assessments in my staff courses with no deadline (EC2), for Undated. Students who left are not counted (EC4),
+     * nor exempt or deferred ones (CS4).
      *
      * @return \stdClass[] Keyed by cmid.
      */
@@ -238,9 +239,9 @@ class staff extends base {
         [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
         $records = $DB->get_records_sql("SELECT c.*,
                                             (SELECT COUNT(1) FROM {block_le_dashboard_stu} s
-                                              WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1) AS students,
+                                              WHERE s.cmid = c.cmid AND " . marking_rules::EXPECTED . ") AS students,
                                             (SELECT COUNT(1) FROM {block_le_dashboard_stu} s
-                                              WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1
+                                              WHERE s.cmid = c.cmid AND " . marking_rules::EXPECTED . "
                                                     AND s.submitted = 1) AS submissions
                                        FROM {block_le_dashboard_cm} c
                                        " . base::LIVE . "

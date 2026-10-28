@@ -184,9 +184,17 @@ final class coursework extends base {
     }
 
     #[\Override]
-    public function remove_extension(\cm_info $cm, int $userid): void {
+    public function mitigate(\cm_info $cm, int $userid, string $type): void {
         global $DB;
-        $params = self::submission_params($cm, $userid) + ['type' => 'extension'];
+        $DB->insert_record('coursework_mitigations', self::submission_params($cm, $userid) + ['type' => $type,
+            'extended_deadline' => 0, 'selfcert' => 0, 'timecreated' => time()]);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function remove_mitigation(\cm_info $cm, int $userid, string $type = 'extension'): void {
+        global $DB;
+        $params = self::submission_params($cm, $userid) + ['type' => $type];
         self::$removed = (int)$DB->get_field('coursework_mitigations', 'MAX(id)', $params);
         $DB->delete_records('coursework_mitigations', $params);
         self::queue($cm);

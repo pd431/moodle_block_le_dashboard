@@ -928,6 +928,7 @@
 .block_le_dashboard_dashboard .ma-pill--inmarking,
 .block_le_dashboard_dashboard .ma-pill--awaiting,
 .block_le_dashboard_dashboard .ma-pill--released,
+.block_le_dashboard_dashboard .ma-pill--exempt,
 .block_le_dashboard_dashboard .ma-pill--grading,
 .block_le_dashboard_dashboard .ma-pill--withheld {
     --ma-fill: var(--ma-info-fill);

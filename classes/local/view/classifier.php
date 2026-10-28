@@ -16,6 +16,8 @@
 
 namespace block_le_dashboard\local\view;
 
+use block_le_dashboard\local\index\student_row;
+
 /**
  * The rules that put assessments into sections. Pure functions of stored
  * values and "now", so buckets change at the deadline without re-indexing.
@@ -57,6 +59,8 @@ class classifier {
     const STATUS_RECEIVED = 'received';
     /** Student status: nothing to hand in online, the date has passed and no grade is out yet. */
     const STATUS_AWAITING = 'awaiting';
+    /** Student status: exempt or deferred, nothing is expected of them here (CS4). */
+    const STATUS_EXEMPT = 'exempt';
     /** Statuses of the ordinary case, shown with no pill. */
     const PLAIN_STATUSES = [self::STATUS_PENDING, self::STATUS_DUE, self::STATUS_OPEN, self::STATUS_REOPENED];
 
@@ -81,8 +85,11 @@ class classifier {
      *   attempt stays in Upcoming.
      * - Joined the course after the deadline (EC10): once the deadline plus the grace period has
      *   passed, Past and "Not submitted" at once; inside the grace period, Overdue as anyone else.
+     * - Exempt or deferred (CS4): "Exempt", by the date alone: Upcoming until it, then Past, never Overdue;
+     *   Undated without one.
      *
-     * @param \stdClass $row due, cutoff, submitted, timereleased, reopened, enrolstart, nosubmission, norelease
+     * @param \stdClass $row due, cutoff, submitted, timereleased, reopened, enrolstart, nosubmission, norelease,
+     *                       mitigation
      * @param int $now
      * @param int $thresholddays
      * @param int $grace Grace period in seconds.
@@ -90,6 +97,9 @@ class classifier {
      */
     public static function student(\stdClass $row, int $now, int $thresholddays, int $grace = 0): array {
         $due = $row->due === null ? null : (int)$row->due;
+        if (student_row::excused($row->mitigation ?? null)) {
+            return [$due === null ? self::UNDATED : ($due >= $now ? self::UPCOMING : self::PAST), self::STATUS_EXEMPT];
+        }
         $released = $row->timereleased !== null && (int)$row->timereleased <= $now;
         // Grades never released here: finished once marked, with no grade claimed (F10).
         $done = empty($row->norelease) ? self::STATUS_RELEASED : self::STATUS_SUBMITTED;
@@ -174,7 +184,7 @@ class classifier {
      * @return bool
      */
     public static function teacher_locked(\stdClass $row): bool {
-        return ($row->lockreason ?? null) === \block_le_dashboard\local\index\student_row::LOCK_TEACHER
+        return ($row->lockreason ?? null) === student_row::LOCK_TEACHER
             && empty($row->submitted);
     }
 

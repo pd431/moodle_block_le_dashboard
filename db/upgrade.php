@@ -111,5 +111,16 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026102800, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026102801) {
+        // Exempt and deferred students leave the counts of who should hand in (Pierre, 2026-10-28): re-index.
+        $table = new xmldb_table('block_le_dashboard_stu');
+        $field = new xmldb_field('expected', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '1', 'enrolstart');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026102801, 'le_dashboard', 'block');
+    }
+
     return true;
 }

@@ -61,6 +61,7 @@ class provider implements
             'canaccess' => 'privacy:metadata:stu:canaccess',
             'active' => 'privacy:metadata:stu:active',
             'enrolstart' => 'privacy:metadata:stu:enrolstart',
+            'expected' => 'privacy:metadata:stu:expected',
         ], 'privacy:metadata:stu');
         $collection->add_database_table('block_le_dashboard_mark', [
             'unitid' => 'privacy:metadata:mark:unitid',

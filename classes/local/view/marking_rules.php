@@ -37,13 +37,20 @@ use block_le_dashboard\local\index\marking_row;
  */
 final class marking_rules {
     /**
-     * The marking units every count and list reads: not work whose results are withheld (CS3). Its rows stay for
-     * the academic conduct flag; a mark already given still counts as given in Completed marking.
+     * The marking units every count and list reads: not work whose results are withheld (CS3), nor exempt or
+     * deferred students (CS4). Their rows stay, for the academic conduct flag and for when the case or the
+     * mitigation changes; a mark already given still counts as given in Completed marking.
      */
     const COUNTED = 'm.counted = 1';
 
     /** A marking unit whose results are withheld after an academic conduct check (CS3). */
     const WITHHELD = 'm.flagged = ' . marking_row::FLAG_WITHHELD;
+
+    /**
+     * The students (alias s) the counts of who should hand in read: who can access the work and are still enrolled
+     * (EC4: students who left are still marked, but not counted), and not exempt or deferred (CS4).
+     */
+    const EXPECTED = 's.canaccess = 1 AND s.active = 1 AND s.expected = 1';
 
     /**
      * SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated
@@ -255,7 +262,7 @@ final class marking_rules {
                                            FROM {block_le_dashboard_stu} s
                                            JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            " . base::LIVE . "
-                                          WHERE s.canaccess = 1 AND s.active = 1 AND s.due > c.due
+                                          WHERE " . self::EXPECTED . " AND s.due > c.due
                                                 AND ((s.submitted = 1 AND s.due >= :now1)
                                                      OR (s.submitted = 0 AND s.due >= :now2))
                                                 AND $where

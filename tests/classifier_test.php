@@ -134,6 +134,24 @@ final class classifier_test extends \basic_testcase {
     }
 
     /**
+     * CS4: an exempt or deferred student is "Exempt" by the date alone, never Overdue, whatever they handed in.
+     */
+    public function test_student_exempt(): void {
+        foreach (['exempt', 'deferred'] as $mitigation) {
+            foreach ([[self::NOW + DAYSECS, 0, c::UPCOMING], [self::NOW - DAYSECS, 0, c::PAST], [self::NOW - DAYSECS, 1, c::PAST],
+                    [null, 0, c::UNDATED]] as [$due, $submitted, $section]) {
+                $row = (object)['due' => $due, 'cutoff' => null, 'submitted' => $submitted, 'timereleased' => null,
+                    'mitigation' => $mitigation];
+                $this->assertSame([$section, c::STATUS_EXEMPT], c::student($row, self::NOW, 90), "$mitigation, due $due");
+            }
+        }
+        // An extension is not an exemption.
+        $row = (object)['due' => self::NOW - DAYSECS, 'cutoff' => null, 'submitted' => 0, 'timereleased' => null,
+            'mitigation' => 'extension'];
+        $this->assertSame([c::OVERDUE, c::STATUS_NOTSUBMITTED], c::student($row, self::NOW, 90));
+    }
+
+    /**
      * One rule decides whether work can still be handed in: the student's own cut-off, unless reopened.
      */
     public function test_submittable(): void {

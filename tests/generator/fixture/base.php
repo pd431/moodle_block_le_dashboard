@@ -206,8 +206,13 @@ abstract class base implements fixture {
     }
 
     #[\Override]
-    public function remove_extension(\cm_info $cm, int $userid): void {
-        $this->unsupported('Removing extensions on');
+    public function mitigate(\cm_info $cm, int $userid, string $type): void {
+        $this->unsupported("A $type mitigation on");
+    }
+
+    #[\Override]
+    public function remove_mitigation(\cm_info $cm, int $userid, string $type = 'extension'): void {
+        $this->unsupported('Removing mitigations on');
     }
 
     #[\Override]
