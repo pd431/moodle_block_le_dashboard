@@ -156,6 +156,11 @@ final class classifier_test extends \basic_testcase {
         $this->assertSame(c::COMPLETED, c::staff(0, 3, self::NOW - DAYSECS, self::NOW));
         $this->assertNull(c::staff(0, 3, self::NOW + DAYSECS, self::NOW));
         $this->assertNull(c::staff(0, 0, self::NOW - DAYSECS, self::NOW));
+        // Only withheld work of mine (CS3): Completed marking after the deadline, so the flag says where it went.
+        $this->assertSame(c::COMPLETED, c::staff(0, 0, self::NOW - DAYSECS, self::NOW, 1));
+        $this->assertNull(c::staff(0, 0, self::NOW + DAYSECS, self::NOW, 1));
+        $this->assertSame(c::COMPLETED, c::staff(0, 0, null, self::NOW, 1));
+        $this->assertSame(c::TOMARK, c::staff(1, 0, self::NOW - DAYSECS, self::NOW, 1));
         // Past the deadline with nothing of mine yet (extensions to come, or nothing handed in): nowhere.
         // EC2: no deadline and nothing to mark is Undated; work to mark still wins.
         $this->assertSame(c::UNDATED, c::staff(0, 0, null, self::NOW));

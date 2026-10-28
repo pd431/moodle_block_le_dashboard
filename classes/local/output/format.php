@@ -459,19 +459,28 @@ class format {
     }
 
     /**
-     * The hint on a row with submissions flagged for an academic conduct (plagiarism) check:
-     * staff and convenors only, never students.
+     * The academic conduct flag (CS3), for staff and convenors only, never students: "N flagged" over both kinds,
+     * then one sentence for each kind present, work still under investigation first, then work whose results are
+     * withheld and so left the counts.
      *
      * @param string $rowid
-     * @param int $n Flagged submissions.
+     * @param int $open Units under investigation.
+     * @param int $withheld Units whose results are withheld.
      * @return array
      */
-    public static function plagiarism_hint(string $rowid, int $n): array {
+    public static function plagiarism_hint(string $rowid, int $open, int $withheld = 0): array {
+        $n = $open + $withheld;
+        $text = [];
+        foreach (['text' => $open, 'withheld' => $withheld] as $kind => $count) {
+            if ($count > 0) {
+                $text[] = $count === 1 ? get_string("hint_plagiarism_{$kind}_one", 'block_le_dashboard')
+                    : get_string("hint_plagiarism_{$kind}_many", 'block_le_dashboard', $count);
+            }
+        }
         return self::hint(
             $rowid,
             'plagiarism',
-            $n === 1 ? get_string('hint_plagiarism_text_one', 'block_le_dashboard')
-                : get_string('hint_plagiarism_text_many', 'block_le_dashboard', $n),
+            implode(' ', $text),
             null,
             get_string('hint_plagiarism', 'block_le_dashboard', $n),
             $n

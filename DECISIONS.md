@@ -54,6 +54,14 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   through block_rhb. Each names the student, so their rows update at once (F4). extension_created, _updated and
   _deleted are gone: they belong to a coursework_extensions table Exeter's build doesn't have. Every coursework
   event is handled after its transaction commits (PR2), coursework_deadline_changed included.
+- **CS3** Plagiarism flag statuses as Pierre gave them: 0 is referred to the academic conduct officer, still to
+  mark and counted in the flag hint; 1 and 2 are cleared, as if there were no flag; 3 withholds the results, so
+  markers owe nothing more and the unit is in no marking count, though the student's row and the Submitted bar
+  are unchanged. Any other status, or none, reads as 0. The latest flag row of a submission counts. Withheld
+  units keep their marking rows (counted = 0) because the case can reopen: the one academic conduct flag counts
+  them with the open ones and says in its own sentence that they left the workload, and a marker whose units
+  are all withheld keeps the assessment under Completed marking with that flag (Pierre, 16:13 and 16:17). One
+  flag, not two: both counts come from the same coursework table. Settles B42.
 
 ## D: logic overhaul design v2 (2026-10-02)
 

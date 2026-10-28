@@ -213,6 +213,8 @@ final class coursework extends base {
     public function flag_plagiarism(\cm_info $cm, int $userid, string $status = '0'): void {
         global $DB;
         $submissionid = $DB->get_field('coursework_submissions', 'id', self::submission_params($cm, $userid), MUST_EXIST);
+        // A flag is read only where the coursework uses them; a later flag on the same submission replaces it.
+        $DB->set_field('coursework', 'plagiarismflagenabled', 1, ['id' => $cm->instance]);
         $DB->insert_record('coursework_plagiarism_flags', self::filled('coursework_plagiarism_flags',
             ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status]));
         self::queue($cm);

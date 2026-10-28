@@ -40,6 +40,8 @@ use block_le_dashboard\local\index\student_row;
  *   moderation after the final grade.
  * - CS1: a coursework whose only submission type is marks entry takes nothing
  *   online. Attendance is its first stage, then coursework's own.
+ * - CS3: a cleared plagiarism flag is no flag; withheld work is in no marking
+ *   count, but stays in the flag.
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
@@ -464,11 +466,11 @@ class coursework extends base {
         return $pairs;
     }
 
-    /**
-     * Plagiarism flag statuses that mean a case is open. rc6 counted 0-3; 2 is "cleared", so it isn't
-     * one (as in Pierre's rc7 commit). B42: the others are still inferred from rc6.
-     */
-    const OPEN_FLAG_STATUSES = ['0', '1', '3'];
+    /** Flag statuses that clear a submission, as if it had no flag (CS3). */
+    const FLAG_STATUS_CLEARED = ['1', '2'];
+
+    /** The flag status that withholds the results: nothing more is owed by markers (CS3). */
+    const FLAG_STATUS_WITHHELD = '3';
 
     /**
      * Whether the coursework uses plagiarism flags.
@@ -481,30 +483,44 @@ class coursework extends base {
     }
 
     /**
-     * Submissions with an open plagiarism (academic conduct) flag, from mod_coursework's own table.
+     * What a flag status means here (CS3): cleared (null), withheld, or under investigation, which is also
+     * what a status Exeter doesn't use, or none, means.
+     *
+     * @param string|null $status
+     * @return int A marking_row::FLAG_ constant
+     */
+    public static function flag_state(?string $status): int {
+        $status = trim((string)$status);
+        if (in_array($status, self::FLAG_STATUS_CLEARED, true)) {
+            return marking_row::FLAG_NONE;
+        }
+        return $status === self::FLAG_STATUS_WITHHELD ? marking_row::FLAG_WITHHELD : marking_row::FLAG_OPEN;
+    }
+
+    /**
+     * Submissions with a plagiarism (academic conduct) flag that isn't cleared, from mod_coursework's own table:
+     * the latest flag of each.
      *
      * @param int $courseworkid
      * @param int[]|null $submissionids Only these submissions, or null for all.
-     * @return array submission id => true
+     * @return int[] submission id => marking_row::FLAG_OPEN or FLAG_WITHHELD
      */
     protected static function flagged_submissions(int $courseworkid, ?array $submissionids = null): array {
         global $DB;
         if ($submissionids === []) {
             return [];
         }
-        [$statussql, $params] = $DB->get_in_or_equal(self::OPEN_FLAG_STATUSES, SQL_PARAMS_NAMED, 'st');
-        $params['cwid'] = $courseworkid;
-        $subsql = '';
-        if ($submissionids !== null) {
-            [$subsql, $subparams] = $DB->get_in_or_equal($submissionids, SQL_PARAMS_NAMED, 'sub');
-            $subsql = "AND submissionid $subsql";
-            $params += $subparams;
-        }
-        $ids = $DB->get_fieldset_sql("SELECT DISTINCT submissionid
+        [$subsql, $params] = self::submission_sql($submissionids, 'submissionid');
+        $rs = $DB->get_recordset_sql("SELECT id, submissionid, status
                                         FROM {coursework_plagiarism_flags}
-                                       WHERE courseworkid = :cwid AND submissionid > 0 AND status IS NOT NULL $subsql
-                                             AND " . $DB->sql_compare_text('status') . " $statussql", $params);
-        return array_fill_keys(array_map('intval', $ids), true);
+                                       WHERE courseworkid = :cwid AND submissionid > 0 $subsql
+                                    ORDER BY id", ['cwid' => $courseworkid] + $params);
+        $out = [];
+        foreach ($rs as $f) {
+            $out[(int)$f->submissionid] = self::flag_state($f->status);
+        }
+        $rs->close();
+        return array_filter($out);
     }
 
     /**
@@ -575,11 +591,14 @@ class coursework extends base {
         $only = self::only($allocatables);
         $submissions = self::submissions($cw->id, $only, $attendance);
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id, $only) : [];
-        $rows = $attendance ? self::attendance_rows($units, $submissions, $cmrow->hasallocation ? $pairs : null) : [];
+        $subids = $only === null ? null : array_map(fn($s) => (int)$s->id, array_values($submissions));
+        $flagged = self::flags_enabled($cw) ? self::flagged_submissions((int)$cw->id, $subids) : [];
+        $uncounted = self::uncounted($units, $submissions, $flagged);
+        $rows = $attendance
+            ? self::attendance_rows($units, $submissions, $cmrow->hasallocation ? $pairs : null, $uncounted) : [];
         if (!$submissions) {
             return $rows;
         }
-        $subids = $only === null ? null : array_map(fn($s) => (int)$s->id, array_values($submissions));
 
         // Feedback by submission and stage.
         $feedback = [];
@@ -606,7 +625,6 @@ class coursework extends base {
         if (!$cmrow->hasallocation && $sampling) {
             $pairs = self::allocation_pairs((int)$cw->id, $only);
         }
-        $flagged = self::flags_enabled($cw) ? self::flagged_submissions((int)$cw->id, $subids) : [];
 
         foreach ($submissions as $key => $s) {
             if (!isset($units[$key])) {
@@ -656,7 +674,8 @@ class coursework extends base {
                     timemarked: $marked && $f ? (int)$f->timemodified : null,
                     released: $released,
                     timeready: $timeready ?: null,
-                    flagged: isset($flagged[(int)$s->id]),
+                    flagged: $flagged[(int)$s->id] ?? marking_row::FLAG_NONE,
+                    counted: !isset($uncounted[$key]),
                 );
                 $done[] = $marked;
                 $times[] = $marked && $f ? (int)$f->timemodified : 0;
@@ -666,15 +685,36 @@ class coursework extends base {
     }
 
     /**
+     * The units in no marking count: work whose results are withheld (CS3). Their rows stay, so the academic
+     * conduct flag still counts them and they come back when the flag changes.
+     *
+     * @param true[] $units "type:id" => true
+     * @param \stdClass[] $submissions "type:id" => submission
+     * @param int[] $flagged submission id => marking_row::FLAG_ constant
+     * @return true[] "type:id" => true
+     */
+    protected static function uncounted(array $units, array $submissions, array $flagged): array {
+        $out = [];
+        foreach (array_keys($units) as $key) {
+            $s = $submissions[$key] ?? null;
+            if ($s && ($flagged[(int)$s->id] ?? null) === marking_row::FLAG_WITHHELD) {
+                $out[$key] = true;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * The attendance stage (CS1): every unit is ready at its deadline, and attendance is taken once coursework has
      * a submission row for it. Allocated, where markers are, to the first marker.
      *
      * @param true[] $units "type:id" => true, the units with an indexed student
      * @param \stdClass[] $submissions "type:id" => submission, every row
      * @param array|null $pairs Allocation pairs, or null without allocation.
+     * @param true[] $uncounted Units in no count, as uncounted().
      * @return marking_row[]
      */
-    protected static function attendance_rows(array $units, array $submissions, ?array $pairs): array {
+    protected static function attendance_rows(array $units, array $submissions, ?array $pairs, array $uncounted = []): array {
         $rows = [];
         foreach (array_keys($units) as $key) {
             [$type, $id] = explode(':', $key);
@@ -688,6 +728,7 @@ class coursework extends base {
                 released: isset($submissions[$key]) && self::released($submissions[$key]),
                 // Ready at the unit's deadline: the indexer moves it there.
                 timeready: 1,
+                counted: !isset($uncounted[$key]),
             );
         }
         return $rows;

@@ -17,6 +17,7 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
+use block_le_dashboard\local\index\marking_row;
 
 /**
  * The marking rules the staff and convenor views share, each said once (beta29, F1, F2, F4).
@@ -35,6 +36,15 @@ use block_le_dashboard\local\config;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class marking_rules {
+    /**
+     * The marking units every count and list reads: not work whose results are withheld (CS3). Its rows stay for
+     * the academic conduct flag; a mark already given still counts as given in Completed marking.
+     */
+    const COUNTED = 'm.counted = 1';
+
+    /** A marking unit whose results are withheld after an academic conduct check (CS3). */
+    const WITHHELD = 'm.flagged = ' . marking_row::FLAG_WITHHELD;
+
     /**
      * SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated
      * to (EC8). Marking without allocation (a quiz graded by hand, F8) counts for whoever marked it.
@@ -250,6 +260,28 @@ final class marking_rules {
                                                      OR (s.submitted = 0 AND s.due >= :now2))
                                                 AND $where
                                        GROUP BY s.cmid", $params);
+        return array_column(array_values($records), null, 'cmid');
+    }
+
+    /**
+     * Units flagged for an academic conduct (plagiarism) check, per assessment: under investigation, and withheld,
+     * which are in no other count (CS3).
+     *
+     * @param string $where SQL on m (mark index) and c (assessment index) choosing whose units.
+     * @param array $params
+     * @return \stdClass[] Keyed by cmid: open, withheld.
+     */
+    public static function flagged(string $where, array $params): array {
+        global $DB;
+        $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
+        $count = fn(int $flag) => "COUNT(DISTINCT CASE WHEN m.flagged = $flag THEN $unit ELSE NULL END)";
+        $records = $DB->get_records_sql("SELECT m.cmid, " . $count(marking_row::FLAG_OPEN) . " AS open,
+                                                " . $count(marking_row::FLAG_WITHHELD) . " AS withheld
+                                           FROM {block_le_dashboard_mark} m
+                                           JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
+                                           " . base::LIVE . "
+                                          WHERE m.flagged > 0 AND $where
+                                       GROUP BY m.cmid", $params);
         return array_column(array_values($records), null, 'cmid');
     }
 

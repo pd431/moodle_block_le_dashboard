@@ -200,18 +200,21 @@ class classifier {
      *                 marked counts as mine to mark, but isn't my own once done.
      * @param int|null $due
      * @param int $now
+     * @param int $withheld My units whose results are withheld (CS3): in no count, but they keep the row in
+     *                      Completed marking as my own work would.
      * @return string|null Section, or null when it isn't shown in the marking sections.
      */
-    public static function staff(int $tomark, int $own, ?int $due, int $now): ?string {
+    public static function staff(int $tomark, int $own, ?int $due, int $now, int $withheld = 0): ?string {
         if ($tomark > 0) {
             return self::TOMARK;
         }
+        $mine = $own > 0 || $withheld > 0;
         if ($due === null) {
             // No deadline: all my marking done is finished; with none yet,
             // work may still arrive (EC2).
-            return $own > 0 ? self::COMPLETED : self::UNDATED;
+            return $mine ? self::COMPLETED : self::UNDATED;
         }
-        return $own > 0 && $due < $now ? self::COMPLETED : null;
+        return $mine && $due < $now ? self::COMPLETED : null;
     }
 
     /**

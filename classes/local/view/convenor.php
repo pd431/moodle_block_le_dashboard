@@ -127,7 +127,7 @@ class convenor extends base {
                                              MAX(m.timemarked) AS lastmarked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                       WHERE c.courseid $insql
+                                       WHERE c.courseid $insql AND " . marking_rules::COUNTED . "
                                     GROUP BY m.cmid, m.stage", $params);
         foreach ($rs as $r) {
             $marking[(int)$r->cmid][$r->stage] = $r;
@@ -139,14 +139,11 @@ class convenor extends base {
                                                  FROM {block_le_dashboard_mark} m
                                                  JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                                 WHERE c.courseid $insql AND $ready AND m.marked = 0
+                                                      AND " . marking_rules::COUNTED . "
                                              GROUP BY m.cmid", $params);
-        // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43). Off means the query
-        // isn't run either (beta27 hints audit).
-        $flagged = !config::shown('hint_plagiarism') ? [] : $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                FROM {block_le_dashboard_mark} m
-                                                JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                               WHERE c.courseid $insql AND m.flagged = 1
-                                            GROUP BY m.cmid", $params);
+        // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43), withheld ones included
+        // (CS3). Off means the query isn't run either (beta27 hints audit).
+        $flagged = !config::shown('hint_plagiarism') ? [] : marking_rules::flagged("c.courseid $insql", $params);
         // Per marker, per stage.
         $markers = [];
         // Marked work is credited to whoever marked it (EC8).
@@ -156,7 +153,7 @@ class convenor extends base {
                                              SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                       WHERE c.courseid $insql AND $marker IS NOT NULL
+                                       WHERE c.courseid $insql AND $marker IS NOT NULL AND " . marking_rules::COUNTED . "
                                     GROUP BY m.cmid, $marker, m.stage", $params);
         $markerids = [];
         foreach ($rs as $r) {
@@ -247,7 +244,7 @@ class convenor extends base {
                 'returned' => $section === classifier::INPROGRESS
                     && marking_rules::returned($m, $cm->due === null ? null : (int)$cm->due),
                 'pending' => $pending[$cmid] ?? null,
-                'flagged' => (int)($flagged[$cmid] ?? 0),
+                'flagged' => $flagged[$cmid] ?? null,
                 'nostudents' => (int)($s->total ?? 0) === 0,
             ]);
             $row['markers'] = [];

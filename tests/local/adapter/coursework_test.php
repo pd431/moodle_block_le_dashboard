@@ -16,6 +16,8 @@
 
 namespace block_le_dashboard\local\adapter;
 
+use block_le_dashboard\local\index\marking_row;
+
 /**
  * The coursework adapter against stand-ins for mod_coursework's tables, named as Exeter's coursework names them
  * (CS0), since mod_coursework can't be installed where these tests run.
@@ -43,8 +45,8 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
-     * Open flags count once per submission; cleared ones (status outside the open list), rows
-     * without a submission and other courseworks don't.
+     * A submission's latest flag counts, once (CS3): open (0, or a status Exeter doesn't use, or none) or withheld
+     * (3); cleared ones (1, 2), rows without a submission and other courseworks don't.
      */
     public function test_flagged_submissions(): void {
         global $DB;
@@ -62,15 +64,19 @@ final class coursework_test extends \advanced_testcase {
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
         $dbman->create_table($table);
         try {
-            // Coursework, submission, status: open flags on 101 (and a cleared one), one on 102, cleared 103 (4) and
-            // 106 (2, Pierre 2026-10-07), no submission, no status.
-            $rows = [[7, 101, '0'], [7, 101, '2'], [7, 102, '3'], [7, 103, '4'], [7, 106, '2'], [7, 0, '1'], [7, 104, null],
-                [8, 105, '1']];
+            // Coursework, submission, status: 101 cleared then reopened, 102 withheld, 103 an unknown status, 104
+            // none, 106 open then cleared, 107 cleared (1), a row with no submission, and another coursework.
+            $rows = [[7, 101, '2'], [7, 101, '0'], [7, 102, '3'], [7, 103, '4'], [7, 104, null], [7, 106, '0'],
+                [7, 106, '2'], [7, 107, '1'], [7, 0, '0'], [8, 105, '0']];
             foreach ($rows as [$cw, $sub, $status]) {
                 $DB->insert_record(self::TABLE, ['courseworkid' => $cw, 'submissionid' => $sub, 'status' => $status]);
             }
-            $this->assertSame([101 => true, 102 => true], self::call('flagged_submissions', 7));
-            $this->assertSame([105 => true], self::call('flagged_submissions', 8));
+            $open = marking_row::FLAG_OPEN;
+            $this->assertSame([101 => $open, 102 => marking_row::FLAG_WITHHELD, 103 => $open, 104 => $open],
+                self::call('flagged_submissions', 7));
+            $this->assertSame([102 => marking_row::FLAG_WITHHELD], self::call('flagged_submissions', 7, [102, 107]));
+            $this->assertSame([105 => $open], self::call('flagged_submissions', 8));
+            $this->assertSame([], self::call('flagged_submissions', 8, []));
         } finally {
             $dbman->drop_table($table);
         }
@@ -161,6 +167,28 @@ final class coursework_test extends \advanced_testcase {
         $this->assertFalse(self::call('released', (object)['firstpublished' => 0, 'lastpublished' => null]));
         $this->assertTrue(self::call('released', (object)['firstpublished' => 5, 'lastpublished' => 0]));
         $this->assertTrue(self::call('released', (object)['firstpublished' => null, 'lastpublished' => 5]));
+    }
+
+    /**
+     * Withheld work is in no marking count (CS3); open flags and units without a submission are.
+     */
+    public function test_uncounted(): void {
+        $units = ['user:1' => true, 'user:2' => true, 'user:3' => true];
+        $submissions = ['user:1' => (object)['id' => 11], 'user:2' => (object)['id' => 12]];
+        $flagged = [11 => marking_row::FLAG_WITHHELD, 12 => marking_row::FLAG_OPEN];
+        $this->assertSame(['user:1' => true], self::call('uncounted', $units, $submissions, $flagged));
+    }
+
+    /**
+     * Each flag status means what Pierre said (CS3).
+     */
+    public function test_flag_state(): void {
+        [$none, $open, $withheld] = [marking_row::FLAG_NONE, marking_row::FLAG_OPEN, marking_row::FLAG_WITHHELD];
+        foreach (['0' => $open, '1' => $none, '2' => $none, ' 2 ' => $none, '3' => $withheld, '7' => $open, '' => $open]
+                as $status => $state) {
+            $this->assertSame($state, coursework::flag_state((string)$status), "status '$status'");
+        }
+        $this->assertSame($open, coursework::flag_state(null));
     }
 
     /**
@@ -312,6 +340,8 @@ final class coursework_test extends \advanced_testcase {
             ['group:3', 'attendance', true, true, true, null, 1],
         ], $got);
         $this->assertNull(self::call('attendance_rows', ['user:2' => true], [], null)[0]->allocatedto);
+        $this->assertSame([true, false], array_map(fn($r) => $r->counted,
+            self::call('attendance_rows', ['user:1' => true, 'user:2' => true], [], null, ['user:2' => true])));
     }
 
     /**

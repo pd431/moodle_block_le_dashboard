@@ -51,7 +51,7 @@ final class staff_row {
      *     unallocated (int): units unallocated where I convene (staff);
      *     returned (bool): work arrived after marking was finished (G6);
      *     pending (\stdClass|null): students with extensions still to come (marking_rules::pending_extensions());
-     *     flagged (int): units flagged for an academic conduct check;
+     *     flagged (\stdClass|null): units flagged for an academic conduct check, open and withheld;
      *     nostudents (bool): no student's data was read, for the not-loaded note (format::load_error()).
      * @return array
      */
@@ -117,7 +117,7 @@ final class staff_row {
             $hints[] = format::extensions_hint($rowid, $flags['pending']);
         }
         if (!empty($flags['flagged'])) {
-            $hints[] = format::plagiarism_hint($rowid, (int)$flags['flagged']);
+            $hints[] = format::plagiarism_hint($rowid, (int)$flags['flagged']->open, (int)$flags['flagged']->withheld);
         }
         return $hints;
     }

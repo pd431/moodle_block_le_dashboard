@@ -70,6 +70,7 @@ class provider implements
             'timeready' => 'privacy:metadata:mark:timeready',
             'unitdue' => 'privacy:metadata:mark:unitdue',
             'flagged' => 'privacy:metadata:mark:flagged',
+            'counted' => 'privacy:metadata:mark:counted',
         ], 'privacy:metadata:mark');
         foreach (self::PREFERENCES as $name) {
             $collection->add_user_preference('block_le_dashboard_' . $name, 'privacy:metadata:preference:' . $name);

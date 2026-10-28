@@ -104,7 +104,9 @@ class staff extends base {
             $automarked = " OR (m.marked = 1 AND m.markedby IS NULL AND c.hasallocation = 0 AND c.courseid $autosql)";
             $params += $autoparams;
         }
-        $ready = marking_rules::ready_sql($this->now);
+        // Only counted work is in any number; withheld work is counted apart, to keep the row in Completed marking
+        // with its flag (CS3).
+        $ready = '(' . marking_rules::ready_sql($this->now) . ' AND ' . marking_rules::COUNTED . ')';
         // Work still to mark whose marking deadline falls within each summary window, or has passed (UAT, beta27).
         $deadline = marking_rules::marking_deadline_sql();
         $windows = '';
@@ -122,6 +124,8 @@ class staff extends base {
                                             SUM(CASE WHEN $ready AND m.allocatedto IS NULL AND c.hasallocation = 1
                                                      THEN 1 ELSE 0 END) AS unallocated,
                                             MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
+                                            SUM(CASE WHEN " . marking_rules::WITHHELD . " THEN 1 ELSE 0 END)
+                                                AS withheld,
                                             MIN(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
                                                 AS firstready,
                                             MAX(CASE WHEN m.markedby = :me2 THEN m.timemarked ELSE NULL END) AS lastmarked
@@ -134,9 +138,10 @@ class staff extends base {
     }
 
     /**
-     * Units of mine flagged for an academic conduct (plagiarism) check, per assessment.
+     * Units of mine flagged for an academic conduct (plagiarism) check, per assessment: under investigation, and
+     * withheld (CS3), which are in no other count.
      *
-     * @return int[] cmid => flagged units
+     * @return \stdClass[] cmid => open, withheld
      */
     protected function flagged(): array {
         global $DB;
@@ -144,13 +149,7 @@ class staff extends base {
             return [];
         }
         [$where, $params] = marking_rules::mine_sql($this->courses(true), $this->userid, true);
-        $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
-        return array_map('intval', $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                                FROM {block_le_dashboard_mark} m
-                                                                JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                                                " . base::LIVE . "
-                                                               WHERE m.flagged = 1 AND $where
-                                                            GROUP BY m.cmid", $params));
+        return marking_rules::flagged($where, $params);
     }
 
     /**
@@ -184,6 +183,7 @@ class staff extends base {
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                         " . base::LIVE . "
                                        WHERE " . marking_rules::SHARED_SQL . " AND c.courseid $insql
+                                             AND " . marking_rules::COUNTED . "
                                     ORDER BY m.cmid, m.unittype, m.unitid, m.stage", $params);
         $units = [];
         foreach ($rs as $r) {
@@ -294,14 +294,16 @@ class staff extends base {
         $inyear = array_flip($this->courses()[1]);
         foreach ($bycm as $cmid => $stages) {
             $cm = $cms[$cmid];
-            $tomark = $own = $unallocated = 0;
+            $tomark = $own = $unallocated = $withheld = 0;
             foreach ($stages as $s) {
                 $tomark += (int)$s->tomark;
                 $own += (int)$s->own;
                 $unallocated += (int)$s->unallocated;
+                $withheld += (int)($s->withheld ?? 0);
             }
-            // Completed marking holds only my own workload: work allocated to me, or that I marked.
-            $section = classifier::staff($tomark, $own, $cm->due === null ? null : (int)$cm->due, $this->now);
+            // Completed marking holds only my own workload: work allocated to me, or that I marked; and work of
+            // mine whose results are withheld, so the flag says where it went (CS3).
+            $section = classifier::staff($tomark, $own, $cm->due === null ? null : (int)$cm->due, $this->now, $withheld);
             $otheryear = !isset($inyear[(int)$cm->courseid]);
             // Undated rows come from undated_cms(), for every assessment in my staff courses.
             if (!$section || $section === classifier::UNDATED || ($otheryear && $section !== classifier::TOMARK)) {
@@ -313,7 +315,7 @@ class staff extends base {
                 // Work that arrived after I finished marking here: the row came back (G6).
                 'returned' => $tomark && marking_rules::returned($stages, $cm->due === null ? null : (int)$cm->due),
                 'pending' => $pending[$cmid] ?? null,
-                'flagged' => $flagged[$cmid] ?? 0,
+                'flagged' => $flagged[$cmid] ?? null,
             ]);
             $row['tomark'] = $tomark;
             $sections[$section][] = $row + ['sortkey' => (int)(config::markingdue($cm)[0] ?? $cm->due)];
@@ -364,7 +366,7 @@ class staff extends base {
             )];
             $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $bars, [
                 'undated' => true,
-                'flagged' => $flagged[$cmid] ?? 0,
+                'flagged' => $flagged[$cmid] ?? null,
                 'nostudents' => (int)$cm->students === 0,
             ]);
             $sections[classifier::UNDATED][] = $row + ['sortkey' => 0];
@@ -427,7 +429,7 @@ class staff extends base {
                                             COUNT(DISTINCT CASE WHEN $ready AND m.marked = 0 THEN $unit ELSE NULL END)
                                                 AS unmarked
                                        FROM {block_le_dashboard_mark} m
-                                      WHERE m.cmid $insql
+                                      WHERE m.cmid $insql AND " . marking_rules::COUNTED . "
                                    GROUP BY m.cmid", $params);
     }
 
@@ -449,8 +451,9 @@ class staff extends base {
         }
         $bars = [];
         foreach (['marked', 'agreed', 'moderated'] as $kind) {
-            // Agreement or moderation not yet open to me says nothing as "0 of 0" (EC9).
-            if (isset($kinds[$kind]) && ($kind === 'marked' || $kinds[$kind][1] > 0)) {
+            // Agreement or moderation not yet open to me says nothing as "0 of 0" (EC9), nor does marking that is
+            // all withheld (CS3).
+            if (isset($kinds[$kind]) && $kinds[$kind][1] > 0) {
                 [$marked, $mine, $groups] = $kinds[$kind];
                 $bars[] = format::bar($kind, format::stage($kind), $marked, $mine, $groups);
             }
