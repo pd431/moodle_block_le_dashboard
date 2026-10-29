@@ -3656,7 +3656,7 @@
         "hasgradestoggle": true,
         "hasrows": true,
         "hassummary": true,
-        "hasyears": false,
+        "hasyears": true,
         "key": "student",
         "searchplaceholder": "Search by name or module",
         "sections": [
@@ -4388,7 +4388,38 @@
             }
         ],
         "uniqid": "<uniqid>",
-        "years": []
+        "years": [
+            {
+                "id": 0,
+                "label": "All years",
+                "selected": false
+            },
+            {
+                "id": 1,
+                "label": "2024/25",
+                "selected": false
+            },
+            {
+                "id": 2,
+                "label": "2025/26",
+                "selected": false
+            },
+            {
+                "id": 3,
+                "label": "2026/27",
+                "selected": true
+            },
+            {
+                "id": 4,
+                "label": "2027/28",
+                "selected": false
+            },
+            {
+                "id": 5,
+                "label": "2028/29",
+                "selected": false
+            }
+        ]
     },
     "student:s2": {
         "empty": "You have no assessments to show.",
@@ -4401,7 +4432,7 @@
         "hasgradestoggle": false,
         "hasrows": true,
         "hassummary": true,
-        "hasyears": false,
+        "hasyears": true,
         "key": "student",
         "searchplaceholder": "Search by name or module",
         "sections": [
@@ -5140,7 +5171,38 @@
             }
         ],
         "uniqid": "<uniqid>",
-        "years": []
+        "years": [
+            {
+                "id": 0,
+                "label": "All years",
+                "selected": false
+            },
+            {
+                "id": 1,
+                "label": "2024/25",
+                "selected": false
+            },
+            {
+                "id": 2,
+                "label": "2025/26",
+                "selected": false
+            },
+            {
+                "id": 3,
+                "label": "2026/27",
+                "selected": true
+            },
+            {
+                "id": 4,
+                "label": "2027/28",
+                "selected": false
+            },
+            {
+                "id": 5,
+                "label": "2028/29",
+                "selected": false
+            }
+        ]
     },
     "student:s3": {
         "empty": "You have no assessments to show.",
@@ -5153,7 +5215,7 @@
         "hasgradestoggle": false,
         "hasrows": false,
         "hassummary": true,
-        "hasyears": false,
+        "hasyears": true,
         "key": "student",
         "searchplaceholder": "Search by name or module",
         "sections": [
@@ -5223,6 +5285,37 @@
             }
         ],
         "uniqid": "<uniqid>",
-        "years": []
+        "years": [
+            {
+                "id": 0,
+                "label": "All years",
+                "selected": false
+            },
+            {
+                "id": 1,
+                "label": "2024/25",
+                "selected": false
+            },
+            {
+                "id": 2,
+                "label": "2025/26",
+                "selected": false
+            },
+            {
+                "id": 3,
+                "label": "2026/27",
+                "selected": true
+            },
+            {
+                "id": 4,
+                "label": "2027/28",
+                "selected": false
+            },
+            {
+                "id": 5,
+                "label": "2028/29",
+                "selected": false
+            }
+        ]
     }
 }

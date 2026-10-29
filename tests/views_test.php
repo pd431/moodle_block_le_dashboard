@@ -128,6 +128,48 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * A student sees the selected year's assessments by their own deadline or the course, and Refresh covers the
+     * same ones (EC3d); All years shows everything.
+     */
+    public function test_student_year(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $now = time();
+        $thisyear = $DB->insert_record('block_le_dashboard_year', ['label' => 'This year', 'timestart' => $now - 60 * DAYSECS,
+            'timeend' => $now + 300 * DAYSECS, 'timecreated' => $now, 'timemodified' => $now]);
+        $lastyear = $DB->insert_record('block_le_dashboard_year', ['label' => 'Last year', 'timestart' => $now - 425 * DAYSECS,
+            'timeend' => $now - 60 * DAYSECS, 'timecreated' => $now, 'timemodified' => $now]);
+        $DB->set_field('course', 'startdate', $now - 30 * DAYSECS, ['shortname' => 'M1']);
+        $old = $gen->create_course(['shortname' => 'OLD', 'startdate' => $now - 400 * DAYSECS,
+            'enddate' => $now - 100 * DAYSECS]);
+        $gen->enrol_user($this->u['s1']->id, $old->id, 'student');
+        $exam = $gen->get_plugin_generator('mod_assign')->create_instance(['course' => $old->id, 'name' => 'Old exam',
+            'duedate' => $now - 200 * DAYSECS, 'assignsubmission_onlinetext_enabled' => 1]);
+        $this->getDataGenerator()->get_plugin_generator('block_le_dashboard')->tag($exam->cmid, 'summative');
+
+        $names = function (int $yearid): array {
+            $export = (new student($this->u['s1']->id, null, $yearid))->export();
+            $names = [];
+            foreach ($export['sections'] as $section) {
+                $names = array_merge($names, array_column($section['rows'], 'name'));
+            }
+            sort($names);
+            return $names;
+        };
+        $cmids = fn(int $yearid) => (new student($this->u['s1']->id, null, $yearid))->scope_cmids();
+        $this->assertSame(['Discussion', 'Overdue essay', 'Upcoming report'], $names($thisyear));
+        $this->assertSame(['Old exam'], $names($lastyear));
+        $this->assertSame(['Discussion', 'Old exam', 'Overdue essay', 'Upcoming report'], $names(0));
+        $this->assertNotContains((int)$exam->cmid, $cmids($thisyear));
+        $this->assertSame([(int)$exam->cmid], $cmids($lastyear));
+        $this->assertContains((int)$exam->cmid, $cmids(0));
+
+        $export = (new student($this->u['s1']->id, null, $thisyear))->export();
+        $this->assertTrue($export['hasyears']);
+        $this->assertSame(['This year'], array_column(array_filter($export['years'], fn($y) => $y['selected']), 'label'));
+    }
+
+    /**
      * Markers see only work allocated to them where allocation is on, and unallocated work is
      * left to convenors (D6).
      */
