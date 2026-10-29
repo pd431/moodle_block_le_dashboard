@@ -297,7 +297,7 @@ class student extends base {
 
     /**
      * Plain lines under the dates (G5), each at the precision its size needs: time left to submit,
-     * and how soon it is due. How late work was is the clock's title, not a line.
+     * and how soon it is due, on every row still open for submission. How late work was is the clock's title, not a line.
      *
      * @param \stdClass $r
      * @param string $section
@@ -313,8 +313,9 @@ class student extends base {
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
             $notes[] = format::countdown('stillsubmit', $until, $this->now);
         }
+        // How soon it is due, however far away; the due-soon mark keeps its window (DUESOON_DAYS).
         $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && !$this->not_yet_open($r);
-        if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
+        if ($open && $due && $due > $this->now) {
             $notes[] = format::countdown('duein', $due, $this->now);
         }
         return $notes;

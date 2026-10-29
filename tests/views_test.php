@@ -541,6 +541,34 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * "Due in" shows on every open Upcoming row however far away, while the due-soon mark keeps its 7 days; work
+     * handed in shows none (Pierre, 2026-10-29).
+     */
+    public function test_due_in_any_distance(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $due = (new \DateTime('2027-03-10 12:00', \core_date::get_user_timezone_object($student)))->getTimestamp();
+        $far = $this->getDataGenerator()->get_plugin_generator('mod_assign')->create_instance(['course' => $course->id,
+            'name' => 'Dissertation', 'duedate' => $due, 'assignsubmission_onlinetext_enabled' => 1]);
+        // On the module long before the earliest "now" below, so never a late joiner (EC10).
+        $DB->set_field('user_enrolments', 'timecreated', $due - 300 * DAYSECS, ['userid' => $student->id]);
+        $this->getDataGenerator()->get_plugin_generator('block_le_dashboard')->tag($far->cmid, 'summative');
+        foreach ([200 => 'Due in 200 days', 40 => 'Due in 40 days', 3 => 'Due in 3 days'] as $days => $text) {
+            $this->setUser($student);
+            $now = $due - $days * DAYSECS;
+            // All years: the earliest "now" falls in the year before the deadline's.
+            $export = (new student($student->id, $now, 0))->export();
+            $row = self::rows($export, 'upcoming')['Dissertation'];
+            $this->assertSame([$text], array_column($row['notes'], 'text'));
+            $this->assertSame($days <= student::DUESOON_DAYS ? 'duesoon' : null, $row['overlay']['state'] ?? null);
+        }
+        // Handed in: no countdown, as before.
+        $upcoming = self::rows((new student($this->u['s1']->id))->export(), 'upcoming');
+        $this->assertSame([], $upcoming['Upcoming report']['notes']);
+    }
+
+    /**
      * A sentence with a date in it, split around the date for the page to mark up.
      *
      * @covers \block_le_dashboard\local\output\format::dated
