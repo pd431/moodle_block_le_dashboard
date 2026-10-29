@@ -92,21 +92,7 @@ final class scope_test extends \advanced_testcase {
     public function test_in_year_forms_agree(): void {
         global $DB;
         $this->resetAfterTest();
-        $year = (object)['timestart' => 1788220800, 'timeend' => 1819756800];
-        $times = ['none' => null, 'before' => $year->timestart - DAYSECS, 'start' => $year->timestart,
-            'inside' => $year->timestart + 60 * DAYSECS, 'end' => $year->timeend, 'after' => $year->timeend + DAYSECS];
-        $courses = [];
-        foreach ($times as $start) {
-            foreach ($times as $end) {
-                if ($start !== null && $end !== null && $end < $start) {
-                    continue;
-                }
-                // Written directly: the course form refuses an end date without a start date, old courses have them.
-                $courseid = (int)$this->getDataGenerator()->create_course()->id;
-                $DB->update_record('course', (object)['id' => $courseid, 'startdate' => $start ?? 0, 'enddate' => $end ?? 0]);
-                $courses[] = $courseid;
-            }
-        }
+        [$year, $times, $courses, $yearcourses] = $this->year_fixture();
         $n = 0;
         foreach ($courses as $courseid) {
             foreach ($times as $due) {
@@ -117,12 +103,6 @@ final class scope_test extends \advanced_testcase {
                 }
             }
         }
-        $yearcourses = array_map('intval', $DB->get_fieldset_sql(
-            'SELECT c.id FROM {course} c WHERE ' . scope::year_sql('c'),
-            scope::year_params($year)
-        ));
-        $this->assertNotEmpty($yearcourses);
-        $this->assertNotCount(count($courses), $yearcourses);
         foreach ([$year, null] as $chosen) {
             [$sql, $params] = scope::in_year_sql('c', $chosen);
             $insql = array_flip(array_map('intval', $DB->get_fieldset_sql(
@@ -146,5 +126,93 @@ final class scope_test extends \advanced_testcase {
         [$one, $p1] = scope::in_year_sql('a', $year);
         [$two, $p2] = scope::in_year_sql('b', $year);
         $this->assertEmpty(array_intersect_key($p1, $p2));
+    }
+
+    /**
+     * A student's row belongs to a year by their own deadline or its course (EC3d): the SQL and PHP forms agree
+     * over every row shape, the assessment's default and latest deadlines play no part, and All years restricts
+     * nothing.
+     */
+    public function test_in_year_student_forms_agree(): void {
+        global $DB;
+        $this->resetAfterTest();
+        [$year, $times, $courses, $yearcourses] = $this->year_fixture();
+        $userid = (int)$this->getDataGenerator()->create_user()->id;
+        $n = 0;
+        foreach ($courses as $courseid) {
+            foreach ($times as $own) {
+                foreach ($times as $default) {
+                    $cmid = ++$n;
+                    // The latest deadline is at least the student's own, as the index writes it.
+                    $DB->insert_record('block_le_dashboard_cm', (object)['cmid' => $cmid, 'courseid' => $courseid,
+                        'modname' => 'assign', 'adapter' => 'assign', 'name' => "A$n", 'assesstype' => 'summative',
+                        'due' => $default, 'latestdue' => $own ?? $default, 'stages' => 'marked', 'timeindexed' => 1]);
+                    $DB->insert_record('block_le_dashboard_stu', (object)['cmid' => $cmid, 'userid' => $userid,
+                        'due' => $own]);
+                }
+            }
+        }
+        $select = "SELECT c.cmid, c.courseid, c.due AS defaultdue, c.latestdue, s.due
+                     FROM {block_le_dashboard_stu} s
+                     JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
+                    WHERE s.userid = :userid";
+        $all = $DB->get_records_sql($select, ['userid' => $userid]);
+        $this->assertCount($n, $all);
+        foreach ([$year, null] as $chosen) {
+            [$sql, $params] = scope::in_year_sql('c', $chosen, ['s.due']);
+            $insql = array_flip(array_map('intval', array_keys($DB->get_records_sql(
+                "$select AND $sql",
+                $params + ['userid' => $userid]
+            ))));
+            $shown = 0;
+            $differs = false;
+            foreach ($all as $row) {
+                $inphp = scope::in_year($row, $yearcourses, $chosen, ['due']);
+                $this->assertSame($inphp, isset($insql[(int)$row->cmid]), json_encode($row));
+                $shown += $inphp ? 1 : 0;
+                $staff = scope::in_year((object)['due' => $row->defaultdue, 'latestdue' => $row->latestdue,
+                    'courseid' => $row->courseid], $yearcourses, $chosen);
+                $differs = $differs || $staff !== $inphp;
+            }
+            if ($chosen) {
+                $this->assertGreaterThan(0, $shown);
+                $this->assertLessThan($n, $shown);
+                // Somewhere the default deadline is in the year and the student's own is not.
+                $this->assertTrue($differs);
+            } else {
+                $this->assertSame($n, $shown);
+            }
+        }
+    }
+
+    /**
+     * A year, deadlines at every point around it, and a course for every arrangement of start and end dates.
+     *
+     * @return array [year, times, course ids, ids of the courses belonging to the year]
+     */
+    protected function year_fixture(): array {
+        global $DB;
+        $year = (object)['timestart' => 1788220800, 'timeend' => 1819756800];
+        $times = ['none' => null, 'before' => $year->timestart - DAYSECS, 'start' => $year->timestart,
+            'inside' => $year->timestart + 60 * DAYSECS, 'end' => $year->timeend, 'after' => $year->timeend + DAYSECS];
+        $courses = [];
+        foreach ($times as $start) {
+            foreach ($times as $end) {
+                if ($start !== null && $end !== null && $end < $start) {
+                    continue;
+                }
+                // Written directly: the course form refuses an end date without a start date, old courses have them.
+                $courseid = (int)$this->getDataGenerator()->create_course()->id;
+                $DB->update_record('course', (object)['id' => $courseid, 'startdate' => $start ?? 0, 'enddate' => $end ?? 0]);
+                $courses[] = $courseid;
+            }
+        }
+        $yearcourses = array_map('intval', $DB->get_fieldset_sql(
+            'SELECT c.id FROM {course} c WHERE ' . scope::year_sql('c'),
+            scope::year_params($year)
+        ));
+        $this->assertNotEmpty($yearcourses);
+        $this->assertNotCount(count($courses), $yearcourses);
+        return [$year, $times, $courses, $yearcourses];
     }
 }
