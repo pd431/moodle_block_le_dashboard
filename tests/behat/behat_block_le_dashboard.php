@@ -1623,6 +1623,68 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Sets the site's grade display type and re-indexes.
+     *
+     * @Given /^the grade display type is "(?P<label>[^"]*)"$/
+     * @param string $label
+     */
+    public function the_grade_display_type_is(string $label): void {
+        steps::instance()->the_grade_display_type_is($label);
+    }
+
+    /**
+     * The words of a row's grade line: its label and its grade, without the hints after them.
+     *
+     * @Then /^the grade line of "(?P<name>[^"]*)" should read "(?P<text>[^"]*)"$/
+     * @param string $name
+     * @param string $text
+     */
+    public function the_grade_line_should_read(string $name, string $text): void {
+        $grade = $this->row($name)->find('css', '[data-region="ma-grade"]');
+        $label = $grade ? $grade->find('css', '.ma-grade-label') : null;
+        $value = $grade ? $grade->find('css', '.ma-grade-value') : null;
+        $got = $label && $value ? trim($label->getText()) . ' ' . trim($value->getText()) : '';
+        if ($got !== $text) {
+            throw new ExpectationException("The grade line of '$name' reads '$got', not '$text'", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's grade line is on one line, or breaks only between its label and its grade: the label and the grade each
+     * sit on one line box, and the grade is on the label's line or the next.
+     *
+     * @Then /^the grade line of "(?P<name>[^"]*)" should be on one line or break only before the grade$/
+     * @param string $name
+     */
+    public function the_grade_line_breaks_only_before_the_grade(string $name): void {
+        $rowid = $this->row($name)->getAttribute('id');
+        $lines = $this->evaluate_script("return (function() {
+            var grade = document.querySelector('#$rowid [data-region=\"ma-grade\"]');
+            var tops = function(el) {
+                var range = document.createRange();
+                range.selectNodeContents(el);
+                var seen = [];
+                Array.from(range.getClientRects()).forEach(function(r) {
+                    var top = Math.round(r.top);
+                    if (r.width > 0 && !seen.some(function(t) { return Math.abs(t - top) < 4; })) {
+                        seen.push(top);
+                    }
+                });
+                return seen;
+            };
+            return grade ? {label: tops(grade.querySelector('.ma-grade-label')),
+                value: tops(grade.querySelector('.ma-grade-value'))} : null;
+        })()");
+        if (!$lines || count($lines['label']) !== 1 || count($lines['value']) !== 1) {
+            throw new ExpectationException("The grade line of '$name' breaks inside the label or the grade: " .
+                json_encode($lines), $this->getSession());
+        }
+        if ($lines['value'][0] < $lines['label'][0] - 3) {
+            throw new ExpectationException("The grade of '$name' sits above its label", $this->getSession());
+        }
+    }
+
+    /**
      * Sets the late penalties link.
      *
      * @Given /^the My assessments late penalty link is "(?P<url>[^"]*)"$/

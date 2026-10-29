@@ -93,7 +93,7 @@
 </div>
 <div class="ma-row-status">
     {{#status}}<div class="ma-status-wrap"><span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{#statushint}}{{> block_le_dashboard/hint }}{{/statushint}}</div>{{/status}}
-    {{#grade}}<div class="ma-grade" data-region="ma-grade">{{#str}}grade, block_le_dashboard{{/str}} <strong>{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</div>{{/grade}}
+    {{#grade}}<div class="ma-grade" data-region="ma-grade"><span class="ma-grade-label">{{#str}}grade, block_le_dashboard{{/str}}</span> <strong class="ma-grade-value">{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</div>{{/grade}}
     {{#grading}}<span class="badge ma-pill ma-pill--{{key}}" data-grading="{{key}}">{{text}}</span>{{/grading}}
     {{#bars}}{{> block_le_dashboard/progress }}{{/bars}}
 </div>
