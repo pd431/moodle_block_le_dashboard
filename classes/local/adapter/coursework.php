@@ -692,7 +692,7 @@ class coursework extends base {
                     allocatedto: $cmrow->hasallocation ? ($allocated ?: null) : null,
                     submitted: $ready,
                     marked: $marked,
-                    markedby: $marked && $f ? ((int)$f->assessorid ?: null) : null,
+                    markedby: $marked && $f ? self::grader($f, $cmrow->hasallocation ? $allocated : null) : null,
                     timemarked: $marked && $f ? (int)$f->timemodified : null,
                     released: $released,
                     timeready: $timeready ?: null,
@@ -704,6 +704,22 @@ class coursework extends base {
             }
         }
         return $rows;
+    }
+
+    /**
+     * Who marked a feedback: its grader, or for a grade saved by no real user (Turnitin's -1) the marker allocated to
+     * the unit at that stage, else no one (CS6).
+     *
+     * @param \stdClass $feedback With assessorid.
+     * @param int|null $allocated The allocated marker, or null without allocation.
+     * @return int|null
+     */
+    protected static function grader(\stdClass $feedback, ?int $allocated): ?int {
+        $grader = (int)$feedback->assessorid;
+        if ($grader > 0) {
+            return $grader;
+        }
+        return $allocated ?: null;
     }
 
     /**

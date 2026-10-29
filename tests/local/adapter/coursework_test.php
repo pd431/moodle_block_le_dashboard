@@ -161,6 +161,21 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
+     * A grade saved by a real user is theirs; one saved by no real user (Turnitin's -1, or 0) is the allocated
+     * marker's, or no one's without an allocation (CS6).
+     */
+    public function test_grader(): void {
+        $saved = fn($id) => (object)['assessorid' => $id];
+        $this->assertSame(12, self::call('grader', $saved(12), 30), 'a real grader, whoever is allocated');
+        $this->assertSame(12, self::call('grader', $saved(12), null));
+        $this->assertSame(30, self::call('grader', $saved(-1), 30), 'Turnitin');
+        $this->assertSame(30, self::call('grader', $saved(0), 30));
+        $this->assertNull(self::call('grader', $saved(-1), null), 'no allocation: the convenor\'s');
+        $this->assertNull(self::call('grader', $saved(0), null));
+        $this->assertNull(self::call('grader', $saved(-1), 0), 'an empty pair');
+    }
+
+    /**
      * Released once first published, or last published where only that is set.
      */
     public function test_released(): void {

@@ -895,6 +895,19 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A final grade saved under a grader id that is no real user, as Turnitin's grade sync does (-1).
+     *
+     * @Given /^the grade of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is saved as "(?P<grade>[\d.]+)" with grader id "(?P<id>-?\d+)"$/
+     * @param string $student
+     * @param string $name
+     * @param string $grade
+     * @param string $id
+     */
+    public function grade_saved_with_grader_id(string $student, string $name, string $grade, string $id): void {
+        steps::instance()->grade_saved_with_grader_id($student, $name, $grade, (int)$id);
+    }
+
+    /**
      * A row's status pill.
      *
      * @Then /^"(?P<name>[^"]*)" should show the status "(?P<status>[^"]*)"$/

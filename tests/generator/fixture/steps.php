@@ -1086,6 +1086,19 @@ final class steps {
     }
 
     /**
+     * A final grade saved under a grader id that is no real user (Turnitin's -1).
+     *
+     * @param string $student
+     * @param string $name
+     * @param string $grade
+     * @param int $graderid
+     */
+    public function grade_saved_with_grader_id(string $student, string $name, string $grade, int $graderid): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->mark($cm, self::userid($student), $graderid, (float)$grade, true);
+    }
+
+    /**
      * A student submits but the index hears nothing: their task is dropped. Saves their row.
      *
      * @param string $username

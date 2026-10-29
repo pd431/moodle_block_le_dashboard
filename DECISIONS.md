@@ -72,6 +72,11 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   their row, not "Due" (Pierre: "should trigger 'extended deadline' instead of due"). Any activity type, since the
   index records the mitigation the same way for all. Staff rows are unchanged: their extensions hint already
   names the latest extended deadline.
+- **CS6** A coursework grade whose grader id is not a real user (0 or below: Turnitin-synced grades are saved by
+  -1) was marked by the marker allocated to that unit at that stage, even one who has since left the module; with
+  no allocation it is no one's, so it is the convenor's auto-marked work (Pierre, 2026-10-29: "turnitin grade
+  should count as marked by the marker"). lasteditedbyuser is not a fallback: it is -1 too, and an editor isn't
+  always the marker.
 
 ## D: logic overhaul design v2 (2026-10-02)
 
