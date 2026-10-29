@@ -260,8 +260,10 @@ class mitigation {
         if (!$max) {
             return null;
         }
+        // Only installed types: without coursework there is no mitigations table to count from (C4).
+        $installed = array_filter(array_keys(registry::OWN), fn($modname) => registry::module_installed($modname));
         $adapters = array_filter(
-            array_map(fn($modname) => registry::adapter_for($modname, false), array_keys(registry::OWN)),
+            array_map(fn($modname) => registry::adapter_for($modname, false), $installed),
             fn($adapter) => $adapter && $adapter->takes_selfcert()
         );
         if (!$adapters) {

@@ -45,21 +45,17 @@ final class staff_row {
      * @param string $view scope::STAFF or scope::CONVENOR.
      * @param array $bars The row's bars, already built.
      * @param array $flags What this row calls for:
-     *     course (callable): rewrites the course text, with its year, for a row outside the selected year (EC3);
      *     undated (bool): no dates (an Undated row);
      *     brief (bool): say when the activity has no brief or description (convenor);
      *     unallocated (int): units unallocated where I convene (staff);
      *     returned (bool): work arrived after marking was finished (G6);
      *     pending (\stdClass|null): students with extensions still to come (marking_rules::pending_extensions());
-     *     flagged (int): units flagged for an academic conduct check;
+     *     flagged (\stdClass|null): units flagged for an academic conduct check, open and withheld;
      *     nostudents (bool): no student's data was read, for the not-loaded note (format::load_error()).
      * @return array
      */
     public static function build(\stdClass $cm, string $course, string $view, array $bars, array $flags = []): array {
         $row = format::row($cm, $course, $view);
-        if (!empty($flags['course'])) {
-            $row['course'] = $flags['course']($row['course']);
-        }
         $row['dates'] = empty($flags['undated']) ? array_values(array_filter([
             $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
             format::markingdue($row, $cm),
@@ -117,7 +113,7 @@ final class staff_row {
             $hints[] = format::extensions_hint($rowid, $flags['pending']);
         }
         if (!empty($flags['flagged'])) {
-            $hints[] = format::plagiarism_hint($rowid, (int)$flags['flagged']);
+            $hints[] = format::plagiarism_hint($rowid, (int)$flags['flagged']->open, (int)$flags['flagged']->withheld);
         }
         return $hints;
     }

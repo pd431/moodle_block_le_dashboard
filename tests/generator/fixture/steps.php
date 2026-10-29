@@ -253,9 +253,9 @@ final class steps {
      * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation,
      * marking workflow, reopened attempts, a cut-off "...", manual agreement, tagged "..." (a second tag),
      * N attempts allowed, marks never shown, marks shown immediately after only, marks shown after
-     * close only, a maximum grade of 0 (quiz), submission type attendance (coursework), required Submit
-     * (assign: students must click Submit, which makes the submission final). Also: opens "..." and (when
-     * submissions open).
+     * close only, a maximum grade of 0 (quiz), marks entry only, file submission or no submission types
+     * recorded (coursework), required Submit (assign: students must click Submit, which makes the submission
+     * final). Also: opens "..." and (when submissions open).
      *
      * @param string $tag
      * @param string $modname
@@ -740,6 +740,30 @@ final class steps {
     }
 
     /**
+     * A mitigation of one of the activity's own types (coursework: permanent or temporary).
+     *
+     * @param string $username
+     * @param string $type
+     * @param string $name
+     */
+    public function has_a_mitigation_on(string $username, string $type, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->mitigate($cm, self::userid($username), $type);
+    }
+
+    /**
+     * A student's mitigation of a type is taken away.
+     *
+     * @param string $type
+     * @param string $username
+     * @param string $name
+     */
+    public function the_mitigation_is_removed(string $type, string $username, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->remove_mitigation($cm, self::userid($username), $type);
+    }
+
+    /**
      * Does nothing, for scenario outlines where one example needs no event.
      */
     public function nothing_happens(): void {
@@ -1077,6 +1101,57 @@ final class steps {
     }
 
     /**
+     * A student uploads a file to a coursework and the file sub-plugin's event fires; nothing else tells the index.
+     *
+     * @param string $username
+     * @param string $name
+     */
+    public function uploads_a_file_and_the_event_fires(string $username, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->submit($cm, self::userid($username));
+        self::only_the_event_tells($cm, self::userid($username), 'upload');
+    }
+
+    /**
+     * A student self-certifies through block_rhb and coursework's event fires; nothing else tells the index.
+     *
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function self_certifies_and_the_event_fires(string $username, string $name, string $when): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->extend($cm, self::userid($username), phrases::time($when), true);
+        self::only_the_event_tells($cm, self::userid($username), 'mitigation added');
+    }
+
+    /**
+     * A student's self-certification is removed through block_rhb and coursework's event fires; nothing else
+     * tells the index.
+     *
+     * @param string $username
+     * @param string $name
+     */
+    public function removes_the_self_certification_and_the_event_fires(string $username, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->remove_mitigation($cm, self::userid($username));
+        self::only_the_event_tells($cm, self::userid($username), 'mitigation removed');
+    }
+
+    /**
+     * Drops the re-index the fixture queued for a change, then fires the activity's own event for it.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param string $event
+     */
+    private static function only_the_event_tells(\cm_info $cm, int $userid, string $event): void {
+        global $DB;
+        $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\reindex']);
+        self::fixture($cm)->event_fires($cm, $userid, $event);
+    }
+
+    /**
      * A student's index row is as it was saved.
      *
      * @param string $username
@@ -1211,8 +1286,27 @@ final class steps {
      * @param int $minutes
      */
     public function minutes_pass(int $minutes): void {
+        $this->seconds_pass($minutes * MINSECS);
+    }
+
+    /**
+     * Time passes until an assessment's deadline is one second behind, as minutes_pass().
+     *
+     * @param string $name
+     */
+    public function the_deadline_has_just_passed(string $name): void {
         global $DB;
-        $shift = $minutes * MINSECS;
+        $due = (int)$DB->get_field('block_le_dashboard_cm', 'due', ['cmid' => $this->cm($name)->id], MUST_EXIST);
+        $this->seconds_pass(max(0, $due - time() + 1));
+    }
+
+    /**
+     * Time passes: stored dates move back by some seconds.
+     *
+     * @param int $shift
+     */
+    protected function seconds_pass(int $shift): void {
+        global $DB;
         // The index and the activities' own times move together, so a re-index agrees.
         $fields = [
             'block_le_dashboard_cm' => ['due', 'cutoff', 'markingdue', 'timeindexed'],
@@ -1275,6 +1369,16 @@ final class steps {
     public function the_due_date_is_switched_off(string $name): void {
         $cm = $this->cm($name);
         self::fixture($cm)->switch_due_off($cm);
+    }
+
+    /**
+     * Clears an assessment's latest individual deadline in the index, as rows indexed before beta31 have it.
+     *
+     * @param string $name
+     */
+    public function the_index_row_has_no_latest_due(string $name): void {
+        global $DB;
+        $DB->set_field('block_le_dashboard_cm', 'latestdue', null, ['cmid' => $this->cm($name)->id]);
     }
 
     /**
@@ -1677,15 +1781,36 @@ final class steps {
      * @param string $not
      */
     public function a_course_reindex_should_be_queued(string $shortname, string $not = ''): void {
+        self::reindex_queued('courseid', (int)self::course($shortname)->id, $shortname, $not);
+    }
+
+    /**
+     * Whether a re-index of an assessment is waiting.
+     *
+     * @param string $name
+     * @param string $not
+     */
+    public function a_reindex_should_be_queued(string $name, string $not = ''): void {
+        self::reindex_queued('cmid', (int)$this->cm($name)->id, $name, $not);
+    }
+
+    /**
+     * Whether a re-index of a course or an assessment is waiting.
+     *
+     * @param string $key courseid or cmid
+     * @param int $id
+     * @param string $what
+     * @param string $not
+     */
+    private static function reindex_queued(string $key, int $id, string $what, string $not): void {
         global $DB;
-        $courseid = (int)self::course($shortname)->id;
         $queued = false;
         foreach ($DB->get_records('task_adhoc', ['classname' => '\\' . \block_le_dashboard\task\reindex::class]) as $task) {
             $data = json_decode($task->customdata);
-            $queued = $queued || (isset($data->courseid) && (int)$data->courseid === $courseid);
+            $queued = $queued || (isset($data->$key) && (int)$data->$key === $id);
         }
         if ($queued === (bool)$not) {
-            throw new failed("A re-index of $shortname is " . ($queued ? '' : 'not ') . 'queued');
+            throw new failed("A re-index of $what is " . ($queued ? '' : 'not ') . 'queued');
         }
     }
 

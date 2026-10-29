@@ -27,6 +27,9 @@ namespace block_le_dashboard\fixture;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class coursework extends base {
+    /** @var int The mitigation remove_extension() took away last. */
+    private static int $removed = 0;
+
     #[\Override]
     public function modname(): string {
         return 'coursework';
@@ -50,28 +53,47 @@ final class coursework extends base {
             'allocationenabled' => str_contains($opts, 'marker allocation') ? 1 : 0,
             'moderationenabled' => str_contains($opts, 'moderation') ? 1 : 0,
             'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue];
-        if (str_contains($opts, 'submission type attendance')) {
-            $record['submissiontype'] = 'attendance';
-        }
         return $record;
+    }
+
+    /**
+     * The submission types: "with marks entry only", "with file submission", "with marks entry and file submission",
+     * or "with no submission types recorded"; otherwise whatever coursework's generator gives.
+     *
+     * @param \stdClass $instance
+     * @param string $opts
+     */
+    #[\Override]
+    protected function after_create(\stdClass $instance, string $opts): void {
+        global $DB;
+        $types = array_keys(array_filter(['marksentry' => str_contains($opts, 'marks entry'),
+            'file' => str_contains($opts, 'file submission')]));
+        if (!$types && !str_contains($opts, 'no submission types recorded')) {
+            return;
+        }
+        $DB->delete_records('coursework_sub_plugin_cwk', ['courseworkid' => $instance->id]);
+        foreach ($types as $type) {
+            $DB->insert_record('coursework_sub_plugin_cwk', self::filled('coursework_sub_plugin_cwk', [
+                'courseworkid' => $instance->id,
+                'subpluginid' => $DB->get_field('coursework_sub_plugin', 'id', ['name' => $type], MUST_EXIST)]));
+        }
     }
 
     #[\Override]
     public function submit(\cm_info $cm, int $userid, ?int $time = null): void {
         global $DB;
         self::plugin_gen('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-            'allocatableid' => $userid, 'allocatabletype' => 'user',
-            'finalisedstatus' => \mod_coursework\models\submission::FINALISED_STATUS_FINALISED]);
-        if ($time !== null) {
-            $DB->set_field('coursework_submissions', 'timesubmitted', $time, self::submission_params($cm, $userid));
-        }
+            'allocatableid' => $userid, 'allocatabletype' => 'user']);
+        $params = self::submission_params($cm, $userid);
+        $DB->set_field('coursework_submissions', 'finalised', 1, $params);
+        $DB->set_field('coursework_submissions', 'timesubmitted', $time ?? time(), $params);
         self::queue($cm);
     }
 
     #[\Override]
     public function save_draft(\cm_info $cm, int $userid): void {
         self::plugin_gen('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-            'allocatableid' => $userid, 'allocatabletype' => 'user', 'finalised' => 0, 'finalisedstatus' => 0]);
+            'allocatableid' => $userid, 'allocatabletype' => 'user', 'finalised' => 0]);
         self::queue($cm);
     }
 
@@ -111,6 +133,11 @@ final class coursework extends base {
         bool $final = false,
         string $stage = 'assessor_1'
     ): void {
+        global $DB;
+        if (!$DB->record_exists('coursework_submissions', self::submission_params($cm, $userid))) {
+            // Marks entry creates the submission row as the mark goes in.
+            $this->save_draft($cm, $userid);
+        }
         self::plugin_gen('mod_coursework')->create_feedback(['courseworkid' => $cm->instance, 'allocatableid' => $userid,
             'assessorid' => $markerid, 'stage_identifier' => $stage, 'grade' => $grade, 'isfinalgrade' => $final ? 1 : 0,
             'finalised' => 1]);
@@ -151,35 +178,65 @@ final class coursework extends base {
             $this->unsupported('Extensions (other than self-certified) on');
         }
         $record = ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user',
-            'extended_deadline' => $until, 'type' => 'extension', 'selfcert' => 1,
-            'timecreated' => time(), 'timemodified' => time()];
-        $DB->insert_record('coursework_mitigations', array_intersect_key($record, $DB->get_columns('coursework_mitigations')));
+            'extended_deadline' => $until, 'type' => 'extension', 'selfcert' => 1, 'timecreated' => time()];
+        $DB->insert_record('coursework_mitigations', $record);
         self::queue($cm);
+    }
+
+    #[\Override]
+    public function mitigate(\cm_info $cm, int $userid, string $type): void {
+        global $DB;
+        $DB->insert_record('coursework_mitigations', self::submission_params($cm, $userid) + ['type' => $type,
+            'extended_deadline' => 0, 'selfcert' => 0, 'timecreated' => time()]);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function remove_mitigation(\cm_info $cm, int $userid, string $type = 'extension'): void {
+        global $DB;
+        $params = self::submission_params($cm, $userid) + ['type' => $type];
+        self::$removed = (int)$DB->get_field('coursework_mitigations', 'MAX(id)', $params);
+        $DB->delete_records('coursework_mitigations', $params);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function event_fires(\cm_info $cm, int $userid, string $event): void {
+        global $DB;
+        $params = self::submission_params($cm, $userid);
+        [$class, $objectid] = match ($event) {
+            'upload' => ['\courseworksubmission_file\event\assessable_uploaded',
+                $DB->get_field('coursework_submissions', 'id', $params, MUST_EXIST)],
+            'mitigation added' => ['\mod_coursework\event\coursework_mitigation_added',
+                $DB->get_field('coursework_mitigations', 'MAX(id)', $params + ['type' => 'extension'])],
+            'mitigation removed' => ['\mod_coursework\event\coursework_mitigation_removed', self::$removed],
+        };
+        // Built as block_rhb and the file sub-plugin build them. Should Exeter's classes want more in
+        // 'other', create() says which here.
+        $class::create(['context' => \context_module::instance($cm->id), 'objectid' => (int)$objectid,
+            'relateduserid' => $userid, 'userid' => $userid, 'other' => []])->trigger();
     }
 
     #[\Override]
     public function flag_plagiarism(\cm_info $cm, int $userid, string $status = '0'): void {
         global $DB;
         $submissionid = $DB->get_field('coursework_submissions', 'id', self::submission_params($cm, $userid), MUST_EXIST);
-        $record = ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status];
-        foreach ($DB->get_columns('coursework_plagiarism_flags') as $column) {
-            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
-                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
-            }
-        }
-        $DB->insert_record('coursework_plagiarism_flags', $record);
+        // A flag is read only where the coursework uses them; a later flag on the same submission replaces it.
+        $DB->set_field('coursework', 'plagiarismflagenabled', 1, ['id' => $cm->instance]);
+        $DB->insert_record('coursework_plagiarism_flags', self::filled(
+            'coursework_plagiarism_flags',
+            ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status]
+        ));
         self::queue($cm);
     }
 
     #[\Override]
     public function used_self_certs(int $userid, int $count): void {
         global $DB;
-        $columns = $DB->get_columns('coursework_mitigations');
         for ($i = 0; $i < $count; $i++) {
-            $record = ['courseworkid' => 0, 'allocatableid' => $userid, 'allocatabletype' => 'user',
-                'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
-                'timecreated' => time(), 'timemodified' => time()];
-            $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
+            $DB->insert_record('coursework_mitigations', ['courseworkid' => 0, 'allocatableid' => $userid,
+                'allocatabletype' => 'user', 'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
+                'timecreated' => time()]);
         }
     }
 
@@ -193,7 +250,24 @@ final class coursework extends base {
      */
     private static function allocation(\cm_info $cm, int $userid, int $markerid, string $stage): void {
         self::plugin_gen('mod_coursework')->create_allocation(['courseworkid' => $cm->instance, 'allocatableid' => $userid,
-            'allocatabletype' => 'user', 'assessorid' => $markerid, 'stageidentifier' => $stage, 'ismanual' => 1]);
+            'allocatabletype' => 'user', 'assessorid' => $markerid, 'stage_identifier' => $stage, 'ismanual' => 1]);
+    }
+
+    /**
+     * A record with every other required column of the table filled with an empty value.
+     *
+     * @param string $table
+     * @param array $record
+     * @return array
+     */
+    private static function filled(string $table, array $record): array {
+        global $DB;
+        foreach ($DB->get_columns($table) as $column) {
+            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
+                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
+            }
+        }
+        return $record;
     }
 
     /**

@@ -7,7 +7,7 @@ from the maintainability audit; a bare `F` code is from the support map audit or
 as the sections say.
 
 Sources, by series: **A** dev architecture audit (2026-10-06); **B** support map audit of beta22 and the rc6
-test checklist (2026-10-05, codes carried from rc6); **D** logic overhaul design v2 (2026-10-02); **EC** edge
+test checklist (2026-10-05, codes carried from rc6); **CS** coursework schema at Exeter (2026-10-28); **D** logic overhaul design v2 (2026-10-02); **EC** edge
 case review (2026-10-03); **F** support map audit fixes (2026-10-06), performance review (2026-10-04) and
 maintainability audit (2026-10-22); **G** workflow gaps review (2026-10-03); **P** rc6 performance review
 (2026-09-30); **PR** production readiness review (2026-10-05); **R** Pierre's answers to the v1 design
@@ -38,6 +38,41 @@ review (2026-10-02).
   "cleared" (rc6 checklist; Pierre's rc7 commit, 2026-10-07). The other statuses are still inferred from rc6.
 - **B43** The plagiarism flag shows in every section, not only Live (rc6 checklist).
 
+## CS: coursework schema at Exeter (2026-10-28)
+
+Pierre's mod_coursework schema reference, checked against ele-test, and his rulings on it.
+
+- **CS0** The coursework adapter reads Exeter's coursework by the reference's names, one name per fact
+  (use_groups, finalised, stage_identifier, personal_deadline, coursework_mitigations). Coursework is not a
+  public plugin: there is no other build to tolerate, and the guesses between builds were wrong as often as right.
+- **CS1** A coursework whose only submission type is marks entry takes nothing online (Pierre: marks entry is
+  attendance). Attendance is its first marking stage, taken for a student once coursework has a submission row for
+  them, as marks entry creates one; then coursework's own stages. A coursework with no submission types recorded is
+  standard. The signal that attendance was taken is inferred from Exeter's data, not confirmed.
+- **CS2** Coursework is observed by the events Exeter's event log shows firing: the file sub-plugin's
+  assessable_uploaded, and coursework_mitigation_added and _removed for a self-certification made or taken back
+  through block_rhb. Each names the student, so their rows update at once (F4). extension_created, _updated and
+  _deleted are gone: they belong to a coursework_extensions table Exeter's build doesn't have. Every coursework
+  event is handled after its transaction commits (PR2), coursework_deadline_changed included.
+- **CS3** Plagiarism flag statuses as Pierre gave them: 0 is referred to the academic conduct officer, still to
+  mark and counted in the flag hint; 1 and 2 are cleared, as if there were no flag; 3 withholds the results, so
+  markers owe nothing more and the unit is in no marking count, though the student's row and the Submitted bar
+  are unchanged. Any other status, or none, reads as 0. The latest flag row of a submission counts. Withheld
+  units keep their marking rows (counted = 0) because the case can reopen: the one academic conduct flag counts
+  them with the open ones and says in its own sentence that they left the workload, and a marker whose units
+  are all withheld keeps the assessment under Completed marking with that flag (Pierre, 16:13 and 16:17). One
+  flag, not two: both counts come from the same coursework table. Settles B42.
+- **CS4** A coursework mitigation of type permanent (exemption) or temporary (deferral) means nothing is expected of
+  the student there (Pierre: "can be treated as complete", and for staff "drop off the denominator altogether").
+  They leave every count of who should hand in (stu.expected = 0) and every marking count (counted = 0), with or
+  without a submission, and are in no hint. The student sees "Exempt" by the date alone (Upcoming, then Past,
+  never Overdue), one icon whose tip says a mitigation applies, and no actions, not even Mitigate. An exemption
+  or deferral wins over an extension; on a group it applies to every member, as extensions do.
+- **CS5** A student's deadline moved by an extension or a self-certification is labelled "Extended deadline" on
+  their row, not "Due" (Pierre: "should trigger 'extended deadline' instead of due"). Any activity type, since the
+  index records the mitigation the same way for all. Staff rows are unchanged: their extensions hint already
+  names the latest extended deadline.
+
 ## D: logic overhaul design v2 (2026-10-02)
 
 - **D2** A personal deadline replaces the default deadline, even when earlier; a mitigation extension can
@@ -56,7 +91,11 @@ review (2026-10-02).
   is unallocated while unmarked, so it falls to the convenor; work they marked stays theirs.
 - **EC2** An assessment with no due date is listed under Undated, with a hint for convenors, rather than
   vanishing.
-- **EC3** Marking still to do ignores the year filter; a row outside the selected year says its year.
+- **EC3** The staff and convenor views show an assessment in the selected year when its default deadline or the
+  latest deadline any student has (an extension, override or personal deadline) falls in the year, or when its
+  course belongs to the year (EC3b). Nothing outside it is shown or counted, outstanding marking included; All
+  years shows everything. Changed by Pierre on 2026-10-28, replacing the exception that kept outstanding marking
+  of other years in view with its course's year in brackets.
 - **EC4** Students whose enrolment ended or was suspended keep their rows, flagged inactive, so their
   submitted work is still marked; unenrolled students leave.
 - **EC5** An assignment with no online submission behaves like the generic tier for students (no Submitted

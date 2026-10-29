@@ -12,8 +12,9 @@ Feature: Coursework is read the way Exeter's mod_coursework actually stores it
   # - A mark is a feedback row with finalised = 1 and a grade that isn't blank (grade is text).
   # - Groups: the setting is use_groups (beta17 read usegroups, so group courseworks were treated as individual).
   # - Moderator allocations and feedback may carry stage moderator_1: any moderator stage counts as moderation.
-  # - Attendance: coursework has no submission type field; courseworktype is read instead. Its values are
-  #   unconfirmed: "attendance" (any case) is assumed until Pierre confirms.
+  # - Marks entry (Pierre, 2026-10-28): a coursework whose only submission type in coursework_sub_plugin_cwk
+  #   is marksentry takes nothing online, and records attendance first (no-submission.feature).
+  #   courseworktype is not read.
   # - Plagiarism flags are read only where plagiarismflagenabled is on.
   # These run only where mod_coursework is installed; PHPUnit covers the same rules with stand-in tables.
 

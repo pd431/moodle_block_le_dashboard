@@ -46,6 +46,9 @@ class student extends base {
         'notsubmitted' => 'fa-circle-xmark',
         student_row::MITIGATION_SELFCERT => 'fa-hand-holding-heart',
         student_row::MITIGATION_EXTENSION => 'fa-calendar-plus',
+        // One icon for both: the student needn't do this one (CS4).
+        student_row::MITIGATION_EXEMPT => 'fa-user-check',
+        student_row::MITIGATION_DEFERRED => 'fa-user-check',
     ];
 
     /** Assessment types offered Mitigate: summative only (D8). */
@@ -230,7 +233,10 @@ class student extends base {
             $parts[] = get_string('tip_' . $r->mitigation, 'block_le_dashboard');
         }
         $state = null;
-        if ($status === classifier::STATUS_REOPENED) {
+        if ($status === classifier::STATUS_EXEMPT) {
+            // Nothing is expected: no late, overdue or due-soon icon (CS4).
+            $state = null;
+        } else if ($status === classifier::STATUS_REOPENED) {
             // Nothing was missed: no overdue or due-soon icon on a new attempt.
             $state = null;
         } else if ($section === classifier::OVERDUE) {
@@ -342,8 +348,9 @@ class student extends base {
             $dates[] = format::date('opens', (int)$r->opens);
         }
         if ($r->due) {
-            // An extension is ordinary upcoming work: no note.
-            $dates[] = format::date('due', (int)$r->due);
+            // An extension is ordinary upcoming work: no note, but its date says it is the extended one (CS5).
+            $extended = in_array($r->mitigation, [student_row::MITIGATION_EXTENSION, student_row::MITIGATION_SELFCERT], true);
+            $dates[] = format::date('due', (int)$r->due, $extended ? 'extendeddeadline' : null);
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
@@ -365,6 +372,11 @@ class student extends base {
         // With two dates or more, every label on its own line so the dates line up.
         $row['stackdates'] = count($dates) > 1;
         $row['notes'] = $this->notes($r, $section, $status);
+        if ($status === classifier::STATUS_EXEMPT) {
+            // Exempt or deferred: no actions at all, not even Mitigate (CS4).
+            $row['actions'] = [];
+            return $row;
+        }
         // Late work: the clock beside the grade once there is one, else beside the status pill.
         if (self::is_late($r) && config::shown('hint_late')) {
             $hint = $this->late_hint($row['id'], $r);

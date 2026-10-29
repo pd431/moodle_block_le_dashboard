@@ -206,6 +206,21 @@ abstract class base implements fixture {
     }
 
     #[\Override]
+    public function mitigate(\cm_info $cm, int $userid, string $type): void {
+        $this->unsupported("A $type mitigation on");
+    }
+
+    #[\Override]
+    public function remove_mitigation(\cm_info $cm, int $userid, string $type = 'extension'): void {
+        $this->unsupported('Removing mitigations on');
+    }
+
+    #[\Override]
+    public function event_fires(\cm_info $cm, int $userid, string $event): void {
+        $this->unsupported("The $event event of");
+    }
+
+    #[\Override]
     public function override(\cm_info $cm, int $userid, int $due): void {
         $this->unsupported('Overriding the deadline of');
     }

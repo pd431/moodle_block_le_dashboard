@@ -42,7 +42,8 @@ class convenor extends base {
     }
 
     /**
-     * Courses where I am convenor, in the selected year or in every year.
+     * Courses where I am convenor, in the selected year or in every year. The index queries take every year and
+     * choose the year by in_year_sql() (EC3); the selected year's courses are for Refresh and the setup hints.
      *
      * @param bool $allyears
      * @return int[]
@@ -59,11 +60,13 @@ class convenor extends base {
     #[\Override]
     public function scope_cmids(): array {
         global $DB;
-        if (!$this->courses()) {
+        if (!$this->courses(true)) {
             return [];
         }
-        [$insql, $params] = $DB->get_in_or_equal($this->courses(), SQL_PARAMS_NAMED);
-        return array_map('intval', $DB->get_fieldset_select('block_le_dashboard_cm', 'cmid', "courseid $insql", $params));
+        [$insql, $params] = $DB->get_in_or_equal($this->courses(true), SQL_PARAMS_NAMED);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        return array_map('intval', $DB->get_fieldset_sql("SELECT c.cmid FROM {block_le_dashboard_cm} c
+                                                           WHERE c.courseid $insql AND $yearsql", $params + $yearparams));
     }
 
     #[\Override]
@@ -84,16 +87,18 @@ class convenor extends base {
                 ? setupchecks::hint($this->userid, $this->year(), $this->courses()) : null];
         $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::UNDATED => [],
             classifier::CONVENOR_PAST => []];
-        // In progress shows whatever its year; Upcoming and Past follow the year picker (EC3).
         if (!$this->courses(true)) {
             return $this->sections_context($sections, null, $extra);
         }
-        $inyear = array_flip($this->courses());
+        // My courses of every year, and of those the assessments in the selected year by date or course (EC3).
         [$insql, $params] = $DB->get_in_or_equal($this->courses(true), SQL_PARAMS_NAMED);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        $params += $yearparams;
+        $where = "c.courseid $insql AND $yearsql";
         $cms = $DB->get_records_sql("SELECT c.*
                                        FROM {block_le_dashboard_cm} c
                                        " . self::LIVE . "
-                                      WHERE c.courseid $insql
+                                      WHERE $where
                                    ORDER BY c.due ASC", $params);
         if (!$cms) {
             return $this->sections_context($sections, null, $extra);
@@ -101,14 +106,14 @@ class convenor extends base {
         $cms = array_column(array_values($cms), null, 'cmid');
 
         // Students who can access, and how many submitted (R4: as of indexing). Students who left
-        // are not counted here, though their submitted work is still marked (EC4).
+        // are not counted here, though their submitted work is still marked (EC4); nor are exempt or deferred ones.
+        $expected = marking_rules::EXPECTED;
         $students = $DB->get_records_sql("SELECT s.cmid,
-                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
-                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
-                                                          THEN 1 ELSE 0 END) AS submitted
+                                                 SUM(CASE WHEN $expected THEN 1 ELSE 0 END) AS total,
+                                                 SUM(CASE WHEN $expected AND s.submitted = 1 THEN 1 ELSE 0 END) AS submitted
                                             FROM {block_le_dashboard_stu} s
                                             JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
-                                           WHERE c.courseid $insql
+                                           WHERE $where
                                         GROUP BY s.cmid", $params);
         // Marking units per stage. Work counts once its unit's deadline has passed (G9).
         $ready = marking_rules::ready_sql($this->now);
@@ -127,7 +132,7 @@ class convenor extends base {
                                              MAX(m.timemarked) AS lastmarked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                       WHERE c.courseid $insql
+                                       WHERE $where AND " . marking_rules::COUNTED . "
                                     GROUP BY m.cmid, m.stage", $params);
         foreach ($rs as $r) {
             $marking[(int)$r->cmid][$r->stage] = $r;
@@ -138,15 +143,12 @@ class convenor extends base {
         $unmarked = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
                                                  FROM {block_le_dashboard_mark} m
                                                  JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                                WHERE c.courseid $insql AND $ready AND m.marked = 0
+                                                WHERE $where AND $ready AND m.marked = 0
+                                                      AND " . marking_rules::COUNTED . "
                                              GROUP BY m.cmid", $params);
-        // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43). Off means the query
-        // isn't run either (beta27 hints audit).
-        $flagged = !config::shown('hint_plagiarism') ? [] : $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                FROM {block_le_dashboard_mark} m
-                                                JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                               WHERE c.courseid $insql AND m.flagged = 1
-                                            GROUP BY m.cmid", $params);
+        // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43), withheld ones included
+        // (CS3). Off means the query isn't run either (beta27 hints audit).
+        $flagged = !config::shown('hint_plagiarism') ? [] : marking_rules::flagged($where, $params);
         // Per marker, per stage.
         $markers = [];
         // Marked work is credited to whoever marked it (EC8).
@@ -156,7 +158,7 @@ class convenor extends base {
                                              SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                       WHERE c.courseid $insql AND $marker IS NOT NULL
+                                       WHERE $where AND $marker IS NOT NULL AND " . marking_rules::COUNTED . "
                                     GROUP BY m.cmid, $marker, m.stage", $params);
         $markerids = [];
         foreach ($rs as $r) {
@@ -172,7 +174,7 @@ class convenor extends base {
         }
 
         // Extensions still to come, for every student (G9).
-        $pending = marking_rules::pending_extensions("c.courseid $insql", $params, $this->now);
+        $pending = marking_rules::pending_extensions($where, $params, $this->now);
 
         $names = format::course_names(array_column($cms, 'courseid'));
         $oldest = null;
@@ -230,24 +232,18 @@ class convenor extends base {
                 $units,
                 $outstanding + (int)($pending[$cmid]->students ?? 0)
             );
-            $otheryear = !isset($inyear[(int)$cm->courseid]);
-            // Only with marking or release actually outstanding: that is the work needing action.
-            if ($otheryear && ($section !== classifier::INPROGRESS || $outstanding + (int)($pending[$cmid]->students ?? 0) === 0)) {
-                continue;
-            }
             // Marking starts after the deadline: before it, only submissions and allocation.
             $upcoming = $section === classifier::STAFF_UPCOMING;
             if ($upcoming) {
                 $bars = array_values(array_filter($bars, fn($b) => in_array($b['key'], ['submitted', 'unallocated'])));
             }
             $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $bars, [
-                'course' => $otheryear ? fn(string $course) => $this->with_year($course, (int)$cm->courseid) : null,
                 'brief' => true,
                 // Work that arrived after marking was finished brought this back to In progress (G6).
                 'returned' => $section === classifier::INPROGRESS
                     && marking_rules::returned($m, $cm->due === null ? null : (int)$cm->due),
                 'pending' => $pending[$cmid] ?? null,
-                'flagged' => (int)($flagged[$cmid] ?? 0),
+                'flagged' => $flagged[$cmid] ?? null,
                 'nostudents' => (int)($s->total ?? 0) === 0,
             ]);
             $row['markers'] = [];

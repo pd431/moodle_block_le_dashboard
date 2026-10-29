@@ -49,7 +49,9 @@ final class assign extends base {
         // EC5: "with no online submission" means the assignment only records a mark.
         $record += ['duedate' => (int)$due, 'submissiondrafts' => str_contains($opts, 'required Submit') ? 1 : 0,
             'assignsubmission_onlinetext_enabled' => str_contains($opts, 'no online submission') ? 0 : 1,
-            'assignsubmission_file_enabled' => 0,
+            'assignsubmission_file_enabled' => str_contains($opts, 'file submissions') ? 1 : 0,
+            'assignsubmission_file_maxfiles' => 1, 'assignsubmission_file_maxsizebytes' => 0,
+            'assignsubmission_file_filetypes' => '',
             'gradingduedate' => preg_match('/marking deadline "([^"]*)"/', $opts, $m) ? phrases::time($m[1]) : 0,
             'markingworkflow' => $allocation || str_contains($opts, 'marking workflow') ? 1 : 0,
             'markingallocation' => $allocation ? 1 : 0];

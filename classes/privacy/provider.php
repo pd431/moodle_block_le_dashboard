@@ -61,6 +61,7 @@ class provider implements
             'canaccess' => 'privacy:metadata:stu:canaccess',
             'active' => 'privacy:metadata:stu:active',
             'enrolstart' => 'privacy:metadata:stu:enrolstart',
+            'expected' => 'privacy:metadata:stu:expected',
         ], 'privacy:metadata:stu');
         $collection->add_database_table('block_le_dashboard_mark', [
             'unitid' => 'privacy:metadata:mark:unitid',
@@ -70,6 +71,7 @@ class provider implements
             'timeready' => 'privacy:metadata:mark:timeready',
             'unitdue' => 'privacy:metadata:mark:unitdue',
             'flagged' => 'privacy:metadata:mark:flagged',
+            'counted' => 'privacy:metadata:mark:counted',
         ], 'privacy:metadata:mark');
         foreach (self::PREFERENCES as $name) {
             $collection->add_user_preference('block_le_dashboard_' . $name, 'privacy:metadata:preference:' . $name);

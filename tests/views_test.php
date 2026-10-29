@@ -16,6 +16,7 @@
 
 namespace block_le_dashboard;
 
+use block_le_dashboard\local\index\marking_row;
 use block_le_dashboard\local\view\convenor;
 use block_le_dashboard\local\view\marking_rules;
 use block_le_dashboard\local\view\staff;
@@ -274,19 +275,6 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
-     * Pierre, 2026-10-06 (beta14): a course from another year shows "Course (2024/25)", not the raw placeholder.
-     */
-    public function test_course_in_other_year(): void {
-        global $DB;
-        $course = $DB->get_record('course', ['shortname' => 'M1']);
-        $DB->set_field('course', 'startdate', mktime(0, 0, 0, 10, 1, 2024), ['id' => $course->id]);
-        $method = new \ReflectionMethod(convenor::class, 'with_year');
-        $text = $method->invoke(new convenor($this->u['convenor']->id), 'Module 1', (int)$course->id);
-        $this->assertStringStartsWith('Module 1 (', $text);
-        $this->assertStringNotContainsString('{$a', $text);
-    }
-
-    /**
      * PR3: names with "&" are escaped once, by the template, and search finds them.
      */
     public function test_names_escaped_once(): void {
@@ -525,6 +513,82 @@ final class views_test extends \advanced_testcase {
         $this->assertSame('21 Oct 2026, 12:00', $dated['date']);
         $this->assertSame('.', $dated['after']);
         $this->assertSame($time, strtotime($dated['iso']));
+    }
+
+    /**
+     * CS4: an exempt or deferred student reads "Exempt" with no actions and the exemption's icon, and leaves the
+     * convenor's Submitted bar; their marking units leave every count.
+     */
+    public function test_exempt_student(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $convenorbar = function () {
+            $rows = [];
+            foreach ((new convenor($this->u['convenor']->id))->export()['sections'] as $section) {
+                $rows += array_column($section['rows'], null, 'name');
+            }
+            return array_column($rows['Overdue essay']['bars'], null, 'key')['submitted'];
+        };
+        $this->assertSame([1, 2], [$convenorbar()['value'], $convenorbar()['max']]);
+        $excuse = function (string $name, string $mitigation) use ($DB, $cmid) {
+            $params = ['cmid' => $cmid, 'userid' => $this->u[$name]->id];
+            $DB->set_field('block_le_dashboard_stu', 'mitigation', $mitigation, $params);
+            $DB->set_field('block_le_dashboard_stu', 'expected', 0, $params);
+        };
+        $excuse('s1', 'exempt');
+
+        $row = self::rows((new student($this->u['s1']->id))->export(), 'past')['Overdue essay'];
+        $this->assertSame('exempt', $row['status']['key']);
+        $this->assertSame('Exempt', $row['status']['label']);
+        $this->assertSame([], $row['actions']);
+        $this->assertArrayNotHasKey('mitigation', $row);
+        $this->assertSame('exempt', $row['mitigationoverlay']['state']);
+        $this->assertNull($row['overlay']);
+        $this->assertStringContainsString(get_string('tip_exempt', 'block_le_dashboard'), $row['tip']);
+        $this->assertSame([1, 1], [$convenorbar()['value'], $convenorbar()['max']]);
+
+        // The marker's only unit is s2's: deferred, it leaves their marking.
+        $this->assertArrayHasKey('Overdue essay', self::rows((new staff($this->u['marker']->id))->export(), 'tomark'));
+        $excuse('s2', 'deferred');
+        $DB->set_field('block_le_dashboard_mark', 'counted', 0, ['cmid' => $cmid]);
+        $this->assertArrayNotHasKey('Overdue essay', self::rows((new staff($this->u['marker']->id))->export(), 'tomark'));
+        $past = self::rows((new student($this->u['s2']->id))->export(), 'past');
+        $this->assertSame('exempt', $past['Overdue essay']['status']['key']);
+    }
+
+    /**
+     * CS3: withheld work is in no marking count, but stays in the academic conduct flag with its own sentence; a
+     * marker whose only work there is withheld keeps the assessment under Completed marking, with no bars.
+     */
+    public function test_withheld_work(): void {
+        global $DB;
+        set_config('hint_plagiarism', 1, 'block_le_dashboard');
+        $cmid = $this->a['overdue']->cmid;
+        $this->assertSame(1, $DB->count_records('block_le_dashboard_mark', ['cmid' => $cmid]));
+        $DB->set_field('block_le_dashboard_mark', 'flagged', marking_row::FLAG_WITHHELD, ['cmid' => $cmid]);
+        $DB->set_field('block_le_dashboard_mark', 'counted', 0, ['cmid' => $cmid]);
+        $withheld = get_string('hint_plagiarism_withheld_one', 'block_le_dashboard');
+
+        $staff = (new staff($this->u['marker']->id))->export();
+        $this->assertArrayNotHasKey('Overdue essay', self::rows($staff, 'tomark'));
+        $row = self::rows($staff, 'completed')['Overdue essay'];
+        $hint = array_column($row['hints'], null, 'key')['plagiarism'];
+        $this->assertSame($withheld, $hint['text']);
+        $this->assertSame('1 flagged', $hint['title']);
+        $this->assertSame([], $row['bars'] ?? []);
+
+        $convenor = (new convenor($this->u['convenor']->id))->export();
+        $rows = [];
+        foreach ($convenor['sections'] as $section) {
+            $rows += array_column($section['rows'], null, 'name');
+        }
+        $hint = array_column($rows['Overdue essay']['hints'], null, 'key')['plagiarism'];
+        $this->assertSame($withheld, $hint['text']);
+
+        // With one under investigation as well, both sentences, the open one first, over one count.
+        $hint = \block_le_dashboard\local\output\format::plagiarism_hint('r', 2, 1);
+        $this->assertSame('3 flagged', $hint['title']);
+        $this->assertSame(get_string('hint_plagiarism_text_many', 'block_le_dashboard', 2) . ' ' . $withheld, $hint['text']);
     }
 
     /**

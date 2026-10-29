@@ -29,6 +29,15 @@ final class marking_row {
     /** Unit is a group (one submission per group). */
     const UNIT_GROUP = 'group';
 
+    /** No academic conduct flag. */
+    const FLAG_NONE = 0;
+
+    /** Flagged for an academic conduct check, still to mark (CS3). */
+    const FLAG_OPEN = 1;
+
+    /** Results withheld after an academic conduct check: out of the counts, still in the flag hint (CS3). */
+    const FLAG_WITHHELD = 2;
+
     /**
      * Constructor.
      *
@@ -46,7 +55,9 @@ final class marking_row {
      *                            stage finishing), when known. The indexer makes it no earlier than unitdue.
      * @param int|null $unitdue The unit's effective deadline. The indexer fills it in: the student's own
      *                          deadline, or a group's latest member deadline.
-     * @param bool $flagged Whether the unit's submission is flagged for an academic conduct (plagiarism) check.
+     * @param int $flagged A FLAG_ constant: the unit's academic conduct (plagiarism) check.
+     * @param bool $counted Whether the unit is in the marking counts. Withheld work and exempt or deferred students
+     *                      are not (CS3); their rows are kept so the flag hint still counts them.
      */
     public function __construct(
         /** @var int User or group id. */
@@ -71,8 +82,10 @@ final class marking_row {
         public ?int $timeready = null,
         /** @var int|null The unit's effective deadline. */
         public ?int $unitdue = null,
-        /** @var bool Flagged for an academic conduct check. */
-        public bool $flagged = false,
+        /** @var int Academic conduct check, a FLAG_ constant. */
+        public int $flagged = self::FLAG_NONE,
+        /** @var bool In the marking counts. */
+        public bool $counted = true,
     ) {
     }
 }

@@ -105,14 +105,17 @@ class format {
      *
      * @param string $key Date key; the label is the date_{key} string, if there is one.
      * @param int $time
+     * @param string|null $label Another date's label for this one: a student's deadline under an extension is
+     *                           labelled "Extended deadline" (extendeddeadline, CS5).
      * @return array
      */
-    public static function date(string $key, int $time): array {
+    public static function date(string $key, int $time, ?string $label = null): array {
         $sm = get_string_manager();
+        $label = $label ?? $key;
         return [
             'key' => $key,
-            'label' => $sm->string_exists('date_' . $key, 'block_le_dashboard')
-                ? get_string('date_' . $key, 'block_le_dashboard') : null,
+            'label' => $sm->string_exists('date_' . $label, 'block_le_dashboard')
+                ? get_string('date_' . $label, 'block_le_dashboard') : null,
             'text' => self::datetime($time),
             'iso' => date('c', $time),
         ];
@@ -459,19 +462,28 @@ class format {
     }
 
     /**
-     * The hint on a row with submissions flagged for an academic conduct (plagiarism) check:
-     * staff and convenors only, never students.
+     * The academic conduct flag (CS3), for staff and convenors only, never students: "N flagged" over both kinds,
+     * then one sentence for each kind present, work still under investigation first, then work whose results are
+     * withheld and so left the counts.
      *
      * @param string $rowid
-     * @param int $n Flagged submissions.
+     * @param int $open Units under investigation.
+     * @param int $withheld Units whose results are withheld.
      * @return array
      */
-    public static function plagiarism_hint(string $rowid, int $n): array {
+    public static function plagiarism_hint(string $rowid, int $open, int $withheld = 0): array {
+        $n = $open + $withheld;
+        $text = [];
+        foreach (['text' => $open, 'withheld' => $withheld] as $kind => $count) {
+            if ($count > 0) {
+                $text[] = $count === 1 ? get_string("hint_plagiarism_{$kind}_one", 'block_le_dashboard')
+                    : get_string("hint_plagiarism_{$kind}_many", 'block_le_dashboard', $count);
+            }
+        }
         return self::hint(
             $rowid,
             'plagiarism',
-            $n === 1 ? get_string('hint_plagiarism_text_one', 'block_le_dashboard')
-                : get_string('hint_plagiarism_text_many', 'block_le_dashboard', $n),
+            implode(' ', $text),
             null,
             get_string('hint_plagiarism', 'block_le_dashboard', $n),
             $n

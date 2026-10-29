@@ -229,7 +229,6 @@ abstract class view_testcase extends \advanced_testcase {
     protected static function forget(): void {
         local\guidance::reset_caches();
         local\mitigation::reset_caches();
-        local\adapter\coursework::reset_caches();
     }
 
     /**
@@ -358,6 +357,16 @@ abstract class view_testcase extends \advanced_testcase {
      */
     protected function i_view_again(string $view): void {
         $this->render(self::view_or_default($view));
+    }
+
+    /**
+     * One view for an academic year.
+     *
+     * @param string $view
+     * @param string $year
+     */
+    protected function i_view_for_year(string $view, string $year): void {
+        $this->render(self::view_or_default($view), self::year_id($year));
     }
 
     /**
@@ -673,13 +682,25 @@ abstract class view_testcase extends \advanced_testcase {
     }
 
     /**
-     * A row's due date.
+     * A row's due date, labelled Due or, under an extension, Extended deadline.
      *
      * @param string $name
      * @param string $when
      */
     protected function should_show_the_due_date(string $name, string $when): void {
-        $this->row_date($this->row($name), $name, get_string('date_due', 'block_le_dashboard'), $when);
+        // A student's deadline under an extension is labelled as the extended one (CS5).
+        $row = $this->row($name);
+        $label = get_string('date_due', 'block_le_dashboard');
+        $extended = get_string('date_extendeddeadline', 'block_le_dashboard');
+        try {
+            $this->row_date($row, $name, $label, $when);
+        } catch (\Throwable $e) {
+            try {
+                $this->row_date($row, $name, $extended, $when);
+            } catch (\Throwable $other) {
+                throw $e;
+            }
+        }
     }
 
     /**

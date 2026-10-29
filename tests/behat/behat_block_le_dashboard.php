@@ -223,9 +223,9 @@ class behat_block_le_dashboard extends behat_base {
      * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation,
      * marking workflow, reopened attempts, a cut-off "...", manual agreement, tagged "..." (a second tag),
      * N attempts allowed, marks never shown, marks shown immediately after only, marks shown after
-     * close only, a maximum grade of 0 (quiz), submission type attendance (coursework), required Submit
-     * (assign: students must click Submit, which makes the submission final). Also: opens "..." and (when
-     * submissions open).
+     * close only, a maximum grade of 0 (quiz), marks entry only, file submission or no submission types
+     * recorded (coursework), required Submit (assign: students must click Submit, which makes the submission
+     * final). Also: opens "..." and (when submissions open).
      *
      * @Given /^an? (?P<tag>summative|formative|"[^"]+") "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag
@@ -592,6 +592,30 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A mitigation of one of the activity's own types (coursework: permanent or temporary).
+     *
+     * @Given /^"(?P<user>[^"]*)" has an? "(?P<type>[^"]*)" mitigation on "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $type
+     * @param string $name
+     */
+    public function has_a_mitigation_on(string $username, string $type, string $name): void {
+        steps::instance()->has_a_mitigation_on($username, $type, $name);
+    }
+
+    /**
+     * A student's mitigation of a type is taken away.
+     *
+     * @When /^the "(?P<type>[^"]*)" mitigation of "(?P<user>[^"]*)" on "(?P<name>[^"]*)" is removed$/
+     * @param string $type
+     * @param string $username
+     * @param string $name
+     */
+    public function the_mitigation_is_removed(string $type, string $username, string $name): void {
+        steps::instance()->the_mitigation_is_removed($type, $username, $name);
+    }
+
+    /**
      * Does nothing, for scenario outlines where one example needs no event.
      *
      * @Given /^nothing happens$/
@@ -901,6 +925,22 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The logged-in student hands in a file through the assignment's page.
+     *
+     * @When /^I submit a file to "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_submit_a_file_to(string $name): void {
+        $this->getSession()->visit($this->locate_path('/mod/assign/view.php?id=' . $this->cm($name)->id));
+        $this->execute('behat_forms::press_button', [get_string('addsubmission', 'assign')]);
+        $this->execute(
+            'behat_repository_upload::i_upload_file_to_filemanager',
+            ['lib/tests/fixtures/empty.txt', get_string('pluginname', 'assignsubmission_file')]
+        );
+        $this->execute('behat_forms::press_button', [get_string('savechanges')]);
+    }
+
+    /**
      * Opens the dashboard without running pending index tasks.
      *
      * @When /^I view my dashboard$/
@@ -919,6 +959,40 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function submitted_untold(string $username, string $name): void {
         steps::instance()->submitted_untold($username, $name);
+    }
+
+    /**
+     * A student uploads a file to a coursework and the file sub-plugin's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" uploads a file to coursework "(?P<name>[^"]*)" and the upload event fires$/
+     * @param string $username
+     * @param string $name
+     */
+    public function uploads_a_file_and_the_event_fires(string $username, string $name): void {
+        steps::instance()->uploads_a_file_and_the_event_fires($username, $name);
+    }
+
+    /**
+     * A student self-certifies through block_rhb and coursework's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" self-certifies "(?P<name>[^"]*)" to "(?P<when>[^"]*)" and the mitigation added event fires$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function self_certifies_and_the_event_fires(string $username, string $name, string $when): void {
+        steps::instance()->self_certifies_and_the_event_fires($username, $name, $when);
+    }
+
+    /**
+     * A student's self-certification is removed and coursework's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" removes the self-certification of "(?P<name>[^"]*)" and the mitigation removed event fires$/
+     * @param string $username
+     * @param string $name
+     */
+    public function removes_the_self_certification_and_the_event_fires(string $username, string $name): void {
+        steps::instance()->removes_the_self_certification_and_the_event_fires($username, $name);
     }
 
     /**
@@ -1022,6 +1096,16 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Time passes until the deadline is one second behind.
+     *
+     * @When /^the deadline of "(?P<name>[^"]*)" has just passed$/
+     * @param string $name
+     */
+    public function the_deadline_has_just_passed(string $name): void {
+        steps::instance()->the_deadline_has_just_passed($name);
+    }
+
+    /**
      * Changes a deadline without any event.
      *
      * @Given /^the deadline of "(?P<name>[^"]*)" is changed directly in the database to "(?P<when>[^"]*)"$/
@@ -1104,6 +1188,20 @@ class behat_block_le_dashboard extends behat_base {
     public function i_view_again(string $view): void {
         $this->i_view_my_dashboard_again();
         $this->open_view($view);
+    }
+
+    /**
+     * Opens one view for an academic year, without logging in again.
+     *
+     * @When /^I view the "(?P<view>[^"]*)" for academic year "(?P<year>[^"]*)"$/
+     * @param string $view
+     * @param string $year
+     */
+    public function i_view_for_year(string $view, string $year): void {
+        $this->i_view_my_dashboard_again();
+        $this->open_view($view);
+        $this->execute('behat_forms::i_set_the_field_to', [get_string('academicyear', 'block_le_dashboard'), $year]);
+        $this->wait_for_pending_js();
     }
 
     /**
@@ -1309,6 +1407,16 @@ class behat_block_le_dashboard extends behat_base {
                 $this->getSession()
             );
         }
+    }
+
+    /**
+     * Clears an assessment's latest individual deadline in the index, as rows indexed before beta31 have it.
+     *
+     * @Given /^the index row of "(?P<name>[^"]*)" has no latest individual deadline$/
+     * @param string $name
+     */
+    public function the_index_row_has_no_latest_due(string $name): void {
+        steps::instance()->the_index_row_has_no_latest_due($name);
     }
 
     /**
@@ -2053,14 +2161,26 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * A row's due date.
+     * A row's due date, labelled Due or, under an extension, Extended deadline.
      *
      * @Then /^"(?P<name>[^"]*)" should show the due date "(?P<when>[^"]*)"$/
      * @param string $name
      * @param string $when
      */
     public function should_show_the_due_date(string $name, string $when): void {
-        $this->row_date($this->row($name), $name, get_string('date_due', 'block_le_dashboard'), $when);
+        // A student's deadline under an extension is labelled as the extended one (CS5).
+        $row = $this->row($name);
+        $label = get_string('date_due', 'block_le_dashboard');
+        $extended = get_string('date_extendeddeadline', 'block_le_dashboard');
+        try {
+            $this->row_date($row, $name, $label, $when);
+        } catch (\Throwable $e) {
+            try {
+                $this->row_date($row, $name, $extended, $when);
+            } catch (\Throwable $other) {
+                throw $e;
+            }
+        }
     }
 
     /**
@@ -3234,6 +3354,17 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function a_course_reindex_should_be_queued(string $shortname, string $not = ''): void {
         steps::instance()->a_course_reindex_should_be_queued($shortname, $not);
+    }
+
+    /**
+     * Whether a re-index of an assessment is waiting.
+     *
+     * @Then /^a re-index of "(?P<name>[^"]*)" should (?P<not>not )?be queued$/
+     * @param string $name
+     * @param string $not
+     */
+    public function a_reindex_should_be_queued(string $name, string $not = ''): void {
+        steps::instance()->a_reindex_should_be_queued($name, $not);
     }
 
     /**

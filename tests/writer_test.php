@@ -206,6 +206,35 @@ final class writer_test extends \advanced_testcase {
     }
 
     /**
+     * The latest deadline any student has is indexed with the assessment (EC3), and re-indexing one student
+     * moves it both ways.
+     */
+    public function test_latest_due(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $gen->create_and_enrol($course, 'student');
+        $due = time() + DAYSECS;
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => $due]);
+        $this->ma->tag($a->cmid);
+        $latest = fn() => $DB->get_field('block_le_dashboard_cm', 'latestdue', ['cmid' => $a->cmid]);
+        $this->assertEquals($due, $latest());
+        // Written directly, so only the re-index below sees it.
+        $flag = $DB->insert_record('assign_user_flags', (object)['assignment' => $a->id, 'userid' => $s1->id,
+            'extensionduedate' => $due + 30 * DAYSECS]);
+        $this->assertTrue((new indexer())->index_users($a->cmid, [$s1->id]));
+        $this->assertEquals($due + 30 * DAYSECS, $latest());
+        $DB->set_field('assign_user_flags', 'extensionduedate', 0, ['id' => $flag]);
+        $this->assertTrue((new indexer())->index_users($a->cmid, [$s1->id]));
+        $this->assertEquals($due, $latest());
+        // Undated, with nobody given a deadline: none.
+        $b = $gen->create_module('assign', ['course' => $course->id, 'duedate' => 0]);
+        $this->ma->tag($b->cmid);
+        $this->assertNull($DB->get_field('block_le_dashboard_cm', 'latestdue', ['cmid' => $b->cmid]));
+    }
+
+    /**
      * One student's bad data (Pierre's coursework text grade, beta14) fails only that student's row:
      * it keeps what was indexed before, everyone else is re-indexed, and the error is reported.
      */

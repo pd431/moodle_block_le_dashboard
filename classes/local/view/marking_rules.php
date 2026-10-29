@@ -17,6 +17,7 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
+use block_le_dashboard\local\index\marking_row;
 
 /**
  * The marking rules the staff and convenor views share, each said once (beta29, F1, F2, F4).
@@ -35,6 +36,22 @@ use block_le_dashboard\local\config;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class marking_rules {
+    /**
+     * The marking units every count and list reads: not work whose results are withheld (CS3), nor exempt or
+     * deferred students (CS4). Their rows stay, for the academic conduct flag and for when the case or the
+     * mitigation changes; a mark already given still counts as given in Completed marking.
+     */
+    const COUNTED = 'm.counted = 1';
+
+    /** A marking unit whose results are withheld after an academic conduct check (CS3). */
+    const WITHHELD = 'm.flagged = ' . marking_row::FLAG_WITHHELD;
+
+    /**
+     * The students (alias s) the counts of who should hand in read: who can access the work and are still enrolled
+     * (EC4: students who left are still marked, but not counted), and not exempt or deferred (CS4).
+     */
+    const EXPECTED = 's.canaccess = 1 AND s.active = 1 AND s.expected = 1';
+
     /**
      * SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated
      * to (EC8). Marking without allocation (a quiz graded by hand, F8) counts for whoever marked it.
@@ -245,11 +262,33 @@ final class marking_rules {
                                            FROM {block_le_dashboard_stu} s
                                            JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                            " . base::LIVE . "
-                                          WHERE s.canaccess = 1 AND s.active = 1 AND s.due > c.due
+                                          WHERE " . self::EXPECTED . " AND s.due > c.due
                                                 AND ((s.submitted = 1 AND s.due >= :now1)
                                                      OR (s.submitted = 0 AND s.due >= :now2))
                                                 AND $where
                                        GROUP BY s.cmid", $params);
+        return array_column(array_values($records), null, 'cmid');
+    }
+
+    /**
+     * Units flagged for an academic conduct (plagiarism) check, per assessment: under investigation, and withheld,
+     * which are in no other count (CS3).
+     *
+     * @param string $where SQL on m (mark index) and c (assessment index) choosing whose units.
+     * @param array $params
+     * @return \stdClass[] Keyed by cmid: open, withheld.
+     */
+    public static function flagged(string $where, array $params): array {
+        global $DB;
+        $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
+        $count = fn(int $flag) => "COUNT(DISTINCT CASE WHEN m.flagged = $flag THEN $unit ELSE NULL END)";
+        $records = $DB->get_records_sql("SELECT m.cmid, " . $count(marking_row::FLAG_OPEN) . " AS open,
+                                                " . $count(marking_row::FLAG_WITHHELD) . " AS withheld
+                                           FROM {block_le_dashboard_mark} m
+                                           JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
+                                           " . base::LIVE . "
+                                          WHERE m.flagged > 0 AND $where
+                                       GROUP BY m.cmid", $params);
         return array_column(array_values($records), null, 'cmid');
     }
 
