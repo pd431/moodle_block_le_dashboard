@@ -4524,7 +4524,7 @@ class behat_block_le_dashboard extends behat_base {
      * Points at a link in the block.
      *
      * @When /^I hover over the "(?P<name>[^"]*)" link in the My assessments block$/
-     * @param string $name
+     * @param string $name A link's text, or "course of" and an assessment for that row's course link
      */
     public function i_hover_over_the_link(string $name): void {
         $this->block_link($name)->mouseOver();
@@ -4570,12 +4570,16 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * The first visible link in the block with this text.
+     * The first visible link in the block with this text, or with "course of" and an assessment, that row's course link.
      *
      * @param string $name
      * @return \Behat\Mink\Element\NodeElement
      */
     protected function block_link(string $name): \Behat\Mink\Element\NodeElement {
+        if (str_starts_with($name, 'course of ')) {
+            return $this->row(substr($name, strlen('course of ')))->find('css', '.ma-row-course') ??
+                throw new ExpectationException("No course link in the row for '$name'", $this->getSession());
+        }
         foreach ($this->getSession()->getPage()->findAll('css', self::BLOCK . ' a') as $link) {
             if (trim($link->getText()) === $name && $link->isVisible()) {
                 return $link;
