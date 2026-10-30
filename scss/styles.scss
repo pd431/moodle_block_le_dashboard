@@ -301,11 +301,10 @@ $ma-state-tones: (
     // the block sets itself is re-pointed here. Moodle 4.5 and 5.2 never set
     // the attribute.
     @at-root [data-bs-theme="dark"] & {
-        // Body text is a step brighter than Boost's (#dee2e6, Lc 81), to APCA
-        // Lc 90 on the dark card (#343a40) and page (#1d2125), so muted text
-        // at Lc 75 sits clearly under it (Pierre, 2026-10-29). Muted is the
-        // darkest grey that keeps Lc 75 on both.
-        --ma-text: #ecf0f4;
+        // Body text is the block card's (below). Muted is the darkest grey
+        // that keeps APCA Lc 75 on Boost's dark card (#343a40) and page
+        // (#1d2125).
+        --ma-text: var(--bs-body-color, #ecf0f4);
         --ma-text-muted: #d1d9e1;
         --ma-rule: var(--bs-border-color, #495057);
         // Boost's dark mode re-points white to its raised surface (#343a40).
@@ -1389,6 +1388,15 @@ $ma-state-tones: (
             width: auto;
         }
     }
+}
+
+// Moodle 5.3's dark colour mode: the block's card, its title included, draws
+// body text a step brighter than Boost's (#dee2e6, Lc 81), at APCA Lc 90 on
+// the dark card and page, so muted text at Lc 75 sits clearly under it
+// (Pierre, 2026-10-29). Bootstrap's rows, boxes and dates take their colour
+// from this variable, so it is set here rather than on each of them.
+[data-bs-theme="dark"] .block_le_dashboard {
+    --bs-body-color: #ecf0f4;
 }
 
 // Admin pages: space between row actions.

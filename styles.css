@@ -82,7 +82,7 @@
 }
 
 [data-bs-theme=dark] .block_le_dashboard_dashboard {
-    --ma-text: #ecf0f4;
+    --ma-text: var(--bs-body-color, #ecf0f4);
     --ma-text-muted: #d1d9e1;
     --ma-rule: var(--bs-border-color, #495057);
     --ma-surface: var(--bs-white, #343a40);
@@ -1181,6 +1181,10 @@
         left: 0;
         width: auto;
     }
+}
+
+[data-bs-theme=dark] .block_le_dashboard {
+    --bs-body-color: #ecf0f4;
 }
 
 .ma-gap {

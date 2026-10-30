@@ -79,11 +79,11 @@
         return [`nothing matches ${selector}`];
     }
 
-    // The block's colour for a custom property, as the browser resolves it.
+    // The block's colour for a custom property, as the browser resolves it inside the block's content.
     const token = name => {
         const probe = document.createElement('span');
         probe.style.color = `var(${name})`;
-        scope.appendChild(probe);
+        (scope.querySelector('.block_le_dashboard_dashboard') || scope).appendChild(probe);
         const c = col(getComputedStyle(probe).color);
         probe.remove();
         return c;
