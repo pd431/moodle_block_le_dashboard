@@ -141,7 +141,7 @@ final class edge_cases_test extends view_testcase {
         ]);
         $this->step('And "marker1" is enrolled in "M0" as "teacher"');
         $this->step('And "student1" is enrolled in "M0" as "student"');
-        $this->step('And a summative "assign" "Old essay" in "M0" was due "60 days ago"');
+        $this->step('And a summative "assign" "Old essay" in "M0" was due "370 days ago"');
         $this->step('And "student1" has submitted "Old essay"');
         $this->step('And "marker1" marks the submission of "student1" for "Old essay"');
         $this->step('And the My assessments index is up to date');
