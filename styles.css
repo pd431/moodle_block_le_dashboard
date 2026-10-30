@@ -176,6 +176,11 @@
     text-decoration-color: currentcolor !important;
 }
 
+[data-bs-theme=dark] .block_le_dashboard_dashboard a.ma-row-name:not(:hover) {
+    /* stylelint-disable-next-line declaration-no-important */
+    text-decoration-line: none !important;
+}
+
 [data-bs-theme=dark] .block_le_dashboard_dashboard a:not(.btn):focus-visible {
     outline: 2px solid var(--ma-primary-glyph);
     outline-offset: 1px;

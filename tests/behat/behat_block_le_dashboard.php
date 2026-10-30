@@ -4546,6 +4546,21 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The link has no underline.
+     *
+     * @Then /^the "(?P<name>[^"]*)" link in the My assessments block should have no underline$/
+     * @param string $name
+     */
+    public function the_link_should_have_no_underline(string $name): void {
+        $link = $this->block_link($name);
+        $this->evaluate_script('document.evaluate(' . json_encode($link->getXpath()) . ', document, null, ' .
+            'XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute("data-contrast", "underline")');
+        $failures = $this->contrast('no-underline', '[data-contrast="underline"]');
+        $this->evaluate_script('document.querySelector("[data-contrast]").removeAttribute("data-contrast")');
+        $this->assert_contrast($failures, 'Underline');
+    }
+
+    /**
      * No section header has a rule under it: its fill sets it off from the rows.
      *
      * @Then /^the section headers in the My assessments block should have no line under them$/

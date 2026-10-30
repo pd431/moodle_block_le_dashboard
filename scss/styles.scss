@@ -360,6 +360,14 @@ $ma-state-tones: (
             }
         }
 
+        // Assessment titles stand on their own line at the head of their
+        // row, so that says they are links, as in light mode: underlined on
+        // hover only (Pierre, 2026-10-30).
+        a.ma-row-name:not(:hover) {
+            // stylelint-disable-next-line declaration-no-important
+            text-decoration-line: none !important;
+        }
+
         // Chrome's default ring on links and Boost's select ring (a compiled
         // colour that doesn't follow the mode) both vanish on the dark card.
         a:not(.btn):focus-visible {

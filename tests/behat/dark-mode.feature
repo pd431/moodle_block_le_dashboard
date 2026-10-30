@@ -158,6 +158,16 @@ Feature: The dashboard meets its contrast targets in light and dark colour modes
     Given "student1" uses the dark colour mode
     When I log in as "student1" and view my dashboard
     Then every link underline in the My assessments block should be thin, dimmer than its link and meet its contrast target
+    When I hover over the "M1" link in the My assessments block
+    Then the underline of the "M1" link should be the same colour as the link
+
+  # Pierre, 2026-10-30: an assessment title stands on its own line at the head of its row, which says it is a link,
+  # so it has no underline in dark mode either. Course and marker names keep theirs: it is their only mark.
+  Scenario: Assessment titles have no underline in dark mode, as in light, until hovered
+    Given "student1" uses the dark colour mode
+    When I log in as "student1" and view my dashboard
+    Then the "Overdue essay" link in the My assessments block should have no underline
+    And every link underline in the My assessments block should be thin, dimmer than its link and meet its contrast target
     When I hover over the "Overdue essay" link in the My assessments block
     Then the underline of the "Overdue essay" link should be the same colour as the link
 

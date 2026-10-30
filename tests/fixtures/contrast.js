@@ -5,8 +5,8 @@
 // check "text:body:90:7" or "text:secondary:75:4.5": text drawn in the block's body (--ma-text) or secondary
 // (--ma-text-muted) colour reaches that APCA Lc and ratio. "gap:14": body text is that many Lc brighter than
 // secondary text on the block's surface. "underlines": every link underline is 1px, dimmer than its link and
-// reaches Lc 45 and 3:1. "underlines-full": every link underline is its link's own colour. "header-lines": no
-// section header has a line under it.
+// reaches Lc 45 and 3:1. "underlines-full": every link underline is its link's own colour. "no-underline": no link
+// has an underline. "header-lines": no section header has a line under it.
 // Targets: text APCA Lc 75 and WCAG 4.5:1; icons, bars, outlines and focus Lc 45 and 3:1.
 // APCA is SAPC 0.0.98G-4g, the version the block's targets were set with.
 (check, selector) => {
@@ -141,6 +141,16 @@
             test('underline', a, line, bg, 45, 3);
         }
         return links.length ? failures : ['no underlined links in the block'];
+    }
+
+    if (kind === 'no-underline') {
+        const links = [...(scope.matches('a') ? [scope] : []), ...scope.querySelectorAll('a')].filter(a => !hidden(a));
+        for (const a of links) {
+            if (getComputedStyle(a).textDecorationLine.includes('underline')) {
+                failures.push(`"${a.textContent.trim().slice(0, 30)}" is underlined`);
+            }
+        }
+        return links.length ? failures : ['no link to check'];
     }
 
     if (kind === 'header-lines') {
