@@ -10,7 +10,10 @@
 // Targets: text APCA Lc 75 and WCAG 4.5:1; icons, bars, outlines and focus Lc 45 and 3:1.
 // APCA is SAPC 0.0.98G-4g, the version the block's targets were set with.
 (check, selector) => {
-    const cv = document.createElement('canvas').getContext('2d', {willReadFrequently: true});
+    // Measure the settled look: Moodle 4.5's Bootstrap fades a focus ring in over 0.15s, so a check run straight
+    // after Tab reads it near transparent.
+    document.getAnimations().filter(a => a instanceof CSSTransition).forEach(a => a.finish());
+    const cv =document.createElement('canvas').getContext('2d', {willReadFrequently: true});
     const col = s => {
         cv.clearRect(0, 0, 1, 1);
         cv.fillStyle = '#000';
