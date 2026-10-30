@@ -871,6 +871,9 @@
 .block_le_dashboard_dashboard .ma-view--showgrades .ma-grade {
     display: block;
 }
+.block_le_dashboard_dashboard .ma-grade-value {
+    white-space: nowrap;
+}
 .block_le_dashboard_dashboard .ma-markers {
     grid-column: 2/-1;
     margin: 0;

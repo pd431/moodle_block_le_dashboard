@@ -1132,6 +1132,11 @@ $ma-glyph-tones: ("attention");
         display: block;
     }
 
+    // The grade never splits before its "%": the line may break only between the label and the grade.
+    .ma-grade-value {
+        white-space: nowrap;
+    }
+
     // Marker breakdown, under the row: a subgrid of the row, so each marker's
     // name sits under the assessment name and their bars under its bars. The
     // grid applies only while open, so Bootstrap's collapse can still hide it.

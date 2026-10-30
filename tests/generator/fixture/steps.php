@@ -1382,6 +1382,26 @@ final class steps {
     }
 
     /**
+     * Sets the site's grade display type, as Grades > General settings does, and re-indexes what is indexed: the grade
+     * text is kept at index time.
+     *
+     * @param string $label Real, Percentage or Real (percentage).
+     */
+    public function the_grade_display_type_is(string $label): void {
+        global $CFG, $DB;
+        require_once($CFG->libdir . '/gradelib.php');
+        $types = ['Real' => GRADE_DISPLAY_TYPE_REAL, 'Percentage' => GRADE_DISPLAY_TYPE_PERCENTAGE,
+            'Real (percentage)' => GRADE_DISPLAY_TYPE_REAL_PERCENTAGE];
+        if (!isset($types[$label])) {
+            throw new coding_exception("Unknown grade display type '$label'");
+        }
+        set_config('grade_displaytype', $types[$label]);
+        // Moodle keeps each course's resolved display type in a cache.
+        \cache::make('core', 'gradesetting')->purge();
+        (new indexer())->index_cms(array_map('intval', $DB->get_fieldset_select('block_le_dashboard_cm', 'cmid', '1 = 1')));
+    }
+
+    /**
      * Sets the brief guidance link.
      *
      * @param string $url
