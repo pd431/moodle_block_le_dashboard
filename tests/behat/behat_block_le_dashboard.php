@@ -4890,9 +4890,98 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Text drawn in the block's body or secondary colour reaches the given APCA level and WCAG ratio.
+     *
+     * @Then /^the (?P<which>body|secondary) text in the My assessments block should reach APCA Lc (?P<lc>\d+) and (?P<ratio>[\d.]+):1$/
+     * @param string $which
+     * @param string $lc
+     * @param string $ratio
+     */
+    public function the_text_should_reach(string $which, string $lc, string $ratio): void {
+        $this->assert_contrast($this->contrast("text:$which:$lc:$ratio", self::BLOCK), ucfirst($which) . ' text');
+    }
+
+    /**
+     * Body text stands far enough above secondary text, on the block's surface, to read as a separate level.
+     *
+     * @Then /^the body text in the My assessments block should be at least (?P<lc>\d+) Lc brighter than its secondary text$/
+     * @param string $lc
+     */
+    public function the_body_text_should_be_brighter_than_secondary(string $lc): void {
+        $this->assert_contrast($this->contrast("gap:$lc", self::BLOCK), 'Text levels');
+    }
+
+    /**
+     * Dark mode's link underlines: 1px, dimmer than the link, and still Lc 45 and 3:1 against what's behind them.
+     *
+     * @Then /^every link underline in the My assessments block should be thin, dimmer than its link and meet its contrast target$/
+     */
+    public function every_link_underline_should_be_toned(): void {
+        $this->assert_contrast($this->contrast('underlines', self::BLOCK), 'Underlines');
+    }
+
+    /**
+     * Every link's underline is the link's own colour, as in light mode.
+     *
+     * @Then /^link underlines in the My assessments block should be the same colour as their links$/
+     */
+    public function link_underlines_should_be_full_colour(): void {
+        $this->assert_contrast($this->contrast('underlines-full', self::BLOCK), 'Underlines');
+    }
+
+    /**
+     * Points at a link in the block.
+     *
+     * @When /^I hover over the "(?P<name>[^"]*)" link in the My assessments block$/
+     * @param string $name
+     */
+    public function i_hover_over_the_link(string $name): void {
+        $this->block_link($name)->mouseOver();
+    }
+
+    /**
+     * The link's underline is the link's own colour.
+     *
+     * @Then /^the underline of the "(?P<name>[^"]*)" link should be the same colour as the link$/
+     * @param string $name
+     */
+    public function the_underline_should_be_the_link_colour(string $name): void {
+        $link = $this->block_link($name);
+        $this->evaluate_script('document.evaluate(' . json_encode($link->getXpath()) . ', document, null, ' .
+            'XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute("data-contrast", "underline")');
+        $failures = $this->contrast('underlines-full', '[data-contrast="underline"]');
+        $this->evaluate_script('document.querySelector("[data-contrast]").removeAttribute("data-contrast")');
+        $this->assert_contrast($failures, 'Hovered');
+    }
+
+    /**
+     * No section header has a rule under it: its fill sets it off from the rows.
+     *
+     * @Then /^the section headers in the My assessments block should have no line under them$/
+     */
+    public function the_section_headers_should_have_no_line(): void {
+        $this->assert_contrast($this->contrast('header-lines', self::BLOCK), 'Section headers');
+    }
+
+    /**
+     * The first visible link in the block with this text.
+     *
+     * @param string $name
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function block_link(string $name): \Behat\Mink\Element\NodeElement {
+        foreach ($this->getSession()->getPage()->findAll('css', self::BLOCK . ' a') as $link) {
+            if (trim($link->getText()) === $name && $link->isVisible()) {
+                return $link;
+            }
+        }
+        throw new ExpectationException("No \"$name\" link in the My assessments block", $this->getSession());
+    }
+
+    /**
      * Runs tests/fixtures/contrast.js in the page.
      *
-     * @param string $check "all" or "focus"
+     * @param string $check "all", "focus" or one of the checks tests/fixtures/contrast.js lists
      * @param string $selector What to check
      * @return string[] One line per failure
      */

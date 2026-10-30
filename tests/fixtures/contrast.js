@@ -2,6 +2,11 @@
 // Evaluated in the browser as one function expression: (check, selector) => failures.
 // check "all": every visible text, icon, progress bar and control outline under selector.
 // check "focus": the focus indicator of the focused element, against what is behind it.
+// check "text:body:90:7" or "text:secondary:75:4.5": text drawn in the block's body (--ma-text) or secondary
+// (--ma-text-muted) colour reaches that APCA Lc and ratio. "gap:14": body text is that many Lc brighter than
+// secondary text on the block's surface. "underlines": every link underline is 1px, dimmer than its link and
+// reaches Lc 45 and 3:1. "underlines-full": every link underline is its link's own colour. "header-lines": no
+// section header has a line under it.
 // Targets: text APCA Lc 75 and WCAG 4.5:1; icons, bars, outlines and focus Lc 45 and 3:1.
 // APCA is SAPC 0.0.98G-4g, the version the block's targets were set with.
 (check, selector) => {
@@ -72,6 +77,79 @@
     const scope = document.querySelector(selector);
     if (!scope) {
         return [`nothing matches ${selector}`];
+    }
+
+    // The block's colour for a custom property, as the browser resolves it.
+    const token = name => {
+        const probe = document.createElement('span');
+        probe.style.color = `var(${name})`;
+        scope.appendChild(probe);
+        const c = col(getComputedStyle(probe).color);
+        probe.remove();
+        return c;
+    };
+    const same = (a, b) => Math.abs(a.r - b.r) + Math.abs(a.g - b.g) + Math.abs(a.b - b.b) < 3;
+    const [kind, ...args] = check.split(':');
+
+    if (kind === 'text') {
+        const want = token(args[0] === 'body' ? '--ma-text' : '--ma-text-muted');
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+        const seen = new Set();
+        while (walker.nextNode()) {
+            const el = walker.currentNode.parentElement;
+            if (!walker.currentNode.textContent.trim() || seen.has(el) || hidden(el)) {
+                continue;
+            }
+            seen.add(el);
+            const fg = col(getComputedStyle(el).color);
+            if (fg.a >= 1 && same(fg, want)) {
+                test(`${args[0]} text`, el, fg, behind(el), +args[1], +args[2]);
+            }
+        }
+        return seen.size ? failures : ['no text in the block'];
+    }
+
+    if (kind === 'gap') {
+        const surface = token('--ma-surface');
+        const body = apca(token('--ma-text'), surface), secondary = apca(token('--ma-text-muted'), surface);
+        return body - secondary >= +args[0] - 0.05 ? [] :
+            [`body text is Lc ${body.toFixed(1)} and secondary text Lc ${secondary.toFixed(1)} on ${hex(surface)}, ` +
+                `${(body - secondary).toFixed(1)} apart (needs ${args[0]})`];
+    }
+
+    if (kind === 'underlines' || kind === 'underlines-full') {
+        const links = [...(scope.matches('a') ? [scope] : []), ...scope.querySelectorAll('a')].filter(a => !hidden(a) &&
+            getComputedStyle(a).textDecorationLine.includes('underline'));
+        for (const a of links) {
+            const cs = getComputedStyle(a);
+            const bg = behind(a);
+            const text = blend(col(cs.color), bg);
+            const line = blend(col(cs.textDecorationColor), bg);
+            const name = `underline of "${a.textContent.trim().slice(0, 30)}"`;
+            if (kind === 'underlines-full') {
+                if (!same(line, text)) {
+                    failures.push(`${name} is ${hex(line)}, not its link's ${hex(text)}`);
+                }
+                continue;
+            }
+            if (cs.textDecorationThickness !== '1px') {
+                failures.push(`${name} is ${cs.textDecorationThickness} thick, not 1px`);
+            }
+            if (apca(line, bg) >= apca(text, bg)) {
+                failures.push(`${name} (${hex(line)}) is no dimmer than its link (${hex(text)})`);
+            }
+            test('underline', a, line, bg, 45, 3);
+        }
+        return links.length ? failures : ['no underlined links in the block'];
+    }
+
+    if (kind === 'header-lines') {
+        for (const h of scope.querySelectorAll('.ma-section-header')) {
+            if (!hidden(h) && parseFloat(getComputedStyle(h).borderBottomWidth) > 0) {
+                failures.push(`header "${h.textContent.trim().replace(/\s+/g, ' ').slice(0, 30)}" has a line under it`);
+            }
+        }
+        return failures;
     }
 
     if (check === 'focus') {

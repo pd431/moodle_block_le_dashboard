@@ -121,3 +121,59 @@ Feature: The dashboard meets its contrast targets in light and dark colour modes
     When I choose the light colour mode from the navbar
     Then the page should be in light colour mode
     And the My assessments block should meet its contrast targets
+
+  # Pierre, 2026-10-29 and 30: body text lifted to APCA Lc 90 so secondary text at Lc 75 reads as a level below it,
+  # and dark mode's link underlines toned down (1px, 70% of the link colour) so they don't crowd the words. The
+  # underline is the only mark on course and marker names, so it keeps the non-text floor, Lc 45 and 3:1.
+  Scenario Outline: Body text reaches Lc 90 and stands clear of secondary text in dark mode in the <view>
+    Given "<user>" uses the dark colour mode
+    When I log in as "<user>" and view the "<view>"
+    Then the body text in the My assessments block should reach APCA Lc 90 and 7:1
+    And the secondary text in the My assessments block should reach APCA Lc 75 and 4.5:1
+    And the body text in the My assessments block should be at least 14 Lc brighter than its secondary text
+
+    Examples:
+      | user     | view          |
+      | marker1  | My marking    |
+      | convenor | Convenor view |
+
+  Scenario: Body text reaches Lc 90 and stands clear of secondary text in dark mode for a student
+    Given "student1" uses the dark colour mode
+    When I log in as "student1" and view my dashboard
+    Then the body text in the My assessments block should reach APCA Lc 90 and 7:1
+    And the secondary text in the My assessments block should reach APCA Lc 75 and 4.5:1
+    And the body text in the My assessments block should be at least 14 Lc brighter than its secondary text
+
+  Scenario Outline: Link underlines are thin and dimmed but still mark the link in dark mode for <user>
+    Given "<user>" uses the dark colour mode
+    When I log in as "<user>" and view the "<view>"
+    Then every link underline in the My assessments block should be thin, dimmer than its link and meet its contrast target
+
+    Examples:
+      | user     | view          |
+      | marker1  | My marking    |
+      | convenor | Convenor view |
+
+  Scenario: Hovering a link in dark mode brings its underline up to the link colour
+    Given "student1" uses the dark colour mode
+    When I log in as "student1" and view my dashboard
+    Then every link underline in the My assessments block should be thin, dimmer than its link and meet its contrast target
+    When I hover over the "Overdue essay" link in the My assessments block
+    Then the underline of the "Overdue essay" link should be the same colour as the link
+
+  Scenario: Light mode keeps full-colour link underlines
+    Given "student1" uses the light colour mode
+    When I log in as "student1" and view my dashboard
+    Then link underlines in the My assessments block should be the same colour as their links
+
+  # Pierre, 2026-10-30: the section headers' fill sets them off from the rows, so the line under them goes.
+  Scenario Outline: Section headers have no line under them in <mode> mode
+    Given "student1" uses the <mode> colour mode
+    When I log in as "student1" and view my dashboard
+    Then the section headers in the My assessments block should have no line under them
+    And the My assessments block should meet its contrast targets
+
+    Examples:
+      | mode  |
+      | light |
+      | dark  |

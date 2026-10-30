@@ -301,11 +301,12 @@ $ma-state-tones: (
     // the block sets itself is re-pointed here. Moodle 4.5 and 5.2 never set
     // the attribute.
     @at-root [data-bs-theme="dark"] & {
-        // Body text is Boost's. Muted is the darkest grey that keeps APCA
-        // Lc 75 on the dark card (#343a40), so it is close to the body text:
-        // on a dark surface Lc 75 leaves little room under it.
-        --ma-text: var(--bs-body-color, #dee2e6);
-        --ma-text-muted: #d4dadf;
+        // Body text is a step brighter than Boost's (#dee2e6, Lc 81), to APCA
+        // Lc 90 on the dark card (#343a40) and page (#1d2125), so muted text
+        // at Lc 75 sits clearly under it (Pierre, 2026-10-29). Muted is the
+        // darkest grey that keeps Lc 75 on both.
+        --ma-text: #ecf0f4;
+        --ma-text-muted: #d1d9e1;
         --ma-rule: var(--bs-border-color, #495057);
         // Boost's dark mode re-points white to its raised surface (#343a40).
         --ma-surface: var(--bs-white, #343a40);
@@ -336,9 +337,26 @@ $ma-state-tones: (
         }
 
         // A light link is no longer told apart from the text by its colour
-        // (WCAG 1.4.1), so it is underlined, as Boost does in dark mode.
+        // (WCAG 1.4.1), so it is underlined, as Boost does in dark mode. A
+        // full-colour line is nearly as bright as the text and crowds it, so
+        // it is thin, 70% of the link colour and a little lower (Pierre,
+        // 2026-10-30): APCA Lc 49 and 6.3:1 on the rows, over the block's
+        // non-text floor (Lc 45, 3:1), as it is the only thing that marks
+        // course and marker names as links. Hover brings it to full colour.
+        // Boost's own rule has an ID (#region-main a:not(...)) and resets
+        // the line's colour and thickness, so they have to be !important.
         a:not(.btn, .dropdown-item) {
             text-decoration: underline;
+            // stylelint-disable-next-line declaration-no-important
+            text-decoration-thickness: 1px !important;
+            // stylelint-disable-next-line declaration-no-important
+            text-decoration-color: color-mix(in srgb, currentcolor 70%, transparent) !important;
+            text-underline-offset: 0.22em;
+
+            &:hover {
+                // stylelint-disable-next-line declaration-no-important
+                text-decoration-color: currentcolor !important;
+            }
         }
 
         // Chrome's default ring on links and Boost's select ring (a compiled
@@ -910,7 +928,9 @@ $ma-state-tones: (
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 0.75rem;
-        border-bottom-color: var(--ma-border);
+        // No rule under the header: its fill already sets it off from the
+        // rows (Pierre, 2026-10-30).
+        border-bottom: 0;
         background-color: var(--ma-fill);
         color: var(--ma-ink);
     }
@@ -968,14 +988,8 @@ $ma-state-tones: (
     }
 
     // Collapsed: only the header shows.
-    .ma-section--collapsed {
-        .ma-section-header {
-            border-bottom: 0;
-        }
-
-        .ma-section-toggle .fa {
-            transform: rotate(-90deg);
-        }
+    .ma-section--collapsed .ma-section-toggle .fa {
+        transform: rotate(-90deg);
     }
 
     .ma-section-footer {
