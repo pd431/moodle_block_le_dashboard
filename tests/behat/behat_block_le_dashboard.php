@@ -4596,8 +4596,9 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Presses Tab as a W3C key action, which goes to whatever has focus. Behat's key step sends it to the focused
-     * element instead, and WebDriver refuses that when the element is not one it counts as interactable.
+     * Presses Tab as a W3C key action, which goes to whatever has focus, and waits for the page as a step would.
+     * Behat's key step sends it to the focused element instead, and WebDriver refuses that when the element is not
+     * one it counts as interactable.
      */
     protected function press_tab(): void {
         $tab = "\u{E004}";
@@ -4607,6 +4608,7 @@ class behat_block_le_dashboard extends behat_base {
                 ['type' => 'keyUp', 'value' => $tab],
             ]]],
         ]);
+        $this->wait_for_pending_js();
     }
 
     /**
