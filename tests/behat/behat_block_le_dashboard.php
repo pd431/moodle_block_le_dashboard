@@ -4062,10 +4062,10 @@ class behat_block_le_dashboard extends behat_base {
     public function delete_mitigation_should_be_destructive(string $name): void {
         $item = $this->mitigate_menu($name)->find('css', '[data-action="mitigate-delete"]');
         // The computed colour can be in any colour space (oklch for the block's tones), so the canvas turns it into rgb.
-        $red = $item ? $this->evaluate_script('const x = document.createElement("canvas").getContext("2d"); ' .
+        $red = $item ? $this->evaluate_script('return (() => { const x = document.createElement("canvas").getContext("2d"); ' .
             'x.fillStyle = getComputedStyle(document.evaluate(' . json_encode($item->getXpath()) .
             ', document, null, 9, null).singleNodeValue).color; x.fillRect(0, 0, 1, 1); ' .
-            'const d = x.getImageData(0, 0, 1, 1).data; return "rgb(" + d[0] + ", " + d[1] + ", " + d[2] + ")"') : '';
+            'const d = x.getImageData(0, 0, 1, 1).data; return "rgb(" + d[0] + ", " + d[1] + ", " + d[2] + ")"; })()') : '';
         if (
             !$item || trim($item->getText()) !== 'Delete mitigation' || !$item->find('css', 'i.fa-trash-can')
                 || !preg_match('/^rgba?\((\d+), (\d+), (\d+)/', (string)$red, $m) || !($m[1] > 150 && $m[2] < 100 && $m[3] < 100)
