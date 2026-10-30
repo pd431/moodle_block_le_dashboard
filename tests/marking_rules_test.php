@@ -116,7 +116,9 @@ final class marking_rules_test extends \advanced_testcase {
                     'due' => null, 'hasallocation' => $hasallocation, 'stages' => $stages, 'timeindexed' => 1]);
             }
         }
-        $shared = $DB->get_fieldset_sql("SELECT c.cmid FROM {block_le_dashboard_cm} c WHERE " . marking_rules::SHARED_SQL);
+        // Ordered: without ORDER BY, PostgreSQL may return the rows in any order.
+        $shared = $DB->get_fieldset_sql("SELECT c.cmid FROM {block_le_dashboard_cm} c WHERE " . marking_rules::SHARED_SQL
+            . ' ORDER BY c.cmid');
         $this->assertSame([2001, 2002], array_map('intval', $shared));
         foreach ($DB->get_records('block_le_dashboard_cm') as $cm) {
             $this->assertSame(in_array((int)$cm->cmid, [2001, 2002]), marking_rules::is_shared($cm), $cm->cmid);
