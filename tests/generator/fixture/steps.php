@@ -2180,4 +2180,43 @@ final class steps {
             throw new failed('A first fill is still queued or pending');
         }
     }
+
+    // Colour modes (Moodle 5.3, dark-mode.feature).
+
+    /**
+     * Turns on Boost's colour modes, which Moodle 5.3 added. Earlier versions have none.
+     */
+    public function the_site_has_colour_modes_turned_on(): void {
+        if (!class_exists('\theme_boost\colour_mode')) {
+            throw new unavailable('Needs Moodle 5.3 or later, which has colour modes');
+        }
+        set_config('enablecolourmodes', 1, 'theme_boost');
+    }
+
+    /**
+     * Turns on colour modes where the site has them, so one scenario outline covers 4.5, 5.2 and 5.3.
+     */
+    public function the_site_has_colour_modes_turned_on_if_it_can(): void {
+        if (class_exists('\theme_boost\colour_mode')) {
+            set_config('enablecolourmodes', 1, 'theme_boost');
+        }
+    }
+
+    /**
+     * Sets a user's colour mode, the way the navbar menu stores it. Light is every version's only mode before 5.3.
+     *
+     * @param string $username
+     * @param string $mode light or dark
+     */
+    public function uses_the_colour_mode(string $username, string $mode): void {
+        global $DB;
+        if (!class_exists('\theme_boost\colour_mode')) {
+            if ($mode === 'dark') {
+                throw new unavailable('Needs Moodle 5.3 or later, which has dark mode');
+            }
+            return;
+        }
+        $user = $DB->get_record('user', ['username' => $username], '*', MUST_EXIST);
+        set_user_preference(\theme_boost\colour_mode::PREFERENCE, $mode, $user);
+    }
 }

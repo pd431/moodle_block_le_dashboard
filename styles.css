@@ -185,6 +185,7 @@
     border-color: var(--ma-primary-glyph);
     box-shadow: var(--ma-focus-ring);
 }
+
 .block_le_dashboard_dashboard * {
     box-sizing: border-box;
 }

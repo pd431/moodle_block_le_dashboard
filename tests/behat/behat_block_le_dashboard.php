@@ -4357,10 +4357,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^the site has colour modes turned on$/
      */
     public function the_site_has_colour_modes_turned_on(): void {
-        if (!class_exists('\theme_boost\colour_mode')) {
-            throw new \Moodle\BehatExtension\Exception\SkippedException('Needs Moodle 5.3 or later, which has colour modes');
-        }
-        set_config('enablecolourmodes', 1, 'theme_boost');
+        self::skipping(fn() => steps::instance()->the_site_has_colour_modes_turned_on());
     }
 
     /**
@@ -4369,9 +4366,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^the site has colour modes turned on if it can$/
      */
     public function the_site_has_colour_modes_turned_on_if_it_can(): void {
-        if (class_exists('\theme_boost\colour_mode')) {
-            set_config('enablecolourmodes', 1, 'theme_boost');
-        }
+        steps::instance()->the_site_has_colour_modes_turned_on_if_it_can();
     }
 
     /**
@@ -4396,15 +4391,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $mode
      */
     public function uses_the_colour_mode(string $username, string $mode): void {
-        global $DB;
-        if (!class_exists('\theme_boost\colour_mode')) {
-            if ($mode === 'dark') {
-                throw new \Moodle\BehatExtension\Exception\SkippedException('Needs Moodle 5.3 or later, which has dark mode');
-            }
-            return;
-        }
-        $user = $DB->get_record('user', ['username' => $username], '*', MUST_EXIST);
-        set_user_preference(\theme_boost\colour_mode::PREFERENCE, $mode, $user);
+        self::skipping(fn() => steps::instance()->uses_the_colour_mode($username, $mode));
     }
 
     /**
