@@ -16,7 +16,7 @@
 
 /**
  * A stand-in for block_rhb's request and self-certification links, for Behat scenarios tagged @block_rhb on
- * sites without block_rhb. Loaded only on a Behat site (see mitigation::available()).
+ * sites without block_rhb. Loaded only on a Behat site (see testing::rhb_stub()).
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard

@@ -18,6 +18,7 @@ namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
 use block_le_dashboard\local\output\format;
+use block_le_dashboard\local\scope;
 use block_le_dashboard\local\tags;
 use block_le_dashboard\local\years;
 
@@ -43,7 +44,7 @@ abstract class base {
      *
      * @param int $userid
      * @param int|null $now
-     * @param int|null $yearid Academic year (staff and convenor views); null for the default.
+     * @param int|null $yearid Academic year; null for the default.
      */
     public function __construct(int $userid, ?int $now = null, ?int $yearid = null) {
         $this->userid = $userid;
@@ -174,27 +175,15 @@ abstract class base {
     }
 
     /**
-     * A course name with its academic year, for a row shown outside the selected year (EC3).
+     * SQL for an indexed assessment (by alias) in the selected academic year, by its deadlines or its course (EC3);
+     * no restriction under All years.
      *
-     * @param string $course
-     * @param int $courseid
-     * @return string
+     * @param string $alias
+     * @param string[]|null $deadlines Deadline columns, as scope::in_year_sql() takes them.
+     * @return array [sql, params]
      */
-    protected function with_year(string $course, int $courseid): string {
-        global $DB;
-        $dates = $DB->get_record('course', ['id' => $courseid], 'startdate, enddate');
-        // The year it starts in, or ends in when it has no start date (EC3b).
-        $date = (int)($dates->startdate ?: $dates->enddate);
-        foreach (years::all() as $year) {
-            if ($date && $date >= $year->timestart && $date < $year->timeend) {
-                return get_string(
-                    'courseinyear',
-                    'block_le_dashboard',
-                    ['course' => $course, 'year' => format_string($year->label, true, ['escape' => false])]
-                );
-            }
-        }
-        return $course;
+    protected function in_year_sql(string $alias = 'c', ?array $deadlines = null): array {
+        return scope::in_year_sql($alias, $this->year(), $deadlines);
     }
 
     /**

@@ -19,7 +19,7 @@ namespace block_le_dashboard\local;
 use block_le_dashboard\local\output\format;
 
 /**
- * The generic name hint (Pierre, 2026-10-17): an assessment named only with generic words ("Essay 1",
+ * The generic name hint: an assessment named only with generic words ("Essay 1",
  * "CW2 - Summative", the module's own name) gets a hint for staff suggesting a descriptive name.
  *
  * A name is generic when every word in it is a listed term, a number, a roman numeral up to x, or a word of the
@@ -39,13 +39,12 @@ class genericname {
     const ROMAN = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
 
     /**
-     * Whether the hint is on (the genericnames setting, on unless an admin turned it off).
+     * Whether the hint is on (the genericnames setting, config::HINTS).
      *
      * @return bool
      */
     public static function enabled(): bool {
-        $value = get_config('block_le_dashboard', 'genericnames');
-        return $value === false || (bool)$value;
+        return config::shown('genericnames');
     }
 
     /**

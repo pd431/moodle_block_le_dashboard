@@ -52,6 +52,15 @@ final class provider_test extends provider_testcase {
         provider::export_user_data(new approved_contextlist($student, 'block_le_dashboard', [$context->id]));
         $data = writer::with_context($context)->get_data([get_string('blocktitle', 'block_le_dashboard')]);
         $this->assertCount(1, $data->assessments);
+        // Every per-student field the index stores is in the export (beta29, F13).
+        $row = $data->assessments[0];
+        $fields = ['cmid', 'due', 'cutoff', 'individual', 'submitted', 'timesubmitted', 'timereleased', 'grade',
+            'lockreason', 'canaccess'];
+        foreach ($fields as $field) {
+            $this->assertArrayHasKey($field, $row, $field);
+        }
+        $this->assertSame('No', $row['individual']);
+        $this->assertSame('Yes', $row['canaccess']);
         provider::export_user_preferences($student->id);
         $prefs = writer::with_context(\context_system::instance())->get_user_preferences('block_le_dashboard');
         $this->assertNotEmpty((array)$prefs);

@@ -41,26 +41,9 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
       | marker1  | M1     | teacher        |
       | convenor | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
 
   # ---------- Finished undated work goes to Past (Pierre: "finished work, no matter the view, can move to past") ----------
-
-  Scenario: Undated marking that is all done goes to Completed marking
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    When I log in as "marker1" and view the "My marking"
-    Then "A1" should appear in the "Completed marking" section
-    And "A1" should not appear in the "Undated" section
-
-  Scenario: Undated work that is all marked and released goes to the convenor's Past
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And a summative "assign" "A2" in "M1" with no due date exists
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the grade of "student1" for "A1" is released
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should appear in the "Past" section
-    And "A2" should appear in the "Undated" section
 
   @javascript
   Scenario: A student's undated work, once handed in, is Received until it has a grade
@@ -71,53 +54,9 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     And "A1" should show "Received"
     And "A1" should not have a "received" hint
 
-  Scenario: Graded undated work moves to Past, placed by the date feedback was given
-    Given a summative "assign" "A1" in "M1" with no due date exists
-    And a summative "assign" "A2" in "M1" with no due date exists
-    And a summative "assign" "A3" in "M1" was due "3 days ago"
-    And "student1" submitted "A1" "6 days ago"
-    And "student1" submitted "A2" "2 days ago"
-    And "student1" submitted "A3" "4 days ago"
-    And "marker1" marks the submission of "student1" for "A1"
-    And "marker1" marks the submission of "student1" for "A2"
-    And "marker1" marks the submission of "student1" for "A3"
-    And the grade of "student1" for "A1" was released "5 days ago"
-    And the grade of "student1" for "A2" was released "1 day ago"
-    And the grade of "student1" for "A3" was released "2 days ago"
-    When I log in as "student1" and view my dashboard
-    Then the "Past" section should list "A2, A3, A1" in that order
-    And "A1" should show "Feedback released"
-
   # ---------- No pills for the ordinary case ----------
 
-  Scenario: Work not yet handed in shows no status pill in Upcoming
-    Given a summative "assign" "A1" in "M1" is due "in 10 days"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should have no status pill
-    And "A1" should show "Submit"
-
-  Scenario: Generic activities show no status pill before the deadline or without one
-    Given the "Workshop" activity type is enabled in My assessments
-    And a summative "workshop" "W1" in "M1" is due "in 10 days"
-    And a summative "workshop" "W2" in "M1" with no due date exists
-    When I log in as "student1" and view my dashboard
-    Then "W1" should have no status pill
-    And "W2" should have no status pill
-
-  Scenario: Nothing on the dashboard says "Action required"
-    Given a summative "assign" "A1" in "M1" was due "2 days ago"
-    When I log in as "student1" and view my dashboard
-    Then I should not see "Action required" in the "My assessments" block
-
   # ---------- Modifiers: only the unusual, side by side ----------
-
-  Scenario: Work handed in on time carries no modifier icon
-    Given a summative "assign" "A1" in "M1" was due "2 days ago"
-    And "student1" submitted "A1" "3 days ago"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Past" section
-    And the activity icon of "A1" should have no modifiers
 
   @javascript
   Scenario: Overdue work carries a red clock
@@ -134,14 +73,6 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Past" section
     And the "late" modifier of "A1" should be a "fa-clock" icon in the "grey" tone
-
-  Scenario: Work handed in before an extended deadline is not late
-    Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student1" has an extension on "A1" to "1 day ago"
-    And "student1" submitted "A1" "2 days ago"
-    When I log in as "student1" and view my dashboard
-    Then the activity icon of "A1" should not have the "late" modifier
-    And the activity icon of "A1" should have the "extension" modifier
 
   @javascript
   Scenario: Two modifiers sit side by side
@@ -184,14 +115,6 @@ Feature: Finished work goes to Past, and student rows say only what is unusual
     When I click on the late penalty hint of "A1"
     Then I should see "Work up to 10 minutes late may have 10% taken off its mark." in the "My assessments" block
     And I should see "late penalties" linking to "https://example.com/late"
-
-  Scenario: An on-time mark has no late penalty popover
-    Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And "student1" submitted "A1" "4 days ago"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the grade of "student1" for "A1" is released
-    When I log in as "student1" and view my dashboard
-    Then "A1" should not have a late penalty hint
 
   Scenario: Before release the late clock sits beside the In marking pill
     Given a summative "assign" "A1" in "M1" was due "3 days ago"

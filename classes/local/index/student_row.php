@@ -33,6 +33,15 @@ final class student_row {
     /** A self-certified extension was applied. */
     const MITIGATION_SELFCERT = 'selfcert';
 
+    /** The student is exempt from the assessment (CS4). */
+    const MITIGATION_EXEMPT = 'exempt';
+
+    /** The student's assessment is deferred to another time (CS4). */
+    const MITIGATION_DEFERRED = 'deferred';
+
+    /** Mitigations under which nothing is expected of the student here (CS4). */
+    const EXCUSED = [self::MITIGATION_EXEMPT, self::MITIGATION_DEFERRED];
+
     /** Final: coursework finalised, or an assignment submitted where students must click Submit. */
     const LOCK_FINALISED = 'finalised';
 
@@ -53,12 +62,12 @@ final class student_row {
      * @param int|null $timesubmitted When they submitted.
      * @param int|null $timereleased When the grade is (or will be) visible to the student; null if not released.
      * @param string|null $gradedisplay The grade as the student should see it.
-     * @param string|null $mitigation MITIGATION_EXTENSION or MITIGATION_SELFCERT when one applies.
+     * @param string|null $mitigation A MITIGATION_ constant when one applies.
      * @param bool $reopened Whether a new attempt is open and not yet submitted.
      * @param int[] $allocatedto Markers allocated to the student, on activities with allocation.
      * @param string|null $lockreason Why the student's submission is final and can't be changed (a LOCK_
      *                     constant), or null. The row stays in Upcoming with a "Can't resubmit" control
-     *                     saying why (Pierre, 2026-10-09).
+     *                     saying why.
      */
     public function __construct(
         /** @var int The student. */
@@ -86,5 +95,15 @@ final class student_row {
         /** @var string|null Why the submission can't be changed, or null. */
         public ?string $lockreason = null,
     ) {
+    }
+
+    /**
+     * Whether nothing is expected of the student under a mitigation: exempt or deferred (CS4).
+     *
+     * @param string|null $mitigation
+     * @return bool
+     */
+    public static function excused(?string $mitigation): bool {
+        return in_array($mitigation, self::EXCUSED, true);
     }
 }

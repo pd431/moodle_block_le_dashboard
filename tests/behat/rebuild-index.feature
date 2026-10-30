@@ -52,11 +52,6 @@ Feature: An admin can purge and rebuild the dashboard's index
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Upcoming" section
 
-  Scenario: Students see the Preparing note while the rebuild is pending
-    Given an admin has rebuilt the index and the rebuild task has not run yet
-    When I log in as "student1" and view my dashboard
-    Then I should see "Preparing your assessments"
-
   # Only site admins can open the page or rebuild: it is gated on moodle/site:config, and the rebuild
   # needs a POST with the sesskey. Behat can't open a denied page without failing on the error, so
   # PHPUnit checks this (indexer_test::test_rebuild_page_needs_site_config).

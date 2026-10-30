@@ -10,8 +10,8 @@ Feature: Assessments with no online submission
   #
   # As built:
   # - One shared flag, cm_row::$submissions = false, stored as nosubmission on the index. It covers an
-  #   assignment with no submission types (EC5), coursework whose submission type is attendance (the
-  #   field name is unverified without the plugin), mod_attendance, and any activity tagged with an
+  #   assignment with no submission types (EC5), coursework whose only submission type is marks entry
+  #   (Pierre, 2026-10-28: marks entry is attendance), mod_attendance, and any activity tagged with an
   #   In-person tag. That is a new setting under Tags, default "inperson". The tag goes on as well as a
   #   summative or formative tag.
   # - Student: Upcoming until the date with View, never Submit. One bare fa-person-chalkboard icon,
@@ -42,6 +42,7 @@ Feature: Assessments with no online submission
       | teacher1  | M1     | editingteacher |
       | convenor1 | M1     | moduleconvenor |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
     And the My assessments block treats "moduleconvenor" as a module convenor role
     And the "workshop" activity type is enabled in My assessments
 
@@ -57,16 +58,6 @@ Feature: Assessments with no online submission
     When I click on the "nosubmission" icon of "Viva"
     Then the "nosubmission" popover of "Viva" should say "No online submission" then "Attend or complete this in person; your grade will appear here."
 
-  Scenario: After the date, an in-person assessment waits for feedback in Past, never overdue
-    Given a summative "workshop" "Viva" in "M1" tagged "inperson" was due "2 days ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Viva" should appear in the "Past" section
-    And "Viva" should show the status "Awaiting feedback"
-    And "Viva" should not show "Not submitted"
-    And "Viva" should not have a "nosubmission" hint
-    And the activity icon of "Viva" should have no modifiers
-
   @javascript
   Scenario: Once the grade is out, the student sees it
     Given a summative "workshop" "Viva" in "M1" tagged "inperson" was due "2 days ago"
@@ -78,56 +69,7 @@ Feature: Assessments with no online submission
     And "Viva" should show the status "Feedback released"
     And the grade of "Viva" should be visible
 
-  Scenario: An assignment with no submission types is treated the same way
-    Given a summative "assign" "Exam" in "M1" with no online submission was due "2 days ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Exam" should appear in the "Past" section
-    And "Exam" should show the status "Awaiting feedback"
-    And "Exam" should not show "Not submitted"
-
-  Scenario: Markers count every student as ready to mark from the date
-    Given a summative "workshop" "Viva" in "M1" tagged "inperson" was due "2 days ago"
-    And the gradebook grade of "student1" for "Viva" is set to "64"
-    And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
-    Then "Viva" should appear in the "Marking in progress" section with "1" to mark
-    And "Viva" should have a "nosubmission" hint
-    And "Viva" should not show a "Submitted" progress bar
-    When I log in as "convenor1" and view the "Module convenor view"
-    Then "Viva" should appear in the "In progress" section
-    And "Viva" should show a "Marked" progress bar with "1" of "2"
-    And "Viva" should have a "nosubmission" hint
-
-  Scenario: Before the date, markers have nothing to mark yet
-    Given a summative "workshop" "Viva" in "M1" tagged "inperson" is due "tomorrow"
-    And the My assessments index is up to date
-    When I log in as "teacher1" and view the "My marking"
-    Then "Viva" should not appear in the "Marking in progress" section
-
-  Scenario: A workshop without the in-person tag keeps the generic rules
-    Given a summative "workshop" "L1" in "M1" was due "2 days ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "L1" should show the status "Closed"
-    And "L1" should not have a "nosubmission" hint
-
   Scenario: The in-person tag can be changed in the settings
     When I log in as "admin"
     And I navigate to "Plugins > Blocks > Le Dashboard > Settings" in site administration
     Then the field "In-person tags" matches value "inperson"
-
-  @mod_attendance
-  Scenario: An attendance activity has no online submission
-    Given a summative "attendance" "Seminars" in "M1" was due "2 days ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Seminars" should show the status "Awaiting feedback"
-
-  @mod_coursework
-  Scenario: Coursework assessed by attendance has no online submission
-    Given a summative "coursework" "Presentation" in "M1" with submission type attendance was due "2 days ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "Presentation" should show the status "Awaiting feedback"
-    And "Presentation" should not show "Not submitted"

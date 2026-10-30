@@ -16,9 +16,11 @@
 
 namespace block_le_dashboard\local\adapter;
 
+use block_le_dashboard\local\index\marking_row;
+
 /**
- * The coursework adapter's plagiarism flags, against a stand-in for mod_coursework's flags table,
- * since mod_coursework can't be installed where these tests run.
+ * The coursework adapter against stand-ins for mod_coursework's tables, named as Exeter's coursework names them
+ * (CS0), since mod_coursework can't be installed where these tests run.
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
@@ -43,17 +45,8 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
-     * Forgets the adapter's cached table columns, so it sees the table appear or go.
-     */
-    protected static function forget_columns(): void {
-        $p = new \ReflectionProperty(coursework::class, 'columns');
-        $p->setAccessible(true);
-        $p->setValue(null, []);
-    }
-
-    /**
-     * Open flags count once per submission; cleared ones (status outside the open list), rows
-     * without a submission and other courseworks don't. Without the table, nothing is flagged.
+     * A submission's latest flag counts, once (CS3): open (0, or a status Exeter doesn't use, or none) or withheld
+     * (3); cleared ones (1, 2), rows without a submission and other courseworks don't.
      */
     public function test_flagged_submissions(): void {
         global $DB;
@@ -63,9 +56,6 @@ final class coursework_test extends \advanced_testcase {
         if ($dbman->table_exists(self::TABLE)) {
             $this->markTestSkipped('mod_coursework is installed: its own tests cover the real table');
         }
-        self::forget_columns();
-        $this->assertSame([], self::call('flagged_submissions', 7));
-
         $table = new \xmldb_table(self::TABLE);
         $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE);
         $table->add_field('courseworkid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL);
@@ -74,19 +64,21 @@ final class coursework_test extends \advanced_testcase {
         $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
         $dbman->create_table($table);
         try {
-            // Coursework, submission, status: open flags on 101 (and a cleared one), one on 102, cleared 103 (4) and
-            // 106 (2, Pierre 2026-10-07), no submission, no status.
-            $rows = [[7, 101, '0'], [7, 101, '2'], [7, 102, '3'], [7, 103, '4'], [7, 106, '2'], [7, 0, '1'], [7, 104, null],
-                [8, 105, '1']];
+            // Coursework, submission, status: 101 cleared then reopened, 102 withheld, 103 an unknown status, 104
+            // none, 106 open then cleared, 107 cleared (1), a row with no submission, and another coursework.
+            $rows = [[7, 101, '2'], [7, 101, '0'], [7, 102, '3'], [7, 103, '4'], [7, 104, null], [7, 106, '0'],
+                [7, 106, '2'], [7, 107, '1'], [7, 0, '0'], [8, 105, '0']];
             foreach ($rows as [$cw, $sub, $status]) {
                 $DB->insert_record(self::TABLE, ['courseworkid' => $cw, 'submissionid' => $sub, 'status' => $status]);
             }
-            self::forget_columns();
-            $this->assertSame([101 => true, 102 => true], self::call('flagged_submissions', 7));
-            $this->assertSame([105 => true], self::call('flagged_submissions', 8));
+            $open = marking_row::FLAG_OPEN;
+            $expected = [101 => $open, 102 => marking_row::FLAG_WITHHELD, 103 => $open, 104 => $open];
+            $this->assertSame($expected, self::call('flagged_submissions', 7));
+            $this->assertSame([102 => marking_row::FLAG_WITHHELD], self::call('flagged_submissions', 7, [102, 107]));
+            $this->assertSame([105 => $open], self::call('flagged_submissions', 8));
+            $this->assertSame([], self::call('flagged_submissions', 8, []));
         } finally {
             $dbman->drop_table($table);
-            self::forget_columns();
         }
     }
 
@@ -122,13 +114,11 @@ final class coursework_test extends \advanced_testcase {
                 $dbman->create_table($table);
                 $made[] = $table;
             }
-            self::forget_columns();
             $body();
         } finally {
             foreach ($made as $table) {
                 $dbman->drop_table($table);
             }
-            self::forget_columns();
         }
     }
 
@@ -171,6 +161,21 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
+     * A grade saved by a real user is theirs; one saved by no real user (Turnitin's -1, or 0) is the allocated
+     * marker's, or no one's without an allocation (CS6).
+     */
+    public function test_grader(): void {
+        $saved = fn($id) => (object)['assessorid' => $id];
+        $this->assertSame(12, self::call('grader', $saved(12), 30), 'a real grader, whoever is allocated');
+        $this->assertSame(12, self::call('grader', $saved(12), null));
+        $this->assertSame(30, self::call('grader', $saved(-1), 30), 'Turnitin');
+        $this->assertSame(30, self::call('grader', $saved(0), 30));
+        $this->assertNull(self::call('grader', $saved(-1), null), 'no allocation: the convenor\'s');
+        $this->assertNull(self::call('grader', $saved(0), null));
+        $this->assertNull(self::call('grader', $saved(-1), 0), 'an empty pair');
+    }
+
+    /**
      * Released once first published, or last published where only that is set.
      */
     public function test_released(): void {
@@ -180,18 +185,98 @@ final class coursework_test extends \advanced_testcase {
     }
 
     /**
-     * Exeter's coursework names the group setting use_groups; attendance is its courseworktype; flags follow
-     * plagiarismflagenabled where the setting exists.
+     * Withheld work (CS3) and exempt or deferred students (CS4) are in no marking count; open flags,
+     * extensions and units without a submission are.
+     */
+    public function test_uncounted(): void {
+        $units = ['user:1' => true, 'user:2' => true, 'user:3' => true];
+        $submissions = ['user:1' => (object)['id' => 11], 'user:2' => (object)['id' => 12]];
+        $flagged = [11 => marking_row::FLAG_WITHHELD, 12 => marking_row::FLAG_OPEN];
+        $this->assertSame(['user:1' => true], self::call('uncounted', $units, $submissions, $flagged));
+        // Exempt or deferred students too, with or without a submission.
+        $mitigations = ['user:3' => ['excused' => 'deferred'], 'user:2' => ['extension' => [5, false]]];
+        $uncounted = self::call('uncounted', $units, $submissions, $flagged, $mitigations);
+        $this->assertSame(['user:1' => true, 'user:3' => true], $uncounted);
+    }
+
+    /**
+     * Each flag status means what Pierre said (CS3).
+     */
+    public function test_flag_state(): void {
+        [$none, $open, $withheld] = [marking_row::FLAG_NONE, marking_row::FLAG_OPEN, marking_row::FLAG_WITHHELD];
+        $states = ['0' => $open, '1' => $none, '2' => $none, ' 2 ' => $none, '3' => $withheld, '7' => $open, '' => $open];
+        foreach ($states as $status => $state) {
+            $this->assertSame($state, coursework::flag_state((string)$status), "status '$status'");
+        }
+        $this->assertSame($open, coursework::flag_state(null));
+    }
+
+    /**
+     * Exeter's coursework names the group setting use_groups; flags follow plagiarismflagenabled.
      */
     public function test_settings(): void {
         $this->assertTrue(self::call('uses_groups', (object)['use_groups' => 1]));
-        $this->assertTrue(self::call('uses_groups', (object)['usegroups' => 1]));
         $this->assertFalse(self::call('uses_groups', (object)['use_groups' => 0]));
-        $this->assertTrue(self::call('by_attendance', (object)['courseworktype' => 'Attendance']));
-        $this->assertFalse(self::call('by_attendance', (object)['courseworktype' => 'standard']));
-        $this->assertTrue(self::call('flags_enabled', (object)[]));
         $this->assertTrue(self::call('flags_enabled', (object)['plagiarismflagenabled' => 1]));
         $this->assertFalse(self::call('flags_enabled', (object)['plagiarismflagenabled' => 0]));
+    }
+
+    /**
+     * One name per fact, the reference's (CS0): no other build's column or table, and no checks for which exists.
+     */
+    public function test_reads_one_name_per_fact(): void {
+        global $CFG;
+        $source = file_get_contents($CFG->dirroot . '/blocks/le_dashboard/classes/local/adapter/coursework.php');
+        $names = ['use_groups' => 'usegroups', 'finalised' => 'finalisedstatus', 'stage_identifier' => 'stageidentifier',
+            'personal_deadline' => 'personaldeadline\b(?!_)'];
+        foreach ($names as $read => $notread) {
+            $this->assertStringContainsString($read, $source);
+            $this->assertDoesNotMatchRegularExpression("~(?<![_a-z])$notread~", $source, "reads $notread");
+        }
+        $this->assertStringNotContainsString('coursework_extensions', $source);
+        // Whether anything is handed in online comes from the submission types (CS1), not these columns.
+        foreach (['courseworktype', 'submissiontype', 'submissionmethod'] as $column) {
+            $this->assertStringNotContainsString($column, $source);
+        }
+        foreach (['get_columns', 'table_exists', 'field_exists', 'property_exists', 'column('] as $check) {
+            $this->assertStringNotContainsString($check, $source, "checks which column exists with $check");
+        }
+    }
+
+    /**
+     * Mitigations by allocatable (CS4): the last extension recorded, with whether it was self-certified; permanent
+     * is exempt and temporary deferred, and an exemption wins whichever came first. Other types are ignored.
+     */
+    public function test_mitigations(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_mitigations' => [['courseworkid', 'allocatableid', 'extended_deadline', 'selfcert', 'timecreated'],
+                ['allocatabletype', 'type']],
+        ], function () use ($DB) {
+            $add = fn($user, $type, $until = 0, $selfcert = 0, $cw = 7) => $DB->insert_record('coursework_mitigations', [
+                'courseworkid' => $cw, 'allocatableid' => $user, 'allocatabletype' => 'user', 'type' => $type,
+                'extended_deadline' => $until, 'selfcert' => $selfcert, 'timecreated' => 1]);
+            $add(1, 'extension', 500, 1);
+            $add(1, 'extension', 400);
+            $add(2, 'extension', 300);
+            $add(3, 'permanent');
+            $add(3, 'temporary');
+            $add(4, 'temporary');
+            $add(5, 'temporary');
+            $add(5, 'permanent');
+            $add(5, 'extension', 600, 1);
+            $add(6, 'somethingelse');
+            $add(7, 'permanent', 0, 0, 8);
+            $this->assertSame([
+                'user:1' => ['extension' => [400, false]],
+                'user:2' => ['extension' => [300, false]],
+                'user:3' => ['excused' => 'exempt'],
+                'user:4' => ['excused' => 'deferred'],
+                'user:5' => ['excused' => 'exempt', 'extension' => [600, true]],
+            ], self::call('mitigations', 7));
+            $expected = ['user:2' => ['extension' => [300, false]], 'user:4' => ['excused' => 'deferred']];
+            $this->assertSame($expected, self::call('mitigations', 7, [['user', 2], ['user', 4]]));
+        });
     }
 
     /**
@@ -231,6 +316,86 @@ final class coursework_test extends \advanced_testcase {
                 ['user:2' => ['assessor_1' => 12, 'moderator' => 13]],
                 self::call('allocation_pairs', 7, [['user', 2]])
             );
+        });
+    }
+
+    /**
+     * Marks entry as the only submission type means nothing is handed in online (CS1); file, online text or
+     * Panopto alongside it, or no types recorded at all, means work is handed in.
+     */
+    public function test_marks_entry_only(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_sub_plugin' => [[], ['name']],
+            'coursework_sub_plugin_cwk' => [['courseworkid', 'subpluginid'], []],
+        ], function () use ($DB) {
+            $ids = [];
+            foreach (['file', 'marksentry', 'onlinetext', 'panopto'] as $name) {
+                $ids[$name] = $DB->insert_record('coursework_sub_plugin', ['name' => $name]);
+            }
+            $types = [1 => ['marksentry'], 2 => ['marksentry', 'file'], 3 => ['file'], 5 => ['panopto']];
+            foreach ($types as $cw => $names) {
+                foreach ($names as $name) {
+                    $DB->insert_record('coursework_sub_plugin_cwk', ['courseworkid' => $cw, 'subpluginid' => $ids[$name]]);
+                }
+            }
+            $this->assertTrue(self::call('marks_entry_only', 1));
+            $this->assertFalse(self::call('marks_entry_only', 2));
+            $this->assertFalse(self::call('marks_entry_only', 3));
+            $this->assertFalse(self::call('marks_entry_only', 4));
+            $this->assertFalse(self::call('marks_entry_only', 5));
+        });
+    }
+
+    /**
+     * Attendance comes first where nothing is handed in online, then coursework's own stages (CS1).
+     */
+    public function test_stage_map_with_attendance(): void {
+        $cw = (object)['numberofmarkers' => 2, 'moderationenabled' => 0];
+        $expected = ['marker1' => 'assessor_1', 'marker2' => 'assessor_2', 'agreed' => 'final_agreed_1'];
+        $this->assertSame($expected, coursework::stage_map($cw));
+        $this->assertSame(['attendance' => null, 'marker1' => 'assessor_1', 'marker2' => 'assessor_2',
+            'agreed' => 'final_agreed_1'], coursework::stage_map($cw, true));
+    }
+
+    /**
+     * Every unit is ready at the attendance stage at its deadline, and taken once coursework has a submission row
+     * for it, handed in or not; allocated to the first marker where markers are allocated (CS1).
+     */
+    public function test_attendance_rows(): void {
+        $units = ['user:1' => true, 'user:2' => true, 'group:3' => true];
+        $subs = ['user:1' => (object)['firstpublished' => 0, 'lastpublished' => 0, 'timesubmitted' => 0],
+            'group:3' => (object)['firstpublished' => 9, 'lastpublished' => 0, 'timesubmitted' => 0]];
+        $rows = self::call('attendance_rows', $units, $subs, ['user:2' => ['assessor_1' => 40]]);
+        $got = array_map(fn($r) => [$r->unittype . ':' . $r->unitid, $r->stage, $r->submitted, $r->marked, $r->released,
+            $r->allocatedto, $r->timeready], $rows);
+        $this->assertSame([
+            ['user:1', 'attendance', true, true, false, null, 1],
+            ['user:2', 'attendance', true, false, false, 40, 1],
+            ['group:3', 'attendance', true, true, true, null, 1],
+        ], $got);
+        $this->assertNull(self::call('attendance_rows', ['user:2' => true], [], null)[0]->allocatedto);
+        $rows = self::call('attendance_rows', ['user:1' => true, 'user:2' => true], [], null, ['user:2' => true]);
+        $this->assertSame([true, false], array_map(fn($r) => $r->counted, $rows));
+    }
+
+    /**
+     * Where attendance is taken, every submission row counts, handed in or not (CS1).
+     */
+    public function test_submissions_any_row(): void {
+        global $DB;
+        $this->with_tables([
+            'coursework_submissions' => [['courseworkid', 'allocatableid', 'timesubmitted', 'firstpublished',
+                'lastpublished', 'finalised'], ['allocatabletype']],
+            'coursework_feedbacks' => [['submissionid', 'assessorid', 'finalised'], ['grade', 'stage_identifier']],
+        ], function () use ($DB) {
+            foreach ([[1, 100], [2, 0]] as [$user, $time]) {
+                $DB->insert_record('coursework_submissions', ['courseworkid' => 7, 'allocatableid' => $user,
+                    'allocatabletype' => 'user', 'timesubmitted' => $time, 'firstpublished' => 0, 'lastpublished' => 0,
+                    'finalised' => 0]);
+            }
+            $this->assertSame(['user:1'], array_keys(self::call('submissions', 7)));
+            $this->assertSame(['user:1', 'user:2'], array_keys(self::call('submissions', 7, null, true)));
         });
     }
 }

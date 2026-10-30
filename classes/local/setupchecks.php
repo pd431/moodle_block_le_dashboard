@@ -20,9 +20,9 @@ use block_le_dashboard\local\adapter\registry;
 use block_le_dashboard\local\output\format;
 
 /**
- * Tagged activities whose settings need checking, for the module convenor's second quiet line
- * (Pierre, 2026-10-07): indexed ones the indexer found a problem with, and tagged ones of a type
- * that isn't enabled, which no dashboard shows. The second list reads Moodle's tables, so it is
+ * Tagged activities whose settings need checking, for the module convenor's second quiet line: indexed
+ * ones the indexer found a problem with, and tagged ones of a type that isn't enabled, which no
+ * dashboard shows. The second list reads Moodle's tables, so it is
  * cached with the untagged list and forgotten with it on Refresh.
  *
  * @package    block_le_dashboard

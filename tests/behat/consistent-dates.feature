@@ -32,20 +32,6 @@ Feature: Day counts and dates agree, in the viewer's own time zone
       | teacher1 | M1     | editingteacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
-  Scenario Outline: "Due in" counts the calendar days to the date shown
-    Given a summative "assign" "A1" in "M1" is due "<due>" in "Europe/London"
-    And the My assessments index is up to date
-    And it is now "<now>" in "Europe/London"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should show "<note>"
-
-    Examples:
-      | now                        | due                         | note          |
-      | Mon 12 October 2026 20:00  | Wed 14 October 2026 12:00   | Due in 2 days |
-      | Mon 12 October 2026 08:00  | Tue 13 October 2026 12:00   | Due tomorrow  |
-      | Mon 12 October 2026 20:00  | Tue 13 October 2026 12:00   | Due in 16 h   |
-      | Mon 12 October 2026 11:15  | Mon 12 October 2026 12:00   | Due in 45 min |
-
   @javascript
   Scenario: The count follows the browser's zone when the dates do
     Given a summative "assign" "A1" in "M1" is due "Thu 15 October 2026 12:00" in "Europe/London"
@@ -67,13 +53,6 @@ Feature: Day counts and dates agree, in the viewer's own time zone
     # 13 Oct 20:00 in New York, where it's 12 Oct 15:00: tomorrow. In London it's two calendar days away.
     Then "A1" should show "You can still submit until tomorrow"
 
-  Scenario: Without the browser's help the count is in the Moodle zone
-    Given a summative "assign" "A1" in "M1" with a cut-off "Wed 14 October 2026 01:00 Europe/London" was due "Mon 12 October 2026 10:00 Europe/London"
-    And the My assessments index is up to date
-    And it is now "Mon 12 October 2026 20:00" in "Europe/London"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should show "You can still submit for 2 days"
-
   @javascript
   Scenario: Dates inside a hint are in the same zone as the row dates
     Given a summative "assign" "A1" in "M1" is due "Mon 12 October 2026 12:00" in "Europe/London"
@@ -81,7 +60,9 @@ Feature: Day counts and dates agree, in the viewer's own time zone
     And the My assessments index is up to date
     And it is now "Tue 13 October 2026 09:00" in "Europe/London"
     And my browser's time zone is "America/New_York"
-    When I log in as "teacher1" and view my dashboard
+    And "teacher1" is enrolled in "M1" as "moduleconvenor"
+    # In the Convenor view: My marking has no Upcoming section since beta28.
+    When I log in as "teacher1" and view the "Convenor view"
     And I click on the extension hint of "A1"
     Then the "extensions" popover of "A1" should say "1 student has an extension" then "The latest extended deadline is 21 Oct 2026, 07:00."
 

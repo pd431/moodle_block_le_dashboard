@@ -17,12 +17,13 @@
 {{!
     @template block_le_dashboard/admin_index
 
-    Index admin page: row counts, status and the rebuild button.
+    Index admin page: row counts, status, how far each index pass has got, and the rebuild button.
 
     Example context (json):
     {
         "counts": [{"label": "Activities: 12"}, {"label": "Student rows: 340"}, {"label": "Marking rows: 290"}],
         "status": "Last filled 6 October 2026, 08:00",
+        "progress": [{"line": "Nightly check: 1240 of 5300 courses done."}],
         "rebuildurl": "https://example.com/blocks/le_dashboard/admin/index.php?rebuild=1"
     }
 }}
@@ -31,6 +32,11 @@
     {{#counts}}<li>{{label}}</li>{{/counts}}
 </ul>
 {{#status}}<p>{{status}}</p>{{/status}}
+{{#progress.0}}
+<ul class="list-unstyled" data-region="ma-index-progress">
+    {{#progress}}<li>{{line}}</li>{{/progress}}
+</ul>
+{{/progress.0}}
 <form method="get" action="{{rebuildurl}}">
     <input type="hidden" name="rebuild" value="1">
     <button type="submit" class="btn btn-secondary">{{#str}}rebuildindex, block_le_dashboard{{/str}}</button>

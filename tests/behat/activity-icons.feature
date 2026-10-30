@@ -6,9 +6,8 @@ Feature: Activity icons say what the activity is and what applies to me
 
   # Approved by the coordinator 2026-10-03, with late made grey (Pierre's ask: Font Awesome icons,
   # with a tooltip that names the activity and its modifiers).
-  # Icons: one Font Awesome icon per activity type, with a fallback for any other type:
-  #   Assignment fa-file-arrow-up, Quiz fa-clipboard-question, Coursework fa-file-pen,
-  #   Peer work fa-people-group, any other fa-file-lines.
+  # Icons: superseded in beta27 (Pierre's UAT, 2026-10-19, module-icons.feature): each row shows the module's
+  #   own icon, as on the course page, instead of a Font Awesome icon per type.
   # Modifier icons (student view), at most two per icon, side by side along its bottom edge, and only
   # for the unusual case: work handed in on time has none (Pierre, 2026-10-04):
   #   Overdue fa-clock (danger, Overdue section only), Submitted late fa-clock (grey), Due soon
@@ -82,7 +81,7 @@ Feature: Activity icons say what the activity is and what applies to me
     Given a summative "assign" "A1" in "M1" was due "yesterday"
     When I log in as "student1" and view my dashboard
     And I click on the activity icon of "A1"
-    And I click on "My assessments" "block"
+    And I click on "My Assessments" "block"
     Then the activity icon tooltip of "A1" should not be visible
 
   @javascript
@@ -94,8 +93,8 @@ Feature: Activity icons say what the activity is and what applies to me
     And I click on the activity icon of "A1"
     Then the activity icon tooltip of "A1" should say "Assignment. Hidden from students."
 
-  Scenario: An activity type without its own icon gets the fallback icon
+  Scenario: Any other activity type shows its own module icon too
     Given the "forum" activity type is enabled in My assessments
     And a summative "forum" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard
-    Then the activity icon of "A1" should be the "fa-file-lines" icon
+    Then the activity icon of "A1" should be the "forum" module's own icon

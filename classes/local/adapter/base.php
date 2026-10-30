@@ -44,6 +44,36 @@ abstract class base implements adapter {
         return [];
     }
 
+    #[\Override]
+    public static function events_for_related_user(): array {
+        return [];
+    }
+
+    #[\Override]
+    public function brief_areas(): array {
+        return [];
+    }
+
+    #[\Override]
+    public function takes_submissions(): ?bool {
+        return null;
+    }
+
+    #[\Override]
+    public function takes_selfcert(): bool {
+        return false;
+    }
+
+    #[\Override]
+    public function selfcert_subject(int $instanceid): ?object {
+        return null;
+    }
+
+    #[\Override]
+    public function selfcert_used(int $userid, int $since): ?int {
+        return null;
+    }
+
     /**
      * The activity's own record. Not cached: events can change it mid-request.
      *

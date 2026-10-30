@@ -161,6 +161,8 @@ $ma-state-tones: (
         "inmarking": "info",
         "awaiting": "info",
         "released": "info",
+        // Exempt or deferred (CS4): nothing to do, so no call to action.
+        "exempt": "info",
         // Staff grading status on finished rows (Pierre, 2026-10-07): staff only, so attention is fine.
         "grading": "info",
         "unreleased": "attention",
@@ -631,6 +633,22 @@ $ma-state-tones: (
         }
     }
 
+    // Their outer corners are the theme's, as the search box's are, not Bootstrap's fixed small-button radius
+    // (Pierre, 2026-10-19, Boost Union). Bootstrap's .btn-group still squares the joins between the type buttons.
+    .ma-type-filter > .ma-filter-btn:first-child {
+        border-start-start-radius: $ma-control-radius;
+        border-end-start-radius: $ma-control-radius;
+    }
+
+    .ma-type-filter > .ma-filter-btn:last-child {
+        border-start-end-radius: $ma-control-radius;
+        border-end-end-radius: $ma-control-radius;
+    }
+
+    .ma-grades-toggle {
+        border-radius: $ma-control-radius;
+    }
+
     // Flags (hints): one icon, with its count, that opens its popover on a
     // click, keyboard focus or a short hover (dashboard.js). Staff flags are
     // outlined in their tone; student hints are bare glyphs, still 24px buttons.
@@ -800,19 +818,6 @@ $ma-state-tones: (
         &:focus {
             background-color: var(--bs-danger, var(--danger, #ca3120));
             color: #fff;
-        }
-    }
-
-    // Self-certification the student can't use: greyed but focusable
-    // (aria-disabled), with its reason under it. Never red.
-    .ma-mitigate-item--greyed {
-        color: var(--ma-text-muted);
-        cursor: default;
-
-        &:hover,
-        &:active {
-            background-color: transparent;
-            color: var(--ma-text-muted);
         }
     }
 
@@ -1067,6 +1072,11 @@ $ma-state-tones: (
         }
     }
 
+    // A student row with two dates or more puts each label on its own line, so its dates line up (beta28).
+    .ma-row-dates--stacked .ma-row-date-label {
+        display: block;
+    }
+
     // Narrower blocks, by the block's own width. Student rows first put the
     // pill over the dates so the name keeps its width (the dates row takes the
     // spare height, so the dates sit right under the pill), then split into
@@ -1145,6 +1155,24 @@ $ma-state-tones: (
         border-radius: 0.25rem;
         font-size: 1.25rem;
         cursor: pointer;
+    }
+
+    // The module's own icon, as on the course page (core's activityiconcontainer, purpose colour), sized to the
+    // button.
+    .ma-row-modicon.activityiconcontainer {
+        width: 100%;
+        height: 100%;
+        max-width: none;
+        max-height: none;
+        padding: 0;
+        background: none;
+    }
+
+    .ma-row-modicon .activityicon {
+        width: 1.25rem;
+        height: 1.25rem;
+        max-width: 1.25rem;
+        max-height: 1.25rem;
     }
 
     // Modifiers sit side by side along the icon's bottom edge (Pierre,
@@ -1240,6 +1268,11 @@ $ma-state-tones: (
 
     .ma-view--showgrades .ma-grade {
         display: block;
+    }
+
+    // The grade never splits before its "%": the line may break only between the label and the grade.
+    .ma-grade-value {
+        white-space: nowrap;
     }
 
     // Marker breakdown, under the row: a subgrid of the row, so each marker's
@@ -1402,4 +1435,17 @@ $ma-state-tones: (
 // Admin pages: space between row actions.
 .ma-gap {
     margin-inline-end: 1rem;
+}
+
+// Moodle 4.5's Font Awesome (6.5.2) has no file-half-dashed: draw the plugin's copy in the text colour.
+// Remove with pix/file-half-dashed.svg once the site is on Moodle 5.0 or later (format::hint_icon).
+.block_le_dashboard_dashboard .ma-icon-file-half-dashed::before {
+    content: "";
+    display: inline-block;
+    width: 0.75em;
+    height: 1em;
+    vertical-align: -0.125em;
+    background-color: currentColor;
+    -webkit-mask: url([[pix:block_le_dashboard|file-half-dashed]]) no-repeat center / contain;
+    mask: url([[pix:block_le_dashboard|file-half-dashed]]) no-repeat center / contain;
 }

@@ -1,4 +1,4 @@
-@block @block_le_dashboard @block_rhb @javascript
+@block @block_le_dashboard @block_rhb
 Feature: When Mitigate shows
   In order that students reach block_rhb's mitigation routes exactly as they did before the remake
   As a student
@@ -31,6 +31,7 @@ Feature: When Mitigate shows
       | student1 | M1     | student |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
+  @javascript
   Scenario: An assignment's menu holds formal mitigation only, under our label
     Given a summative "assign" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard

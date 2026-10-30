@@ -29,7 +29,8 @@ $tasks = [
         'classname' => '\block_le_dashboard\task\reconcile',
         'blocking' => 0,
         'minute' => 'R',
-        'hour' => '2',
+        // Hourly: it carries on a first fill at any hour, and does the nightly check from 02:00 to 06:00.
+        'hour' => '*',
         'day' => '*',
         'month' => '*',
         'dayofweek' => '*',

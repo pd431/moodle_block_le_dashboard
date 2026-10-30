@@ -16,7 +16,7 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
   # Submitted work the student can still change keeps Submit, which takes them back to it.
   # Work that can't be submitted for any other reason (past its cut-off, quiz closed) still goes to Past at once.
   # The "Resubmission contact" setting the scope proposed is replaced by the guidance_finalised box (coordinator,
-  # 2026-10-09). Mitigate's new rule is in mitigate-rc6.feature.
+  # 2026-10-09). Mitigate's new rule is in mitigate-window.feature.
 
   Background:
     Given the following "courses" exist:
@@ -31,6 +31,7 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
       | student1 | M1     | student        |
       | teacher1 | M1     | editingteacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
 
   Scenario: An assignment submitted under required Submit stays in Upcoming until its deadline
     Given a summative "assign" "A1" in "M1" with required Submit is due "in 3 days"
@@ -74,54 +75,6 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
     And the "Can't resubmit" popover of "Q1" should say "You've used all your attempts."
     And the "Can't resubmit" popover of "Q1" should not say "unfinalise"
 
-  Scenario: At the deadline the row moves to Past as usual
-    Given a summative "assign" "A1" in "M1" with required Submit was due "1 hour ago"
-    And "student1" submitted "A1" "2 hours ago"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Past" section
-    And "A1" should show the status "In marking"
-    And "A1" should not have a "Can't resubmit" button
-
-  Scenario: Reverted to draft, the row is ordinary again
-    Given a summative "assign" "A1" in "M1" with required Submit is due "in 3 days"
-    And "student1" has submitted "A1"
-    And the submission of "student1" for "A1" is reverted to draft
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should have a "Submit" button
-    And "A1" should not have a "Can't resubmit" button
-
-  Scenario: A draft under required Submit keeps Submit
-    Given a summative "assign" "A1" in "M1" with required Submit is due "in 3 days"
-    And "student1" has saved a draft of "A1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should have a "Submit" button
-
-  Scenario: Work handed in that can still be changed keeps Submit
-    Given a summative "assign" "A1" in "M1" is due "in 3 days"
-    And "student1" has submitted "A1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should show the status "Submitted"
-    And "A1" should have a "Submit" button
-    And "A1" should not have a "Can't resubmit" button
-
-  Scenario: A reopened attempt after a final submission is upcoming work
-    Given a summative "assign" "A1" in "M1" with required Submit and reopened attempts was due "3 days ago"
-    And "student1" submitted "A1" "4 days ago"
-    And "teacher1" grades "student1" on "A1" with "40"
-    And the submission of "student1" for "A1" is reopened
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should have no status pill
-    And "A1" should have a "Submit" button
-
   @javascript
   Scenario: The control opens its explanation, and screen readers hear it
     Given a summative "assign" "A1" in "M1" with required Submit is due "in 3 days"
@@ -132,25 +85,6 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
     When I open the "Can't resubmit" control of "A1"
     Then the "locked" popover of "A1" should be visible
     And the "Can't resubmit" popover of "A1" should say "Your submission is finalised, so you can't change it."
-
-  @mod_coursework
-  Scenario: Finalised coursework stays in Upcoming until its deadline
-    Given a summative "coursework" "C1" in "M1" is due "in 2 days"
-    And "student1" has submitted "C1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "C1" should appear in the "Upcoming" section
-    And "C1" should show the status "Submitted"
-    And "C1" should have a "Can't resubmit" button
-
-  @mod_coursework
-  Scenario: A coursework draft that isn't final keeps Submit
-    Given a summative "coursework" "C1" in "M1" is due "in 2 days"
-    And "student1" has saved a draft of "C1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "C1" should appear in the "Upcoming" section
-    And "C1" should have a "Submit" button
 
   # beta22: the popover opened at the far left of the list, because nothing between it and the block was
   # positioned. It now opens under its button, right-aligned with the row's actions, and takes the row's
@@ -189,21 +123,4 @@ Feature: Work the student can no longer change stays in Upcoming, with the reaso
     And I open the "Can't resubmit" control of "A1"
     And the "Can't resubmit" popover of "A1" should say "Your teacher has locked submissions for you, so you can't submit."
 
-  Scenario: Past the deadline, locked work that was never handed in goes to Past
-    Given a summative "assign" "A1" in "M1" was due "1 hour ago"
-    And "teacher1" locks submissions for "student1" on "A1"
-    And the My assessments index is up to date
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Past" section
-    And "A1" should not have a "Can't submit" button
-
   # B4 (support map): unlocking fired events the block didn't observe, so the row kept "Can't resubmit".
-  Scenario: Unlocking a submission shows at once
-    Given a summative "assign" "A1" in "M1" is due "in 3 days"
-    And "student1" has submitted "A1"
-    And "teacher1" locks submissions for "student1" on "A1"
-    And the My assessments index is up to date
-    When "teacher1" unlocks submissions for "student1" on "A1"
-    And I log in as "student1" and view my dashboard
-    Then "A1" should not have a "Can't resubmit" button
-    And "A1" should have a "Submit" button

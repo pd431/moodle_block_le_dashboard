@@ -17,15 +17,14 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
-use block_le_dashboard\local\genericname;
 use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
 
 /**
  * The marker view: marking that is mine, whatever the plugin (R3: hidden activities included, flagged).
  *
- * "Mine" is the units allocated to me, plus every unit of activities without
- * allocation in courses where I hold a staff role. Unallocated units of
+ * "Mine" is defined once, in marking_rules: the units allocated to me or that I marked, plus every unit of
+ * activities without allocation in courses where I hold a staff or convenor role. Unallocated units of
  * activities with allocation are for convenors only (D6).
  *
  * @package    block_le_dashboard
@@ -51,26 +50,33 @@ class staff extends base {
     }
 
     /**
-     * Courses in scope: [staff role courses, courses where I may have allocated work,
-     * convenor role courses].
+     * Courses in scope: [staff role and convenor role courses, courses where I may have allocated work (the
+     * same), convenor role courses].
      *
-     * @param bool $allyears Every year, for marking still to do (EC3), instead of the selected one.
+     * @param bool $allyears Every year, for the index queries, which choose the year by in_year_sql() (EC3); else the
+     *     courses of the selected year, for Refresh.
      * @return array
      */
     protected function courses(bool $allyears = false): array {
         $key = $allyears ? 'all' : 'year';
         if (!isset($this->courses[$key])) {
             $year = $allyears ? null : $this->year();
-            $staff = scope::courses_with_roles($this->userid, config::role_ids('staffrole'), $year);
             $convenor = scope::courses_with_roles($this->userid, config::role_ids('moduleconvenorrole'), $year);
-            $this->courses[$key] = [$staff, array_values(array_unique(array_merge($staff, $convenor))), $convenor];
+            // A convenor's own courses count as staff courses, so marking without allocation there is theirs too
+            // (UAT, beta27: a convenor who wasn't also a teacher there never saw quiz marking).
+            $staff = array_values(array_unique(array_merge(
+                scope::courses_with_roles($this->userid, config::role_ids('staffrole'), $year),
+                $convenor
+            )));
+            $this->courses[$key] = [$staff, $staff, $convenor];
         }
         return $this->courses[$key];
     }
 
     /**
-     * My marking per assessment and stage: tomark, mine, marked, unallocated (units counted
-     * because they fall to me as convenor), isgroup (units are groups), firstready (earliest
+     * My marking per assessment and stage: tomark, mine, marked, own (units allocated to me or that I marked, and
+     * work without allocation no one marked by hand where I convene: my own workload for Completed marking),
+     * unallocated (units counted because they fall to me as convenor), isgroup (units are groups), firstready (earliest
      * time an unmarked unit became ready) and lastmarked (my latest mark here).
      *
      * Mine is: units allocated to me; unallocated units on activities with allocation in
@@ -78,27 +84,51 @@ class staff extends base {
      * activities without allocation in my staff courses; and my share of activities with
      * several markers and no allocation (G7, see shared_marking()).
      *
-     * Work counts once the unit's own deadline has passed (G9); see ready_sql().
+     * Work counts once the unit's own deadline has passed (G9); see marking_rules::ready_sql().
      *
      * @return \stdClass[]
      */
     protected function marking(): array {
         global $DB;
-        [$staff, $marker] = $this->courses(true);
+        [$staff, $marker, $convenor] = $this->courses(true);
         if (!$marker) {
             return [];
         }
-        [$where, $params] = $this->mine_sql(false);
+        [$where, $params] = marking_rules::mine_sql($this->courses(true), $this->userid, false);
         $shared = $staff ? $this->shared_marking($staff) : [];
-        $params += ['me2' => $this->userid];
-        $ready = self::ready_sql($this->now);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        $where .= " AND $yearsql";
+        $params += $yearparams + ['me2' => $this->userid, 'me3' => $this->userid];
+        // In modules I convene, work without allocation that no one marked by hand (an auto-marked quiz) is mine too;
+        // a colleague's marking isn't.
+        $automarked = '';
+        if ($convenor) {
+            [$autosql, $autoparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'am');
+            $automarked = " OR (m.marked = 1 AND m.markedby IS NULL AND c.hasallocation = 0 AND c.courseid $autosql)";
+            $params += $autoparams;
+        }
+        // Only counted work is in any number; withheld work is counted apart, to keep the row in Completed marking
+        // with its flag (CS3).
+        $ready = '(' . marking_rules::ready_sql($this->now) . ' AND ' . marking_rules::COUNTED . ')';
+        // Work still to mark whose marking deadline falls within each summary window, or has passed (UAT, beta27).
+        $deadline = marking_rules::marking_deadline_sql();
+        $windows = '';
+        foreach (self::WINDOWS as $days) {
+            $by = $this->now + $days * DAYSECS;
+            $windows .= "SUM(CASE WHEN $ready AND m.marked = 0 AND $deadline <= $by THEN 1 ELSE 0 END) AS dueby$days, ";
+        }
         $records = $DB->get_records_sql("SELECT " . $DB->sql_concat('m.cmid', "'-'", 'm.stage') . " AS id, m.cmid, m.stage,
+                                            $windows
                                             SUM(CASE WHEN $ready AND m.marked = 0 THEN 1 ELSE 0 END) AS tomark,
                                             SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS mine,
                                             SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked,
+                                            SUM(CASE WHEN $ready AND (" . marking_rules::MARKER_SQL . " = :me3$automarked)
+                                                     THEN 1 ELSE 0 END) AS own,
                                             SUM(CASE WHEN $ready AND m.allocatedto IS NULL AND c.hasallocation = 1
                                                      THEN 1 ELSE 0 END) AS unallocated,
                                             MAX(CASE WHEN m.unittype = 'group' THEN 1 ELSE 0 END) AS isgroup,
+                                            SUM(CASE WHEN " . marking_rules::WITHHELD . " THEN 1 ELSE 0 END)
+                                                AS withheld,
                                             MIN(CASE WHEN $ready AND m.marked = 0 THEN m.timeready ELSE NULL END)
                                                 AS firstready,
                                             MAX(CASE WHEN m.markedby = :me2 THEN m.timemarked ELSE NULL END) AS lastmarked
@@ -111,189 +141,39 @@ class staff extends base {
     }
 
     /**
-     * SQL on m (mark index) and c (assessment index) for the units that are mine: allocated to me
-     * (or marked by me, EC8), unallocated where I convene (G3), and every unit of activities without
-     * allocation in my staff courses.
+     * Units of mine flagged for an academic conduct (plagiarism) check, per assessment: under investigation, and
+     * withheld (CS3), which are in no other count.
      *
-     * @param bool $shared Include activities with several markers and no allocation, whose share
-     *                     marking() works out separately (G7).
-     * @return array [sql, params]
-     */
-    protected function mine_sql(bool $shared): array {
-        global $DB;
-        [$staff, $marker, $convenor] = $this->courses(true);
-        [$markersql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED, 'mc');
-        // Marked work counts for whoever marked it, the rest for whoever it is allocated to (EC8).
-        $where = ["(" . self::MARKER_SQL . " = :me AND c.courseid $markersql)"];
-        $params['me'] = $this->userid;
-        if ($convenor) {
-            [$convenorsql, $convenorparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'cc');
-            $where[] = "(m.allocatedto IS NULL AND c.hasallocation = 1 AND c.courseid $convenorsql)";
-            $params += $convenorparams;
-        }
-        if ($staff) {
-            [$staffsql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sc');
-            $multi = $shared ? '' : ' AND NOT ' . $DB->sql_like('c.stages', ':multi');
-            $where[] = "(c.hasallocation = 0$multi AND c.courseid $staffsql)";
-            $params += $staffparams + ($shared ? [] : ['multi' => '%marker%']);
-        }
-        return ['(' . implode(' OR ', $where) . ')', $params];
-    }
-
-    /**
-     * Units of mine flagged for an academic conduct (plagiarism) check, per assessment.
-     *
-     * @return int[] cmid => flagged units
+     * @return \stdClass[] cmid => open, withheld
      */
     protected function flagged(): array {
         global $DB;
         if (!$this->courses(true)[1]) {
             return [];
         }
-        [$where, $params] = $this->mine_sql(true);
-        $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
-        return array_map('intval', $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                                FROM {block_le_dashboard_mark} m
-                                                                JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                                                " . base::LIVE . "
-                                                               WHERE m.flagged = 1 AND $where
-                                                            GROUP BY m.cmid", $params));
+        [$where, $params] = marking_rules::mine_sql($this->courses(true), $this->userid, true);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        return marking_rules::flagged("$where AND $yearsql", $params + $yearparams);
     }
 
     /**
-     * SQL for the marker a mark index row (alias m) counts for: who marked it, else who it is allocated
-     * to (EC8). Marking without allocation (a quiz graded by hand, F8) counts for whoever marked it.
-     */
-    const MARKER_SQL = "(CASE WHEN m.marked = 1 AND m.markedby IS NOT NULL THEN m.markedby ELSE m.allocatedto END)";
-
-    /**
-     * SQL for a mark index row (alias m) that is ready to mark at a time: submitted, and its
-     * unit's deadline has passed (G9). Work already marked counts whenever it was marked.
-     *
-     * @param int $now
-     * @return string
-     */
-    public static function ready_sql(int $now): string {
-        // A released unit is finished: a stage that only sampled (moderation) owes it nothing.
-        return "(m.submitted = 1 AND (m.marked = 1 OR (m.released = 0 AND (m.unitdue IS NULL OR m.unitdue < $now))))";
-    }
-
-    /**
-     * Whether a mark index row is ready to mark at a time, as ready_sql().
-     *
-     * @param \stdClass $r
-     * @param int $now
-     * @return bool
-     */
-    public static function is_ready(\stdClass $r, int $now): bool {
-        return $r->submitted && ($r->marked || (empty($r->released) && ($r->unitdue === null || (int)$r->unitdue < $now)));
-    }
-
-    /**
-     * Students with an extension whose work may still arrive, per assessment, counting only
-     * students whose marking is mine (as marking()): allocated to me, unallocated where I
-     * convene, or anyone on activities without allocation in my staff courses. A student counts
-     * until their deadline (if they submitted early) or their deadline plus the grace period
-     * (if they haven't submitted yet).
+     * Students with an extension whose work may still arrive, per assessment, counting only students whose
+     * marking is mine by the same rule as marking() (marking_rules::mine_students_sql()).
      *
      * @return \stdClass[] Keyed by cmid: students, latest (latest extended deadline).
      */
     protected function extensions(): array {
-        global $DB;
-        [$staff, $marker, $convenor] = $this->courses(true);
-        if (!$marker) {
+        if (!$this->courses(true)[1]) {
             return [];
         }
-        [$markersql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED, 'xm');
-        $where = ["(c.hasallocation = 1 AND c.courseid $markersql AND " . $DB->sql_like('s.allocatedto', ':me') . ")"];
-        $params['me'] = '%,' . $this->userid . ',%';
-        if ($convenor) {
-            [$convenorsql, $convenorparams] = $DB->get_in_or_equal($convenor, SQL_PARAMS_NAMED, 'xc');
-            $where[] = "(c.hasallocation = 1 AND s.allocatedto IS NULL AND c.courseid $convenorsql)";
-            $params += $convenorparams;
-        }
-        if ($staff) {
-            [$staffsql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'xs');
-            $where[] = "(c.hasallocation = 0 AND c.courseid $staffsql)";
-            $params += $staffparams;
-        }
-        return self::pending_extensions('(' . implode(' OR ', $where) . ')', $params, $this->now);
+        [$where, $params] = marking_rules::mine_students_sql($this->courses(true), $this->userid);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        return marking_rules::pending_extensions("$where AND $yearsql", $params + $yearparams, $this->now);
     }
 
     /**
-     * Students with an extension whose work may still arrive, per assessment (G9), for the
-     * staff and convenor views.
-     *
-     * @param string $where SQL on s (student index) and c (assessment index) choosing whose count.
-     * @param array $params
-     * @param int $now
-     * @return \stdClass[] Keyed by cmid: students, latest.
-     */
-    public static function pending_extensions(string $where, array $params, int $now): array {
-        global $DB;
-        $params += ['now1' => $now, 'now2' => $now - config::grace()];
-        $records = $DB->get_records_sql("SELECT s.cmid, COUNT(1) AS students, MAX(s.due) AS latest
-                                           FROM {block_le_dashboard_stu} s
-                                           JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
-                                           " . base::LIVE . "
-                                          WHERE s.canaccess = 1 AND s.active = 1 AND s.due > c.due
-                                                AND ((s.submitted = 1 AND s.due >= :now1)
-                                                     OR (s.submitted = 0 AND s.due >= :now2))
-                                                AND $where
-                                       GROUP BY s.cmid", $params);
-        return array_column(array_values($records), null, 'cmid');
-    }
-
-    /**
-     * Whether new work arrived after marking was finished (G6): the latest mark came after the
-     * deadline, and every unit still to mark became ready after it. Marking done before the
-     * deadline (early work, auto-marked quiz attempts) never finished anything (F4).
-     *
-     * @param \stdClass[] $stages With firstready (earliest unmarked ready unit) and lastmarked.
-     * @param int|null $due
-     * @return bool
-     */
-    public static function returned(array $stages, ?int $due): bool {
-        $lastmarked = 0;
-        $firstready = null;
-        foreach ($stages as $s) {
-            $lastmarked = max($lastmarked, (int)$s->lastmarked);
-            if ($s->firstready !== null) {
-                $firstready = $firstready === null ? (int)$s->firstready : min($firstready, (int)$s->firstready);
-            }
-        }
-        return $lastmarked > 0 && ($due === null || $lastmarked > $due) && $firstready !== null
-            && $firstready >= $lastmarked;
-    }
-
-    /**
-     * The hint on a row with extensions still to come (G9), with the count beside its icon.
-     *
-     * @param string $rowid
-     * @param \stdClass $pending students, latest
-     * @return array
-     */
-    public static function extensions_hint(string $rowid, \stdClass $pending): array {
-        $n = (int)$pending->students;
-        $dated = format::dated('hint_extensions_text', (int)$pending->latest);
-        $hint = format::hint(
-            $rowid,
-            'extensions',
-            $dated['text'],
-            null,
-            $n === 1 ? get_string('hint_extensions_one', 'block_le_dashboard')
-                : get_string('hint_extensions_many', 'block_le_dashboard', $n),
-            $n
-        );
-        $hint['dated'] = $dated;
-        return $hint;
-    }
-
-    /**
-     * My share of activities with several markers and no allocation (G7), in the same shape
-     * as marking(). Per unit: the marker stage I marked, otherwise the first open marker
-     * stage, otherwise nothing (others have given every mark). Agreement stays shared once
-     * it is ready. So a marker who has given their mark is done with that unit.
+     * My share of activities with several markers and no allocation (G7), in the same shape as marking():
+     * per unit, the stages marking_rules::shared_units() gives me.
      *
      * @param int[] $staff Staff role courses.
      * @return \stdClass[]
@@ -301,14 +181,16 @@ class staff extends base {
     protected function shared_marking(array $staff): array {
         global $DB;
         [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED, 'sh');
-        $params['multi'] = '%marker%';
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        $params += $yearparams;
         $rs = $DB->get_recordset_sql("SELECT m.id, m.cmid, m.unitid, m.unittype, m.stage, m.submitted, m.marked,
-                                             m.markedby, m.timemarked, m.timeready, m.unitdue, m.released
+                                             m.markedby, m.timemarked, m.timeready, m.unitdue, m.released, m.allocatedto,
+                                             c.markingdue, c.due
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
                                         " . base::LIVE . "
-                                       WHERE c.hasallocation = 0 AND " . $DB->sql_like('c.stages', ':multi') . "
-                                             AND c.courseid $insql
+                                       WHERE " . marking_rules::SHARED_SQL . " AND c.courseid $insql AND $yearsql
+                                             AND " . marking_rules::COUNTED . "
                                     ORDER BY m.cmid, m.unittype, m.unitid, m.stage", $params);
         $units = [];
         foreach ($rs as $r) {
@@ -319,25 +201,23 @@ class staff extends base {
         $out = [];
         foreach ($units as $cmid => $byunit) {
             foreach ($byunit as $stages) {
-                $markerstages = array_filter($stages, fn($r) => str_starts_with($r->stage, 'marker'));
-                $mymark = array_filter($markerstages, fn($r) => $r->marked && (int)$r->markedby === $this->userid);
-                $open = array_filter($markerstages, fn($r) => self::is_ready($r, $this->now) && !$r->marked);
-                $share = array_slice($mymark ?: $open, 0, 1);
-                foreach ($stages as $r) {
-                    if (!str_starts_with($r->stage, 'marker') && self::is_ready($r, $this->now)) {
-                        $share[] = $r;
-                    }
-                }
-                foreach ($share as $r) {
+                foreach (marking_rules::shared_units($stages, $this->userid, $this->now) as $r) {
                     $key = $cmid . '-' . $r->stage;
-                    $o = $out[$key] ??= (object)['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
-                        'mine' => 0, 'marked' => 0, 'unallocated' => 0, 'isgroup' => 0,
-                        'firstready' => null, 'lastmarked' => null];
+                    // The array is complete before the cast: object + array is a PHP error (beta27).
+                    $o = $out[$key] ??= (object)(['id' => $key, 'cmid' => $cmid, 'stage' => $r->stage, 'tomark' => 0,
+                        'mine' => 0, 'marked' => 0, 'own' => 0, 'unallocated' => 0, 'isgroup' => 0,
+                        'firstready' => null, 'lastmarked' => null]
+                        + array_fill_keys(array_map(fn($d) => 'dueby' . $d, self::WINDOWS), 0));
                     $o->mine++;
+                    $o->own += marking_rules::is_own($r, $this->userid, true) ? 1 : 0;
                     if ($r->marked) {
                         $o->marked++;
                     } else {
                         $o->tomark++;
+                        $deadline = marking_rules::marking_deadline($r, $r);
+                        foreach (self::WINDOWS as $days) {
+                            $o->{'dueby' . $days} += $deadline !== null && $deadline <= $this->now + $days * DAYSECS ? 1 : 0;
+                        }
                         $o->firstready = $o->firstready === null ? $r->timeready
                             : min((int)$o->firstready, (int)$r->timeready);
                     }
@@ -352,52 +232,43 @@ class staff extends base {
     }
 
     /**
-     * Assessments in my staff courses whose deadline is ahead or unset (EC2), and those past it
-     * whose only work still to come is extensions (G9). Students who left are not counted (EC4).
+     * Assessments in my staff courses with no deadline (EC2), for Undated. Students who left are not counted (EC4),
+     * nor exempt or deferred ones (CS4).
      *
-     * @param int[] $later Cmids past their deadline that stay in Upcoming deadlines.
      * @return \stdClass[] Keyed by cmid.
      */
-    protected function upcoming(array $later): array {
+    protected function undated_cms(): array {
         global $DB;
-        [$staff] = $this->courses();
-        if (!$staff && !$later) {
+        [$staff] = $this->courses(true);
+        if (!$staff) {
             return [];
         }
-        $where = [];
-        $params = ['now' => $this->now];
-        if ($staff) {
-            [$insql, $staffparams] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
-            $where[] = "(c.courseid $insql AND (c.due >= :now OR c.due IS NULL))";
-            $params += $staffparams;
-        }
-        if ($later) {
-            [$latersql, $laterparams] = $DB->get_in_or_equal($later, SQL_PARAMS_NAMED, 'lt');
-            $where[] = "c.cmid $latersql";
-            $params += $laterparams;
-        }
+        [$insql, $params] = $DB->get_in_or_equal($staff, SQL_PARAMS_NAMED);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        $params += $yearparams;
         $records = $DB->get_records_sql("SELECT c.*,
                                             (SELECT COUNT(1) FROM {block_le_dashboard_stu} s
-                                              WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1) AS students,
+                                              WHERE s.cmid = c.cmid AND " . marking_rules::EXPECTED . ") AS students,
                                             (SELECT COUNT(1) FROM {block_le_dashboard_stu} s
-                                              WHERE s.cmid = c.cmid AND s.canaccess = 1 AND s.active = 1
+                                              WHERE s.cmid = c.cmid AND " . marking_rules::EXPECTED . "
                                                     AND s.submitted = 1) AS submissions
                                        FROM {block_le_dashboard_cm} c
                                        " . base::LIVE . "
-                                      WHERE " . implode(' OR ', $where) . "
-                                   ORDER BY c.due ASC", $params);
+                                      WHERE c.courseid $insql AND c.due IS NULL AND $yearsql", $params);
         return array_column(array_values($records), null, 'cmid');
     }
 
     #[\Override]
     public function scope_cmids(): array {
         global $DB;
-        [$staff, $marker] = $this->courses();
+        [$staff, $marker] = $this->courses(true);
         if (!$marker) {
             return [];
         }
         [$insql, $params] = $DB->get_in_or_equal($marker, SQL_PARAMS_NAMED);
-        return array_map('intval', $DB->get_fieldset_select('block_le_dashboard_cm', 'cmid', "courseid $insql", $params));
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        return array_map('intval', $DB->get_fieldset_sql("SELECT c.cmid FROM {block_le_dashboard_cm} c
+                                                           WHERE c.courseid $insql AND $yearsql", $params + $yearparams));
     }
 
     #[\Override]
@@ -413,8 +284,9 @@ class staff extends base {
             $bycm[(int)$m->cmid][$m->stage] = $m;
         }
         $pending = $this->extensions();
-        $flagged = $this->flagged();
-        $cmids = array_unique(array_merge(array_keys($bycm), array_keys($pending)));
+        // Off means the query isn't run either (beta27 hints audit).
+        $flagged = config::shown('hint_plagiarism') ? $this->flagged() : [];
+        $cmids = array_keys($bycm);
         $cms = [];
         if ($cmids) {
             [$insql, $params] = $DB->get_in_or_equal($cmids, SQL_PARAMS_NAMED);
@@ -423,86 +295,52 @@ class staff extends base {
         }
         $names = format::course_names(array_column($cms, 'courseid'));
 
-        $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::STAFF_UPCOMING => [],
-            classifier::UNDATED => []];
+        $sections = [classifier::TOMARK => [], classifier::COMPLETED => [], classifier::UNDATED => []];
         $tomarkcounts = format::zero_counts();
+        $windowcounts = [];
+        foreach (self::WINDOWS as $days) {
+            $windowcounts[$days] = format::zero_counts();
+        }
         $oldest = null;
-        // Marking still to do shows whatever its year; the rest follows the year picker (EC3).
-        $inyear = array_flip($this->courses()[1]);
         foreach ($bycm as $cmid => $stages) {
             $cm = $cms[$cmid];
-            $tomark = $mine = $unallocated = 0;
+            $tomark = $own = $unallocated = $withheld = 0;
             foreach ($stages as $s) {
                 $tomark += (int)$s->tomark;
-                $mine += (int)$s->mine;
+                $own += (int)$s->own;
                 $unallocated += (int)$s->unallocated;
+                $withheld += (int)($s->withheld ?? 0);
             }
-            $section = classifier::staff(
-                $tomark,
-                $mine,
-                $cm->due === null ? null : (int)$cm->due,
-                $this->now,
-                isset($pending[$cmid])
-            );
-            $otheryear = !isset($inyear[(int)$cm->courseid]);
-            // Upcoming and Undated rows come from upcoming(), for every assessment in my staff courses.
-            if (
-                !$section || in_array($section, [classifier::STAFF_UPCOMING, classifier::UNDATED])
-                    || ($otheryear && $section !== classifier::TOMARK)
-            ) {
+            // Completed marking holds only my own workload: work allocated to me, or that I marked; and work of
+            // mine whose results are withheld, so the flag says where it went (CS3).
+            $section = classifier::staff($tomark, $own, $cm->due === null ? null : (int)$cm->due, $this->now, $withheld);
+            // Undated rows come from undated_cms(), for every assessment in my staff courses.
+            if (!$section || $section === classifier::UNDATED) {
                 continue;
             }
-            $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            if ($otheryear) {
-                $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
-            }
-            $row['dates'] = array_values(array_filter([
-                $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
-                $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
-            ]));
+            $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $this->stage_bars($stages), [
+                'unallocated' => $unallocated,
+                // Work that arrived after I finished marking here: the row came back (G6).
+                'returned' => $tomark && marking_rules::returned($stages, $cm->due === null ? null : (int)$cm->due),
+                'pending' => $pending[$cmid] ?? null,
+                'flagged' => $flagged[$cmid] ?? null,
+            ]);
             $row['tomark'] = $tomark;
-            $row['bars'] = $this->stage_bars($stages);
-            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
-            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
-                $row['hints'][] = $setup;
-            }
-            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
-                $row['hints'][] = $generic;
-            }
-            if ($unallocated) {
-                $row['hints'][] = format::hint(
-                    $row['id'],
-                    'unallocated',
-                    get_string(
-                        $unallocated === 1 ? 'hint_unallocated_one' : 'hint_unallocated_many',
-                        'block_le_dashboard',
-                        $unallocated
-                    ),
-                    null,
-                    get_string('hint_unallocated', 'block_le_dashboard', $unallocated),
-                    $unallocated
-                );
-            }
-            // Work that arrived after I finished marking here: the row came back (G6).
-            if ($tomark && self::returned($stages, $cm->due === null ? null : (int)$cm->due)) {
-                $row['hints'][] = format::hint($row['id'], 'returned', get_string('hint_returned_marker', 'block_le_dashboard'));
-            }
-            if (isset($pending[$cmid])) {
-                $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
-            }
-            if (!empty($flagged[$cmid])) {
-                $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
-            }
-            $row['actions'] = [format::view_action($row['url'])];
-            $row = format::load_error($row, $cm, false);
-            $sections[$section][] = $row + ['sortkey' => (int)($cm->markingdue ?: $cm->due)];
+            $sections[$section][] = $row + ['sortkey' => (int)(config::markingdue($cm)[0] ?? $cm->due)];
             if ($section === classifier::TOMARK) {
                 format::count($tomarkcounts, $cm->assesstype, $tomark);
+                foreach (self::WINDOWS as $days) {
+                    $due = 0;
+                    foreach ($stages as $st) {
+                        $due += (int)($st->{'dueby' . $days} ?? 0);
+                    }
+                    format::count($windowcounts[$days], $cm->assesstype, $due);
+                }
             }
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
 
-        // Finished marking: where the whole assessment stands, with my bars behind Show marking (Pierre, 2026-10-07).
+        // Finished marking: where the whole assessment stands, with my bars behind Show marking.
         $grading = self::grading_counts(array_column($sections[classifier::COMPLETED], 'cmid'), $this->now);
         foreach ($sections[classifier::COMPLETED] as &$row) {
             $g = $grading[$row['cmid']] ?? null;
@@ -516,71 +354,36 @@ class staff extends base {
         }
         unset($row);
 
-        $windowcounts = [];
-        foreach (self::WINDOWS as $days) {
-            $windowcounts[$days] = format::zero_counts();
-        }
-        // Upcoming leaves out what is already listed, and adds what is past its deadline with
-        // only extensions to come (G9).
+        // Undated leaves out what is already listed: My marking has no Upcoming section.
         $listed = array_flip(array_merge(
             array_column($sections[classifier::TOMARK], 'cmid'),
             array_column($sections[classifier::COMPLETED], 'cmid')
         ));
-        $later = [];
-        foreach (array_keys($pending) as $cmid) {
-            if (
-                !isset($listed[$cmid]) && isset($cms[$cmid]) && (int)$cms[$cmid]->due < $this->now
-                    && isset($inyear[(int)$cms[$cmid]->courseid])
-            ) {
-                $later[] = $cmid;
-            }
-        }
-        $upcoming = $this->upcoming($later);
-        // Upcoming covers every assessment in the staff courses, not only those with marking rows (R1, beta22 audit).
-        $names += format::course_names(array_diff(array_unique(array_column($upcoming, 'courseid')), array_keys($names)));
-        foreach ($upcoming as $cmid => $cm) {
-            foreach (self::WINDOWS as $days) {
-                if ((int)$cm->due >= $this->now && (int)$cm->due <= $this->now + $days * DAYSECS) {
-                    format::count($windowcounts[$days], $cm->assesstype);
-                }
-            }
+        $undated = $this->undated_cms();
+        $names += format::course_names(array_diff(array_unique(array_column($undated, 'courseid')), array_keys($names)));
+        foreach ($undated as $cmid => $cm) {
             if (isset($listed[$cmid])) {
                 continue;
             }
-            $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            $row['dates'] = $cm->due === null ? [] : [format::date('submissiondeadline', (int)$cm->due)];
-            // Held here past its deadline by extensions: say when the last one ends (D10).
-            if ((int)$cm->due < $this->now && isset($pending[$cmid])) {
-                $row['dates'][] = format::date('extendeddeadline', (int)$pending[$cmid]->latest);
-            }
             // Generic types can't know about submissions (R5).
-            $row['bars'] = $cm->adapter === 'generic' ? [] : [format::bar(
+            $bars = $cm->adapter === 'generic' ? [] : [format::bar(
                 'submitted',
                 get_string('bar_submitted', 'block_le_dashboard'),
                 (int)$cm->submissions,
                 (int)$cm->students
             )];
-            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
-            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
-                $row['hints'][] = $setup;
-            }
-            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
-                $row['hints'][] = $generic;
-            }
-            if (isset($pending[$cmid])) {
-                $row['hints'][] = self::extensions_hint($row['id'], $pending[$cmid]);
-            }
-            if (!empty($flagged[$cmid])) {
-                $row['hints'][] = format::plagiarism_hint($row['id'], $flagged[$cmid]);
-            }
-            $row['actions'] = [format::view_action($row['url'])];
-            $row = format::load_error($row, $cm, (int)$cm->students === 0);
-            $section = $cm->due === null ? classifier::UNDATED : classifier::STAFF_UPCOMING;
-            $sections[$section][] = $row + ['sortkey' => (int)$cm->due];
+            $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $bars, [
+                'undated' => true,
+                'flagged' => $flagged[$cmid] ?? null,
+                'nostudents' => (int)$cm->students === 0,
+            ]);
+            $sections[classifier::UNDATED][] = $row + ['sortkey' => 0];
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
-        foreach ($sections as &$rows) {
-            usort($rows, fn($a, $b) => ($a['sortkey'] <=> $b['sortkey']) ?: strcmp($a['search'], $b['search']));
+        // Soonest first while there's marking to do, latest first once done, undated by name.
+        foreach ($sections as $key => &$rows) {
+            $order = $key === classifier::COMPLETED ? -1 : 1;
+            usort($rows, fn($a, $b) => $order * ($a['sortkey'] <=> $b['sortkey']) ?: strcmp($a['search'], $b['search']));
         }
         unset($rows);
 
@@ -604,9 +407,8 @@ class staff extends base {
             $this->box('marked', $this->marked_counts(), $rangeoptions, $range),
         ];
         return $this->context($summary, array_filter([
-            // What needs action, then what is coming, then what has no date, then what is done.
+            // What needs action, then what has no date, then what is done.
             $this->section(classifier::TOMARK, $sections[classifier::TOMARK]),
-            $this->section(classifier::STAFF_UPCOMING, $sections[classifier::STAFF_UPCOMING]),
             $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::COMPLETED, $sections[classifier::COMPLETED]),
         ]), $oldest, ['hasyears' => true, 'years' => $this->years()]);
@@ -626,7 +428,7 @@ class staff extends base {
             return [];
         }
         [$insql, $params] = $DB->get_in_or_equal(array_values(array_unique($cmids)), SQL_PARAMS_NAMED);
-        $ready = self::ready_sql($now);
+        $ready = marking_rules::ready_sql($now);
         $unit = $DB->sql_concat('m.unittype', "':'", 'm.unitid');
         return $DB->get_records_sql("SELECT m.cmid,
                                             COUNT(DISTINCT CASE WHEN $ready THEN $unit ELSE NULL END) AS units,
@@ -635,7 +437,7 @@ class staff extends base {
                                             COUNT(DISTINCT CASE WHEN $ready AND m.marked = 0 THEN $unit ELSE NULL END)
                                                 AS unmarked
                                        FROM {block_le_dashboard_mark} m
-                                      WHERE m.cmid $insql
+                                      WHERE m.cmid $insql AND " . marking_rules::COUNTED . "
                                    GROUP BY m.cmid", $params);
     }
 
@@ -657,8 +459,9 @@ class staff extends base {
         }
         $bars = [];
         foreach (['marked', 'agreed', 'moderated'] as $kind) {
-            // Agreement or moderation not yet open to me says nothing as "0 of 0" (EC9).
-            if (isset($kinds[$kind]) && ($kind === 'marked' || $kinds[$kind][1] > 0)) {
+            // Agreement or moderation not yet open to me says nothing as "0 of 0" (EC9), nor does marking that is
+            // all withheld (CS3).
+            if (isset($kinds[$kind]) && $kinds[$kind][1] > 0) {
                 [$marked, $mine, $groups] = $kinds[$kind];
                 $bars[] = format::bar($kind, format::stage($kind), $marked, $mine, $groups);
             }

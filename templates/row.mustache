@@ -30,7 +30,8 @@
         "url": "https://example.com/mod/assign/view.php?id=12",
         "course": "M1",
         "modlabel": "Assignment",
-        "faicon": "fa-file-arrow-up",
+        "modicon": {"url": "https://example.com/theme/image.php/boost/assign/1/monologo", "filter": true,
+            "purpose": "assessment", "branded": false},
         "tip": "Assignment. Extension granted. Due soon.",
         "assesstype": "summative",
         "typelabel": "Summative",
@@ -47,15 +48,21 @@
                    "now": "2026-10-04T09:00:00+01:00"}],
         "actions": [{"key": "submit", "label": "Submit", "icon": "fa-upload", "url": "https://example.com/mod/assign/view.php?id=12"}],
         "mitigation": {"id": "ma-row-12-mitigate", "icon": "fa-hand-holding-heart", "items": [
-            {"greyed": true, "label": "Self-certify an extension",
+            {"info": true,
              "reason": "You have used all 3 of your self-certified extensions. You can still request formal mitigation."},
-            {"live": true, "url": "https://example.com/blocks/rhb/srm.php", "label": "Request formal mitigation"}]}
+            {"divider": true},
+            {"live": true, "url": "https://example.com/blocks/rhb/srm.php", "label": "Request formal mitigation",
+             "describedby": true}]}
     }
 }}
 <div class="ma-row-icon ma-tip-wrap">
     <button type="button" class="ma-row-iconbtn" data-action="tip" data-region="ma-row-icon" aria-expanded="false" aria-controls="{{id}}-tip"
             aria-label="{{tip}}">
-        <i class="fa-solid {{faicon}} ma-row-faicon" aria-hidden="true"></i>
+        {{#modicon}}
+        <span class="activityiconcontainer smaller {{purpose}}{{#branded}} isbranded{{/branded}} ma-row-modicon" aria-hidden="true">
+            <img src="{{url}}" class="activityicon{{^filter}} nofilter{{/filter}}" alt="">
+        </span>
+        {{/modicon}}
         {{#hasmodifiers}}
         <span class="ma-row-modifiers" aria-hidden="true">
             {{#mitigationoverlay}}<span class="ma-row-overlay ma-row-overlay--{{state}}"><i class="fa-solid {{icon}}"></i></span>{{/mitigationoverlay}}
@@ -75,7 +82,7 @@
         {{/hasflags}}
     </div>
 </div>
-<div class="ma-row-dates">
+<div class="ma-row-dates{{#stackdates}} ma-row-dates--stacked{{/stackdates}}">
     {{#dates}}
     <div class="ma-row-date ma-row-date--{{key}}" data-date="{{key}}">
         {{#label}}<span class="ma-row-date-label">{{label}}</span> {{/label}}<time datetime="{{iso}}">{{text}}</time>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}
@@ -86,7 +93,7 @@
 </div>
 <div class="ma-row-status">
     {{#status}}<div class="ma-status-wrap"><span class="badge ma-pill ma-pill--{{key}}" data-status="{{key}}">{{label}}</span>{{#statushint}}{{> block_le_dashboard/hint }}{{/statushint}}</div>{{/status}}
-    {{#grade}}<div class="ma-grade" data-region="ma-grade">{{#str}}grade, block_le_dashboard{{/str}} <strong>{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</div>{{/grade}}
+    {{#grade}}<div class="ma-grade" data-region="ma-grade"><span class="ma-grade-label">{{#str}}grade, block_le_dashboard{{/str}}</span> <strong class="ma-grade-value">{{text}}</strong>{{#hint}}{{> block_le_dashboard/hint }}{{/hint}}</div>{{/grade}}
     {{#grading}}<span class="badge ma-pill ma-pill--{{key}}" data-grading="{{key}}">{{text}}</span>{{/grading}}
     {{#bars}}{{> block_le_dashboard/progress }}{{/bars}}
 </div>
@@ -105,12 +112,11 @@
                 data-toggle="dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa-solid {{icon}} ma-icon" aria-hidden="true"></i>{{#str}}action_mitigate, block_le_dashboard{{/str}}</button>
         <div class="dropdown-menu dropdown-menu-right dropdown-menu-end" aria-labelledby="{{id}}">
             {{#items}}
-            {{#live}}<a class="dropdown-item ma-mitigate-item" href="{{url}}">{{label}}{{#note}}<span class="ma-mitigate-left">{{note}}</span>{{/note}}</a>{{/live}}
-            {{#delete}}<a class="dropdown-item ma-mitigate-item ma-mitigate-item--delete" href="{{url}}" data-action="mitigate-delete"><i class="fa-solid fa-trash-can ma-icon" aria-hidden="true"></i><span data-region="ma-delete-label">{{label}}</span></a>{{/delete}}
+            {{#live}}<a class="dropdown-item ma-mitigate-item" href="{{url}}"{{#describedby}} aria-describedby="{{id}}-reason"{{/describedby}}>{{label}}{{#note}}<span class="ma-mitigate-left">{{note}}</span>{{/note}}</a>{{/live}}
+            {{#delete}}<a class="dropdown-item ma-mitigate-item ma-mitigate-item--delete" href="{{url}}" data-action="mitigate-delete"{{#describedby}} aria-describedby="{{id}}-reason"{{/describedby}}><i class="fa-solid fa-trash-can ma-icon" aria-hidden="true"></i><span data-region="ma-delete-label">{{label}}</span></a>{{/delete}}
             {{#html}}<div class="dropdown-item-text ma-mitigate-item">{{{html}}}</div>{{/html}}
-            {{#greyed}}<button type="button" class="dropdown-item ma-mitigate-item ma-mitigate-item--greyed" aria-disabled="true"
-                    aria-describedby="{{id}}-reason">{{label}}</button>
-            <div class="dropdown-item-text ma-mitigate-note" id="{{id}}-reason">{{#reasondated}}{{> block_le_dashboard/datedtext}}{{/reasondated}}{{^reasondated}}{{reason}}{{/reasondated}}</div>{{/greyed}}
+            {{#info}}<div class="dropdown-item-text ma-mitigate-item ma-mitigate-note" id="{{id}}-reason">{{#reasondated}}{{> block_le_dashboard/datedtext}}{{/reasondated}}{{^reasondated}}{{reason}}{{/reasondated}}</div>{{/info}}
+            {{#divider}}<div class="dropdown-divider ma-mitigate-divider" role="separator"></div>{{/divider}}
             {{/items}}
         </div>
     </div>

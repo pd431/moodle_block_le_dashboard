@@ -24,7 +24,7 @@ use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
 
 /**
- * The student view: my own assessments, in Overdue, Upcoming and Past.
+ * The student view: my own assessments, in Overdue, Upcoming and Past, of the selected academic year.
  *
  * One query on the index, then the live uservisible check on the few rows
  * returned (R1: any restriction hides the assessment, dates included).
@@ -36,7 +36,7 @@ use block_le_dashboard\local\scope;
 class student extends base {
     /**
      * Overlay state => icon, for the unusual case only: nothing marks work handed in on time
-     * (Pierre, 2026-10-04). Late is a clock, so due soon is an hourglass. Tones come from the
+     *. Late is a clock, so due soon is an hourglass. Tones come from the
      * state map in scss/styles.scss.
      */
     const OVERLAY_ICONS = [
@@ -46,9 +46,12 @@ class student extends base {
         'notsubmitted' => 'fa-circle-xmark',
         student_row::MITIGATION_SELFCERT => 'fa-hand-holding-heart',
         student_row::MITIGATION_EXTENSION => 'fa-calendar-plus',
+        // One icon for both: the student needn't do this one (CS4).
+        student_row::MITIGATION_EXEMPT => 'fa-user-check',
+        student_row::MITIGATION_DEFERRED => 'fa-user-check',
     ];
 
-    /** Assessment types offered Mitigate: summative only (D8, Pierre 2026-10-04). */
+    /** Assessment types offered Mitigate: summative only (D8). */
     const MITIGATION_TYPES = ['summative'];
 
     /** @var array|null Self-certified extensions used and allowed, once loaded. */
@@ -62,6 +65,9 @@ class student extends base {
 
     /** A pending assessment is due soon within this many days (rc6). */
     const DUESOON_DAYS = 7;
+
+    /** The deadline that places a row in an academic year: the student's own (EC3d). */
+    const DEADLINES = ['s.due'];
 
     /** @var array|null Rows, once loaded. */
     protected ?array $rows = null;
@@ -95,14 +101,16 @@ class student extends base {
         }
         [$insql, $params] = $DB->get_in_or_equal(array_keys($courses), SQL_PARAMS_NAMED);
         $params['userid'] = $this->userid;
-        $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue,
+        [$yearsql, $yearparams] = $this->in_year_sql('c', self::DEADLINES);
+        $params += $yearparams;
+        $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue, c.opens,
                                                 c.hiddenfromstudents, c.nosubmission, c.norelease, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
                                                 s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.lockreason, s.enrolstart
                                            FROM {block_le_dashboard_stu} s
                                            JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0
-                                            AND c.courseid $insql", $params);
+                                            AND c.courseid $insql AND $yearsql", $params);
         $rows = [];
         foreach ($records as $r) {
             // The course record is at hand, so modinfo needn't fetch it again (F7).
@@ -122,11 +130,13 @@ class student extends base {
     #[\Override]
     public function scope_cmids(): array {
         global $DB;
-        return array_map('intval', $DB->get_fieldset_select(
-            'block_le_dashboard_stu',
-            'cmid',
-            'userid = :userid',
-            ['userid' => $this->userid]
+        [$yearsql, $yearparams] = $this->in_year_sql('c', self::DEADLINES);
+        return array_map('intval', $DB->get_fieldset_sql(
+            "SELECT s.cmid
+               FROM {block_le_dashboard_stu} s
+               JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
+              WHERE s.userid = :userid AND $yearsql",
+            ['userid' => $this->userid] + $yearparams
         ));
     }
 
@@ -151,7 +161,7 @@ class student extends base {
             [$section, $status] = classifier::student($r, $this->now, $threshold, $grace);
             $row = $this->row($r, $section, $status);
             $hasgrades = $hasgrades || !empty($row['grade']);
-            // Undated work in Past sorts by when feedback was given (Pierre, 2026-10-04).
+            // Undated work in Past sorts by when feedback was given.
             $sortkey = $r->due === null && $section === classifier::PAST ? (int)$r->timereleased : (int)$r->due;
             $sections[$section][] = $row + ['sortkey' => $sortkey];
             if (isset($counts[$section])) {
@@ -180,7 +190,7 @@ class student extends base {
                 $box = $this->box('selfcert', ['both' => $selfcert['used']] + format::zero_counts());
                 $box['subnote'] = get_string('selfcertnolimit', 'block_le_dashboard');
             } else {
-                // Counting down, as the Mitigate menu does (Pierre, 2026-10-09).
+                // Counting down, as the Mitigate menu does.
                 $left = max(0, $selfcert['max'] - $selfcert['used']);
                 $box = $this->box(
                     'selfcert',
@@ -198,7 +208,7 @@ class student extends base {
         }
 
         // A student's Refresh rewrites only their own rows and leaves each assessment's index time alone,
-        // so the line also counts this view's last Refresh that finished (Pierre's screenshot, 2026-10-09).
+        // so the line also counts this view's last Refresh that finished (Pierre's screenshot).
         if ($oldest !== null) {
             $last = json_decode((string)get_user_preferences('block_le_dashboard_lastrefresh', '', $this->userid), true);
             $oldest = max($oldest, is_array($last) ? (int)($last[scope::STUDENT] ?? 0) : 0);
@@ -209,6 +219,8 @@ class student extends base {
             $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::PAST, $sections[classifier::PAST]),
         ]), $oldest, [
+            'hasyears' => true,
+            'years' => $this->years(),
             'hasgradestoggle' => $hasgrades,
             'showgrades' => (bool)get_user_preferences('block_le_dashboard_showgrades', false, $this->userid),
         ]);
@@ -230,7 +242,10 @@ class student extends base {
             $parts[] = get_string('tip_' . $r->mitigation, 'block_le_dashboard');
         }
         $state = null;
-        if ($status === classifier::STATUS_REOPENED) {
+        if ($status === classifier::STATUS_EXEMPT) {
+            // Nothing is expected: no late, overdue or due-soon icon (CS4).
+            $state = null;
+        } else if ($status === classifier::STATUS_REOPENED) {
             // Nothing was missed: no overdue or due-soon icon on a new attempt.
             $state = null;
         } else if ($section === classifier::OVERDUE) {
@@ -242,7 +257,8 @@ class student extends base {
             // Not for Closed: the block can't see those submissions (F6).
             $state = 'notsubmitted';
         } else if (
-            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && $r->due && (int)$r->due > $this->now
+            in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && !$this->not_yet_open($r)
+                && $r->due && (int)$r->due > $this->now
                 && (int)$r->due - $this->now <= self::DUESOON_DAYS * DAYSECS
         ) {
             $state = 'duesoon';
@@ -254,18 +270,34 @@ class student extends base {
     }
 
     /**
+     * Whether the activity hasn't opened for submissions yet (quiz open, assignment "allow submissions from",
+     * coursework start, peer work from): the student can't hand anything in, so it isn't due soon and has no
+     * Submit (Pierre's UAT).
+     *
+     * @param \stdClass $r
+     * @return bool
+     */
+    protected function not_yet_open(\stdClass $r): bool {
+        return !empty($r->opens) && (int)$r->opens > $this->now && (int)$r->submitted !== 1;
+    }
+
+    /**
      * Whether the work was handed in after the student's own deadline, extensions included (D2).
      *
      * @param \stdClass $r
      * @return bool
      */
     protected static function is_late(\stdClass $r): bool {
-        return (int)$r->submitted === 1 && $r->due && $r->timesubmitted && (int)$r->timesubmitted > (int)$r->due;
+        // Work within the late tolerance isn't late (beta27 hints audit).
+        $tolerance = config::number('latetolerance') * MINSECS;
+        return (int)$r->submitted === 1 && $r->due && $r->timesubmitted
+            && (int)$r->timesubmitted > (int)$r->due + $tolerance;
     }
+
 
     /**
      * Plain lines under the dates (G5), each at the precision its size needs: time left to submit,
-     * and how soon it is due. How late work was is the clock's title, not a line.
+     * and how soon it is due, on every row still open for submission. How late work was is the clock's title, not a line.
      *
      * @param \stdClass $r
      * @param string $section
@@ -276,13 +308,14 @@ class student extends base {
         $notes = [];
         $due = $r->due ? (int)$r->due : null;
         // Time left: to the cut-off (a quiz's close is its cut-off). Without one Moodle keeps taking the work, so
-        // there's no countdown (B9, support map beta22 re-run).
+        // there's no countdown (B9).
         $until = $r->cutoff ? (int)$r->cutoff : null;
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
             $notes[] = format::countdown('stillsubmit', $until, $this->now);
         }
-        $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]);
-        if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
+        // How soon it is due, however far away; the due-soon mark keeps its window (DUESOON_DAYS).
+        $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && !$this->not_yet_open($r);
+        if ($open && $due && $due > $this->now) {
             $notes[] = format::countdown('duein', $due, $this->now);
         }
         return $notes;
@@ -315,35 +348,47 @@ class student extends base {
         [$row['overlay'], $row['mitigationoverlay'], $parts] = $this->modifiers($r, $section, $status);
         $row['hasmodifiers'] = $row['overlay'] || $row['mitigationoverlay'];
         $row['tip'] = format::tip($row['modlabel'], $parts);
-        // Nothing to hand in online: say so while the date is ahead (Pierre, 2026-10-06).
-        $row['hints'] = !empty($r->nosubmission) && $section !== classifier::PAST
+        // Nothing to hand in online: say so while the date is ahead.
+        $row['hints'] = !empty($r->nosubmission) && $section !== classifier::PAST && config::shown('hint_nosubmission')
             ? [format::nosubmission_hint($row['id'], false)] : [];
 
         $dates = [];
+        if ($this->not_yet_open($r)) {
+            // Said first, so the row reads "Opens ..., Due ..." (Pierre's UAT).
+            $dates[] = format::date('opens', (int)$r->opens);
+        }
         if ($r->due) {
-            // An extension is ordinary upcoming work: no note (Pierre, 2026-10-06).
-            $dates[] = format::date('due', (int)$r->due);
+            // An extension is ordinary upcoming work: no note, but its date says it is the extended one (CS5).
+            $extended = in_array($r->mitigation, [student_row::MITIGATION_EXTENSION, student_row::MITIGATION_SELFCERT], true);
+            $dates[] = format::date('due', (int)$r->due, $extended ? 'extendeddeadline' : null);
         }
         $released = $status === classifier::STATUS_RELEASED;
         if ($released) {
-            // First, under the Feedback released pill, so it never reads as the student's own deadline (D6).
-            array_unshift($dates, format::date('released', (int)$r->timereleased));
+            // After the deadline, in the order things happen: its label says what it is (replacing D6).
+            $dates[] = format::date('released', (int)$r->timereleased);
             if ($r->gradedisplay !== null && $r->gradedisplay !== '') {
                 $row['grade'] = ['text' => $r->gradedisplay];
             }
-        } else if ($status === classifier::STATUS_INMARKING && $r->markingdue) {
+        } else if ($status === classifier::STATUS_INMARKING && ($feedback = config::feedback_date($r)) !== null) {
             // The date stays once it has passed, with a hint saying who to contact (G12).
-            $date = format::date('feedbackexpected', (int)$r->markingdue);
-            // The question-circle beside the date once it has passed, saying who to contact (G12).
-            if ((int)$r->markingdue < $this->now) {
+            $date = format::date('feedbackexpected', $feedback);
+            // The question-circle beside the date once the date students see has passed, saying who to contact (G12).
+            if ($feedback < $this->now) {
                 $date['hint'] = $this->feedback_hint($row['id']);
             }
             $dates[] = $date;
         }
         $row['dates'] = $dates;
+        // With two dates or more, every label on its own line so the dates line up.
+        $row['stackdates'] = count($dates) > 1;
         $row['notes'] = $this->notes($r, $section, $status);
+        if ($status === classifier::STATUS_EXEMPT) {
+            // Exempt or deferred: no actions at all, not even Mitigate (CS4).
+            $row['actions'] = [];
+            return $row;
+        }
         // Late work: the clock beside the grade once there is one, else beside the status pill.
-        if (self::is_late($r)) {
+        if (self::is_late($r) && config::shown('hint_late')) {
             $hint = $this->late_hint($row['id'], $r);
             if (!empty($row['grade'])) {
                 $row['grade']['hint'] = $hint;
@@ -355,11 +400,19 @@ class student extends base {
         $actions = [];
         $open = [classifier::STATUS_PENDING, classifier::STATUS_NOTSUBMITTED, classifier::STATUS_REOPENED];
         if ($status === classifier::STATUS_SUBMITTED && $section !== classifier::PAST && $r->lockreason) {
-            // Final before the deadline: say why instead of offering Submit (Pierre, 2026-10-09).
+            // Final before the deadline: say why instead of offering Submit.
             $row['locked'] = $this->lock_control($row['id'], $r->lockreason);
-        } else if ($section !== classifier::PAST && classifier::teacher_locked($r)) {
-            // Locked before anything was handed in (B1).
-            $row['locked'] = $this->lock_control($row['id'], $r->lockreason, false);
+        } else if ($section !== classifier::PAST && !classifier::submittable($r, $this->now)) {
+            // Nothing can be handed in before the deadline: a teacher's lock (B1), or every quiz attempt used with
+            // none finished.
+            if ($r->lockreason) {
+                $row['locked'] = $this->lock_control($row['id'], $r->lockreason, false);
+            } else {
+                $actions[] = format::view_action($row['url']);
+            }
+        } else if ($this->not_yet_open($r)) {
+            // Nothing can be handed in yet: View, not Submit.
+            $actions[] = format::view_action($row['url']);
         } else if (in_array($status, $open) && $section !== classifier::PAST) {
             $actions[] = format::action('submit', $row['url']);
         } else if ($status === classifier::STATUS_SUBMITTED && $section === classifier::UPCOMING) {
@@ -400,7 +453,7 @@ class student extends base {
     }
 
     /**
-     * Mitigate (Pierre, 2026-10-09): on every summative row (D8) where block_rhb gives a real link
+     * Mitigate: on every summative row (D8) where block_rhb gives a real link
      * (mitigation::links()), from the start until the hours set after the student's own deadline, whatever
      * was handed in or released. Work with no deadline keeps it.
      *

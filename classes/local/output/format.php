@@ -16,6 +16,7 @@
 
 namespace block_le_dashboard\local\output;
 
+use block_le_dashboard\local\config;
 use block_le_dashboard\local\guidance;
 
 /**
@@ -26,17 +27,6 @@ use block_le_dashboard\local\guidance;
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 class format {
-    /** Font Awesome icon per activity type. Add a line here for a new adapter. */
-    const ICONS = [
-        'assign' => 'fa-file-arrow-up',
-        'quiz' => 'fa-clipboard-question',
-        'coursework' => 'fa-file-pen',
-        'peerwork' => 'fa-people-group',
-    ];
-
-    /** Icon for any other activity type. */
-    const ICON_FALLBACK = 'fa-file-lines';
-
     /** Font Awesome icon per row action (Show markers has none, as in rc6). */
     const ACTION_ICONS = [
         'submit' => 'fa-upload',
@@ -57,7 +47,7 @@ class format {
 
     /**
      * A string with a date in it, split around the date so a template can mark it up as a time element and the
-     * page can show it in the viewer's own time zone, like the row dates (Pierre, 2026-10-09: "all times ...
+     * page can show it in the viewer's own time zone, like the row dates (Pierre: "all times ...
      * should look like the server was in china").
      *
      * @param string $identifier A block string whose only placeholder is the date.
@@ -115,14 +105,17 @@ class format {
      *
      * @param string $key Date key; the label is the date_{key} string, if there is one.
      * @param int $time
+     * @param string|null $label Another date's label for this one: a student's deadline under an extension is
+     *                           labelled "Extended deadline" (extendeddeadline, CS5).
      * @return array
      */
-    public static function date(string $key, int $time): array {
+    public static function date(string $key, int $time, ?string $label = null): array {
         $sm = get_string_manager();
+        $label = $label ?? $key;
         return [
             'key' => $key,
-            'label' => $sm->string_exists('date_' . $key, 'block_le_dashboard')
-                ? get_string('date_' . $key, 'block_le_dashboard') : null,
+            'label' => $sm->string_exists('date_' . $label, 'block_le_dashboard')
+                ? get_string('date_' . $label, 'block_le_dashboard') : null,
             'text' => self::datetime($time),
             'iso' => date('c', $time),
         ];
@@ -225,7 +218,7 @@ class format {
 
     /**
      * A hint on a row: one icon (with its count) that opens a popover with its title and
-     * description on a click, keyboard focus or a short hover (Pierre, 2026-10-06). The same
+     * description on a click, keyboard focus or a short hover. The same
      * component for every hint, in the row's meta line or beside a date, pill or grade.
      *
      * @param string $rowid
@@ -260,7 +253,7 @@ class format {
         ];
     }
 
-    /** The guidance box each hint shows under its factual line (Pierre, 2026-10-09). */
+    /** The guidance box each hint shows under its factual line. */
     const HINT_GUIDANCE = [
         'late' => 'latepenalty',
         'feedbackcontact' => 'feedbacklate',
@@ -273,16 +266,17 @@ class format {
     ];
 
     /**
-     * A hint's icon. The missing brief is a half-dashed file where Moodle's Font Awesome has one (6.6 and later,
-     * so Moodle 5.0 and later): 4.5's 6.5.2 would draw a blank square (Pierre, 2026-10-17).
+     * A hint's icon. The missing brief is a half-dashed file. Moodle's Font Awesome has it
+     * from 6.6, so Moodle 5.0 and later; on 4.5 (6.5.2) the plugin draws its own copy, pix/file-half-dashed.svg,
+     * in styles.css (Pierre: "UNTIL WE MOVE TO 5.3"). Remove both then.
      *
      * @param string $key
      * @return string
      */
     public static function hint_icon(string $key): string {
         global $CFG;
-        if ($key === 'brief' && (int)$CFG->branch >= 500) {
-            return 'fa-file-half-dashed';
+        if ($key === 'brief') {
+            return (int)$CFG->branch >= 500 ? 'fa-file-half-dashed' : 'ma-icon-file-half-dashed';
         }
         return self::HINT_ICONS[$key];
     }
@@ -290,6 +284,7 @@ class format {
     /** Each hint's icon (the Flag icons mockup). */
     const HINT_ICONS = [
         'brief' => 'fa-file-circle-exclamation',
+        'defaultmarkingdue' => 'fa-calendar-day',
         'genericname' => 'fa-signature',
         'hidden' => 'fa-eye-slash',
         'unallocated' => 'fa-user-slash',
@@ -306,6 +301,7 @@ class format {
     /** Each hint's tone. Attention is for staff and convenors only, never on a student's row. */
     const HINT_TONES = [
         'brief' => 'info',
+        'defaultmarkingdue' => 'info',
         'genericname' => 'info',
         'hidden' => 'grey',
         'unallocated' => 'attention',
@@ -320,7 +316,7 @@ class format {
     ];
 
     /**
-     * Where a finished assessment stands, for staff Past rows (Pierre, 2026-10-07): one status over the whole
+     * Where a finished assessment stands, for staff Past rows: one status over the whole
      * assessment, every marker's share included. Still being marked first, then release.
      *
      * @param int $units Work ready to mark.
@@ -349,7 +345,7 @@ class format {
 
     /**
      * Moves a finished row's bars behind its Show marking button, first in the list under the row, above any
-     * markers: at a glance the row shows its grading status only (Pierre, 2026-10-07).
+     * markers: at a glance the row shows its grading status only.
      *
      * @param array $row
      * @param string $label The name beside the row's own bars.
@@ -395,7 +391,7 @@ class format {
     const SETUP_PROBLEMS = ['nodue', 'nograde', 'nomarks', 'bothtags'];
 
     /**
-     * Staff flag on a tagged assessment missing a setting (Pierre, 2026-10-07): each problem on its
+     * Staff flag on a tagged assessment missing a setting: each problem on its
      * own, then a link to the activity's settings.
      *
      * @param string $rowid
@@ -423,7 +419,7 @@ class format {
 
     /**
      * Staff rows of an assessment whose last index couldn't read all student data: a flag, and with no
-     * student data at all, a note in place of the bars that would read 0 of 0 (Pierre, 2026-10-08).
+     * student data at all, a note in place of the bars that would read 0 of 0.
      *
      * @param array $row
      * @param \stdClass $cm Index row, with loaderror.
@@ -443,19 +439,51 @@ class format {
     }
 
     /**
-     * The hint on a row with submissions flagged for an academic conduct (plagiarism) check:
-     * staff and convenors only, never students.
+     * The hint on a row with extensions still to come (G9), with the count beside its icon.
      *
      * @param string $rowid
-     * @param int $n Flagged submissions.
+     * @param \stdClass $pending students, latest
      * @return array
      */
-    public static function plagiarism_hint(string $rowid, int $n): array {
+    public static function extensions_hint(string $rowid, \stdClass $pending): array {
+        $n = (int)$pending->students;
+        $dated = self::dated('hint_extensions_text', (int)$pending->latest);
+        $hint = self::hint(
+            $rowid,
+            'extensions',
+            $dated['text'],
+            null,
+            $n === 1 ? get_string('hint_extensions_one', 'block_le_dashboard')
+                : get_string('hint_extensions_many', 'block_le_dashboard', $n),
+            $n
+        );
+        $hint['dated'] = $dated;
+        return $hint;
+    }
+
+    /**
+     * The academic conduct flag (CS3), for staff and convenors only, never students: "N flagged" over both kinds,
+     * then one sentence for each kind present, work still under investigation first, then work whose results are
+     * withheld and so left the counts.
+     *
+     * @param string $rowid
+     * @param int $open Units under investigation.
+     * @param int $withheld Units whose results are withheld.
+     * @return array
+     */
+    public static function plagiarism_hint(string $rowid, int $open, int $withheld = 0): array {
+        $n = $open + $withheld;
+        $text = [];
+        foreach (['text' => $open, 'withheld' => $withheld] as $kind => $count) {
+            if ($count > 0) {
+                $text[] = $count === 1 ? get_string("hint_plagiarism_{$kind}_one", 'block_le_dashboard')
+                    : get_string("hint_plagiarism_{$kind}_many", 'block_le_dashboard', $count);
+            }
+        }
         return self::hint(
             $rowid,
             'plagiarism',
-            $n === 1 ? get_string('hint_plagiarism_text_one', 'block_le_dashboard')
-                : get_string('hint_plagiarism_text_many', 'block_le_dashboard', $n),
+            implode(' ', $text),
             null,
             get_string('hint_plagiarism', 'block_le_dashboard', $n),
             $n
@@ -517,7 +545,7 @@ class format {
             'courseurl' => (new \moodle_url('/course/view.php', ['id' => $cm->courseid]))->out(false),
             'modname' => $cm->modname,
             'modlabel' => $modname,
-            'faicon' => self::ICONS[$cm->modname] ?? self::ICON_FALLBACK,
+            'modicon' => self::modicon($cm->modname),
             'assesstype' => $cm->assesstype,
             'typelabel' => get_string($cm->assesstype, 'block_le_dashboard'),
             'typeline' => get_string('rowtype', 'block_le_dashboard', [
@@ -525,11 +553,59 @@ class format {
                 'type' => get_string($cm->assesstype, 'block_le_dashboard'),
             ]),
             // The first flag on staff rows; students never see hidden work.
-            'hiddenhint' => empty($cm->hiddenfromstudents) ? null
+            'hiddenhint' => empty($cm->hiddenfromstudents) || !config::shown('hint_hidden') ? null
                 : self::hint($id, 'hidden', get_string('hint_hidden_text', 'block_le_dashboard')),
             'tip' => self::tip($modname, !empty($cm->hiddenfromstudents) ? [get_string('tip_hidden', 'block_le_dashboard')] : []),
             'search' => \core_text::strtolower(implode(' ', [$name, $courseshortname, $modname])),
         ];
+    }
+
+    /**
+     * An activity type's icon as the course page draws it (core_courseformat cmicon): the module's own
+     * monologo, which a theme can override, in its purpose colour (Pierre's UAT: "Activity icons
+     * in the dash don't match the course view"). Per type, not per activity: no assessment module sets its
+     * own icon per activity, and this needs no course modinfo.
+     *
+     * @param string $modname
+     * @return array url, filter (whether the theme colours it), purpose, branded
+     */
+    public static function modicon(string $modname): array {
+        global $OUTPUT;
+        static $icons = [];
+        if (!isset($icons[$modname])) {
+            $icons[$modname] = [
+                'url' => $OUTPUT->image_url('monologo', $modname)->out(false),
+                'filter' => \core_component::has_monologo_icon('mod', $modname),
+                'purpose' => plugin_supports('mod', $modname, FEATURE_MOD_PURPOSE, MOD_PURPOSE_OTHER),
+                'branded' => (bool)component_callback('mod_' . $modname, 'is_branded', [], false),
+            ];
+        }
+        return $icons[$modname];
+    }
+
+    /**
+     * The marking deadline date of a staff or convenor row: the assessment's own, or the default one (config::markingdue())
+     * with its hint beside the date it explains, as "Waiting for feedback?" sits beside a
+     * student's "Feedback expected".
+     *
+     * @param array $row The row, for its id.
+     * @param \stdClass $cm Index record.
+     * @return array|null The date, or null with no marking deadline.
+     */
+    public static function markingdue(array $row, \stdClass $cm): ?array {
+        [$deadline, $default] = config::markingdue($cm);
+        if ($deadline === null) {
+            return null;
+        }
+        $date = self::date('markingdue', $deadline);
+        if ($default) {
+            $date['hint'] = self::hint($row['id'], 'defaultmarkingdue', get_string(
+                'hint_defaultmarkingdue_text',
+                'block_le_dashboard',
+                config::number('defaultmarkingdays')
+            ));
+        }
+        return $date;
     }
 
     /**

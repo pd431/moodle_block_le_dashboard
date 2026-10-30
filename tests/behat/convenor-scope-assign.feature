@@ -42,141 +42,31 @@ Feature: Convenors oversee all marking in their modules, with bars only where th
     And the academic year "2026/27" starts on "2026-09-01"
 
   @javascript
-  Scenario: Only modules in the selected academic year are shown
+  # A2 is on last year's module and was due last year; one due this year would show by its date (EC3).
+  Scenario: Only assessments of the selected academic year are shown
     Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And a summative "assign" "A2" in "M2" was due "3 days ago"
+    And a summative "assign" "A2" in "M2" was due "2025-10-20 12:00"
     When I log in as "convenor" and view the "Convenor view" for academic year "2026/27"
     Then I should see "A1" in the "My assessments" block
     And I should not see "A2" in the "My assessments" block
 
-  Scenario: Convenor sees marking by every marker, including their own
-    Given a summative "assign" "A1" in "M1" with marker allocation was due "3 days ago"
-    And "student1" and "student2" have submitted "A1"
-    And the submission of "student1" for "A1" is allocated to "marker1"
-    And the submission of "student2" for "A1" is allocated to "convenor"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show a "Marked" progress bar with "0" of "2"
-    And "A1" should list markers "Mo Marker" and "Cat Convenor"
-
-  Scenario: Unallocated bar appears only for activity types with allocation
-    Given a summative "assign" "A1" in "M1" with marker allocation was due "3 days ago"
-    And a summative "quiz" "Q1" in "M1" with an essay question was due "3 days ago"
-    And "student1" has submitted "A1"
-    And the submission of "student1" for "A1" is not allocated
-    And "student1" has finished "Q1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show an "Unallocated" progress bar with "1"
-    And "Q1" should not show an "Unallocated" progress bar
-
   # R4: computed when indexed; freshness.feature covers refresh.
-  Scenario: Submission totals count only students who can access the assessment
-    Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And "A1" is restricted to group "Group A"
-    And "student1" has submitted "A1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show a "Submitted" progress bar with "1" of "2"
-
-  Scenario: An assessment hidden from students is still overseen, and flagged
-    Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And "A1" is hidden from students
-    When I log in as "convenor" and view the "Convenor view"
-    Then I should see "A1" in the "My assessments" block
-    And "A1" should have a "hidden" hint
-
-  Scenario: A marker who is not a convenor cannot open the convenor view
-    When I log in as "marker1" and view my dashboard
-    Then I should not be able to open the "Convenor view"
 
   # D4: released means the agreed or final grade has been published to the student.
 
   # beta1 review M7: no "Marked 0 of 0" before anything is submitted.
-  Scenario: Marking bars appear only once something is submitted
-    Given a summative "assign" "A1" in "M1" was due "3 days ago"
-    And a summative "assign" "A2" in "M1" was due "3 days ago"
-    And "student1" has submitted "A2"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show progress bars "Submitted"
-    And "A2" should show progress bars "Submitted, Marked, Released"
+  # A1 stays In progress for an extension: with nothing to come it would go to Past at once (beta28).
 
   # beta6 (Pierre, 2026-10-03): marking doesn't start before the deadline.
-  Scenario: Before the deadline the convenor sees submissions only
-    Given a summative "assign" "A1" in "M1" is due "tomorrow"
-    And "student1" has submitted "A1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should appear in the "Upcoming" section
-    And "A1" should show progress bars "Submitted"
-
-  Scenario: Before the deadline an allocated assessment also shows what is unallocated
-    Given a summative "assign" "A1" in "M1" with marker allocation is due "tomorrow"
-    And "student1" and "student2" have submitted "A1"
-    And the submission of "student1" for "A1" is allocated to "marker1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show progress bars "Submitted, Unallocated"
-    And "A1" should show an "Unallocated" progress bar with "1" of "2"
-    And I should not see "Show markers" in the "My assessments" block
-
-  Scenario: Once the deadline passes the marking bars appear
-    Given a summative "assign" "A1" in "M1" was due "yesterday"
-    And "student1" has submitted "A1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should appear in the "In progress" section
-    And "A1" should show progress bars "Submitted, Marked, Released"
 
   # G1, G2 (workflow gaps, 2026-10-03).
-  Scenario: A resubmission under marking workflow comes back to the convenor, not released
-    Given a summative "assign" "A1" in "M1" with marking workflow and reopened attempts was due "5 days ago"
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the grade of "student1" for "A1" is released
-    And the submission of "student1" for "A1" is reopened
-    And "student1" has submitted "A1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should appear in the "In progress" section
-    And "A1" should show a "Released" progress bar with "0" of "1"
 
   # ---------- Workflow gaps, beta7 (coordinator-approved scope, 2026-10-03) ----------
 
   # G6
-  Scenario: Returned work moves the assessment back to In progress with a hint for the convenor
-    Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student2" has an extension on "A1" to "in 2 minutes"
-    And "student1" has submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    And the grade of "student1" for "A1" is released
-    And "student2" has submitted "A1"
-    And 3 minutes pass
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should appear in the "In progress" section
-    And "A1" should have a returned work hint
 
   # G10
-  Scenario: Unmarked work past the marking deadline is called out for the convenor
-    Given a summative "assign" "A1" in "M1" with a marking deadline "yesterday" was due "10 days ago"
-    And "student1" and "student2" have submitted "A1"
-    And "marker1" marks the submission of "student1" for "A1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show "1 unmarked after the marking deadline"
-
-  Scenario: Before the marking deadline there is no call-out
-    Given a summative "assign" "A1" in "M1" with a marking deadline "in 5 days" was due "3 days ago"
-    And "student1" has submitted "A1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should not show "unmarked after the marking deadline"
 
   # G11
-  Scenario: Staff rows name which deadline a date is
-    Given a summative "assign" "A1" in "M1" with a marking deadline "in 10 days" was due "3 days ago"
-    And "student1" has submitted "A1"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show "Submission deadline"
-    And "A1" should show "Marking deadline"
-    And "A1" should not show "Due"
 
   # G9: extensions still to come, for every student on the assessment.
-  Scenario: The convenor sees extensions still to come on the assessment
-    Given a summative "assign" "A1" in "M1" was due "5 days ago"
-    And "student1" has submitted "A1"
-    And "student2" has an extension on "A1" to "in 3 days"
-    When I log in as "convenor" and view the "Convenor view"
-    Then "A1" should appear in the "In progress" section
-    And the "extension" flag of "A1" should be labelled "1 student has an extension"

@@ -95,4 +95,53 @@ interface adapter {
      * @return string[]
      */
     public static function events(): array;
+
+    /**
+     * Those of events() that a member of staff fires about one student (a lock, an unlock), whose rows are
+     * updated at once as the student's own action would be (B4). The event's relateduserid is the student.
+     *
+     * @return string[]
+     */
+    public static function events_for_related_user(): array;
+
+    /**
+     * File areas of the activity, besides its intro, that hold its brief: a file there means it has one.
+     *
+     * @return string[]
+     */
+    public function brief_areas(): array;
+
+    /**
+     * Whether students of this type ever hand anything in online: false for a type that never takes
+     * submissions (attendance), null to go by each activity (cm_row::$submissions).
+     *
+     * @return bool|null
+     */
+    public function takes_submissions(): ?bool;
+
+    /**
+     * Whether this type takes self-certified extensions (block_rhb): coursework only.
+     *
+     * @return bool
+     */
+    public function takes_selfcert(): bool;
+
+    /**
+     * The object block_rhb's self-certification link takes for one activity, or null when there is none
+     * (the type takes no self-certification, or the activity can't be found).
+     *
+     * @param int $instanceid
+     * @return object|null
+     */
+    public function selfcert_subject(int $instanceid): ?object;
+
+    /**
+     * Self-certified extensions a student has used since a time, by this type's own records, or null when
+     * this type (or this site's schema) can't say.
+     *
+     * @param int $userid
+     * @param int $since
+     * @return int|null
+     */
+    public function selfcert_used(int $userid, int $since): ?int;
 }

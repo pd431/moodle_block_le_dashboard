@@ -1,4 +1,4 @@
-@block @block_le_dashboard @javascript
+@block @block_le_dashboard
 Feature: Module convenors see which compatible activities are not tagged
   In order to tag every assessment that should be on the dashboard
   As a module convenor
@@ -59,54 +59,62 @@ Feature: Module convenors see which compatible activities are not tagged
       | page     | Reading    | M1     |       |
     And a summative "assign" "Tagged" in "M1" is due "tomorrow"
 
+  @javascript
   Scenario: The convenor sees how many compatible activities are untagged in the selected year
     When I log in as "convenor1" and view the "Module convenor view" for academic year "2026/27"
     Then I should see "You have 3 compatible but untagged activities across your 2026/27 courses." in the "My assessments" block
     And I should not see "Tagged" in the untagged activities list
     And I should not see "Reading" in the untagged activities list
 
+  @javascript
   Scenario: The count follows the year picker
     When I log in as "convenor1" and view the "Module convenor view" for academic year "2024/25"
     Then I should see "You have 1 compatible but untagged activities across your 2024/25 courses." in the "My assessments" block
     When I set the field "Academic year" to "All years"
     Then I should see "You have 4 compatible but untagged activities across your courses." in the "My assessments" block
 
+  @javascript
   Scenario: The list is collapsed until opened, and each course opens to its activities as links
     Given the My assessments tagging guidance link is "https://example.com/tagging"
     When I log in as "convenor1" and view the "Module convenor view" for academic year "2026/27"
     Then the untagged activities list should be collapsed
-    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My assessments" "block"
+    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My Assessments" "block"
     Then I should see "Guidance on tagging activities" linking to "https://example.com/tagging"
     And I should see "Module 1 (2)" in the untagged activities list
     And I should see "Module 2 (1)" in the untagged activities list
     And the untagged activities of "Module 1" should be collapsed
-    When I click on "Module 1 (2)" "text" in the "My assessments" "block"
+    When I click on "Module 1 (2)" "text" in the "My Assessments" "block"
     Then I should see "Essay" linking to the page of "Essay"
     And I should see "Practice" linking to the page of "Practice"
-    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My assessments" "block"
+    When I click on "You have 3 compatible but untagged activities across your 2026/27 courses." "text" in the "My Assessments" "block"
     Then the untagged activities list should be collapsed
 
+  @javascript
   Scenario: Hidden activities are listed and flagged as hidden
     Given "Essay" is hidden from students
     When I log in as "convenor1" and view the "Module convenor view" for academic year "2026/27"
     Then "Essay" in the untagged activities list should be marked "Hidden from students"
 
+  @javascript
   Scenario: With nothing untagged, the line is hidden
     Given every compatible activity in "M1", "M2" and "OLD" is tagged "formative"
     When I log in as "convenor1" and view the "Module convenor view" for academic year "All years"
     Then I should not see "compatible but untagged" in the "My assessments" block
 
+  @javascript
   Scenario: Activity types not ticked in Activity types don't count
     Given the "quiz" activity type is not enabled in My assessments
     When I log in as "convenor1" and view the "Module convenor view" for academic year "2026/27"
     Then I should see "You have 2 compatible but untagged activities across your 2026/27 courses." in the "My assessments" block
 
+  @javascript
   Scenario: Markers and students never see it
     When I log in as "teacher1" and view the "My marking"
     Then I should not see "compatible but untagged" in the "My assessments" block
     When I log in as "student1" and view my dashboard
     Then I should not see "compatible but untagged" in the "My assessments" block
 
+  @javascript
   Scenario: With no guidance link set, the list has no guidance link
     When I log in as "convenor1" and view the "Module convenor view" for academic year "2026/27"
     Then I should not see "Guidance on tagging activities" in the "My assessments" block

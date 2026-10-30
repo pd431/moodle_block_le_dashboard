@@ -17,7 +17,6 @@
 namespace block_le_dashboard\local\view;
 
 use block_le_dashboard\local\config;
-use block_le_dashboard\local\genericname;
 use block_le_dashboard\local\index\indexer;
 use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
@@ -43,7 +42,8 @@ class convenor extends base {
     }
 
     /**
-     * Courses where I am convenor, in the selected year or in every year.
+     * Courses where I am convenor, in the selected year or in every year. The index queries take every year and
+     * choose the year by in_year_sql() (EC3); the selected year's courses are for Refresh and the setup hints.
      *
      * @param bool $allyears
      * @return int[]
@@ -60,11 +60,13 @@ class convenor extends base {
     #[\Override]
     public function scope_cmids(): array {
         global $DB;
-        if (!$this->courses()) {
+        if (!$this->courses(true)) {
             return [];
         }
-        [$insql, $params] = $DB->get_in_or_equal($this->courses(), SQL_PARAMS_NAMED);
-        return array_map('intval', $DB->get_fieldset_select('block_le_dashboard_cm', 'cmid', "courseid $insql", $params));
+        [$insql, $params] = $DB->get_in_or_equal($this->courses(true), SQL_PARAMS_NAMED);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        return array_map('intval', $DB->get_fieldset_sql("SELECT c.cmid FROM {block_le_dashboard_cm} c
+                                                           WHERE c.courseid $insql AND $yearsql", $params + $yearparams));
     }
 
     #[\Override]
@@ -72,26 +74,31 @@ class convenor extends base {
         return $this->courses();
     }
 
+
     #[\Override]
     public function export(): array {
         global $DB;
         $extra = ['hasyears' => true, 'years' => $this->years(),
-            // Compatible activities nobody tagged, in the selected year's courses (Pierre, 2026-10-06).
-            'untagged' => untagged::hint($this->userid, $this->year(), $this->courses()),
-            // Tagged activities missing a setting, or of a type no dashboard shows (Pierre, 2026-10-07).
-            'setupchecks' => setupchecks::hint($this->userid, $this->year(), $this->courses())];
+            // Compatible activities nobody tagged, in the selected year's courses.
+            // Each line has an admin switch; off skips its queries too.
+            'untagged' => config::shown('showuntagged') ? untagged::hint($this->userid, $this->year(), $this->courses()) : null,
+            // Tagged activities missing a setting, or of a type no dashboard shows.
+            'setupchecks' => config::shown('showsetupchecks')
+                ? setupchecks::hint($this->userid, $this->year(), $this->courses()) : null];
         $sections = [classifier::STAFF_UPCOMING => [], classifier::INPROGRESS => [], classifier::UNDATED => [],
             classifier::CONVENOR_PAST => []];
-        // In progress shows whatever its year; Upcoming and Past follow the year picker (EC3).
         if (!$this->courses(true)) {
             return $this->sections_context($sections, null, $extra);
         }
-        $inyear = array_flip($this->courses());
+        // My courses of every year, and of those the assessments in the selected year by date or course (EC3).
         [$insql, $params] = $DB->get_in_or_equal($this->courses(true), SQL_PARAMS_NAMED);
+        [$yearsql, $yearparams] = $this->in_year_sql();
+        $params += $yearparams;
+        $where = "c.courseid $insql AND $yearsql";
         $cms = $DB->get_records_sql("SELECT c.*
                                        FROM {block_le_dashboard_cm} c
                                        " . self::LIVE . "
-                                      WHERE c.courseid $insql
+                                      WHERE $where
                                    ORDER BY c.due ASC", $params);
         if (!$cms) {
             return $this->sections_context($sections, null, $extra);
@@ -99,19 +106,17 @@ class convenor extends base {
         $cms = array_column(array_values($cms), null, 'cmid');
 
         // Students who can access, and how many submitted (R4: as of indexing). Students who left
-        // are not counted here, though their submitted work is still marked (EC4).
+        // are not counted here, though their submitted work is still marked (EC4); nor are exempt or deferred ones.
+        $expected = marking_rules::EXPECTED;
         $students = $DB->get_records_sql("SELECT s.cmid,
-                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 THEN 1 ELSE 0 END) AS total,
-                                                 SUM(CASE WHEN s.canaccess = 1 AND s.active = 1 AND s.submitted = 1
-                                                          THEN 1 ELSE 0 END) AS submitted,
-                                                 SUM(CASE WHEN s.cutoff IS NULL THEN 1 ELSE 0 END) AS uncut,
-                                                 MAX(s.cutoff) AS lastcutoff
+                                                 SUM(CASE WHEN $expected THEN 1 ELSE 0 END) AS total,
+                                                 SUM(CASE WHEN $expected AND s.submitted = 1 THEN 1 ELSE 0 END) AS submitted
                                             FROM {block_le_dashboard_stu} s
                                             JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
-                                           WHERE c.courseid $insql
+                                           WHERE $where
                                         GROUP BY s.cmid", $params);
         // Marking units per stage. Work counts once its unit's deadline has passed (G9).
-        $ready = staff::ready_sql($this->now);
+        $ready = marking_rules::ready_sql($this->now);
         $marking = [];
         $rs = $DB->get_recordset_sql("SELECT m.cmid, m.stage,
                                              COUNT(1) AS units,
@@ -127,7 +132,7 @@ class convenor extends base {
                                              MAX(m.timemarked) AS lastmarked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                       WHERE c.courseid $insql
+                                       WHERE $where AND " . marking_rules::COUNTED . "
                                     GROUP BY m.cmid, m.stage", $params);
         foreach ($rs as $r) {
             $marking[(int)$r->cmid][$r->stage] = $r;
@@ -138,24 +143,22 @@ class convenor extends base {
         $unmarked = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
                                                  FROM {block_le_dashboard_mark} m
                                                  JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                                WHERE c.courseid $insql AND $ready AND m.marked = 0
+                                                WHERE $where AND $ready AND m.marked = 0
+                                                      AND " . marking_rules::COUNTED . "
                                              GROUP BY m.cmid", $params);
-        // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43).
-        $flagged = $DB->get_records_sql_menu("SELECT m.cmid, COUNT(DISTINCT $unit)
-                                                FROM {block_le_dashboard_mark} m
-                                                JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                               WHERE c.courseid $insql AND m.flagged = 1
-                                            GROUP BY m.cmid", $params);
+        // Units flagged for an academic conduct (plagiarism) check, in every section (rc6 B43), withheld ones included
+        // (CS3). Off means the query isn't run either (beta27 hints audit).
+        $flagged = !config::shown('hint_plagiarism') ? [] : marking_rules::flagged($where, $params);
         // Per marker, per stage.
         $markers = [];
         // Marked work is credited to whoever marked it (EC8).
-        $marker = staff::MARKER_SQL;
+        $marker = marking_rules::MARKER_SQL;
         $rs = $DB->get_recordset_sql("SELECT m.cmid, $marker AS allocatedto, m.stage,
                                              SUM(CASE WHEN $ready THEN 1 ELSE 0 END) AS ready,
                                              SUM(CASE WHEN $ready AND m.marked = 1 THEN 1 ELSE 0 END) AS marked
                                         FROM {block_le_dashboard_mark} m
                                         JOIN {block_le_dashboard_cm} c ON c.cmid = m.cmid
-                                       WHERE c.courseid $insql AND $marker IS NOT NULL
+                                       WHERE $where AND $marker IS NOT NULL AND " . marking_rules::COUNTED . "
                                     GROUP BY m.cmid, $marker, m.stage", $params);
         $markerids = [];
         foreach ($rs as $r) {
@@ -167,14 +170,13 @@ class convenor extends base {
         if ($markerids) {
             [$usql, $uparams] = $DB->get_in_or_equal(array_keys($markerids), SQL_PARAMS_NAMED);
             $namefields = implode(', ', \core_user\fields::get_name_fields());
-            $people = $DB->get_records_select('user', "id $usql", $uparams, '', 'id, email, deleted, ' . $namefields);
+            $people = $DB->get_records_select('user', "id $usql", $uparams, '', 'id, email, maildisplay, deleted, ' . $namefields);
         }
 
         // Extensions still to come, for every student (G9).
-        $pending = staff::pending_extensions("c.courseid $insql", $params, $this->now);
+        $pending = marking_rules::pending_extensions($where, $params, $this->now);
 
         $names = format::course_names(array_column($cms, 'courseid'));
-        $threshold = config::overdue_threshold_days();
         $oldest = null;
         $active = [];
         foreach ($cms as $cmid => $cm) {
@@ -220,42 +222,30 @@ class convenor extends base {
                     $outstanding += isset($m[$stage]) ? (int)$m[$stage]->ready - $marked : 0;
                 }
                 $bars[] = format::bar('released', get_string('bar_released', 'block_le_dashboard'), $released, $units, $groups);
-                // Release is outstanding until some is released: what is held back after that is withheld on
-                // purpose, so the assessment can go to Past (Pierre, 2026-10-07).
-                $outstanding += $released > 0 ? 0 : $units;
+                // Release is outstanding until every marked unit is released (reversing the earlier rule):
+                // a partly released assessment stays In progress.
+                $outstanding += $units - $released;
             }
-            // Nothing more can be handed in: a generic type, or every student's cut-off has passed (F3).
-            $closed = $cm->adapter === 'generic'
-                || ($s && (int)$s->uncut === 0 && $s->lastcutoff !== null && (int)$s->lastcutoff < $this->now);
-
             $section = classifier::convenor(
                 $cm->due === null ? null : (int)$cm->due,
                 $this->now,
                 $units,
-                $outstanding + (int)($pending[$cmid]->students ?? 0),
-                $threshold,
-                (int)($s->total ?? 0),
-                $closed
+                $outstanding + (int)($pending[$cmid]->students ?? 0)
             );
-            $otheryear = !isset($inyear[(int)$cm->courseid]);
-            // Only with marking or release actually outstanding: that is the work needing action.
-            if ($otheryear && ($section !== classifier::INPROGRESS || $outstanding + (int)($pending[$cmid]->students ?? 0) === 0)) {
-                continue;
-            }
-            $row = format::row($cm, $names[$cm->courseid] ?? '', $this->key());
-            if ($otheryear) {
-                $row['course'] = $this->with_year($row['course'], (int)$cm->courseid);
-            }
-            $row['dates'] = array_values(array_filter([
-                $cm->due ? format::date('submissiondeadline', (int)$cm->due) : null,
-                $cm->markingdue ? format::date('markingdue', (int)$cm->markingdue) : null,
-            ]));
             // Marking starts after the deadline: before it, only submissions and allocation.
             $upcoming = $section === classifier::STAFF_UPCOMING;
             if ($upcoming) {
                 $bars = array_values(array_filter($bars, fn($b) => in_array($b['key'], ['submitted', 'unallocated'])));
             }
-            $row['bars'] = $bars;
+            $row = staff_row::build($cm, $names[$cm->courseid] ?? '', $this->key(), $bars, [
+                'brief' => true,
+                // Work that arrived after marking was finished brought this back to In progress (G6).
+                'returned' => $section === classifier::INPROGRESS
+                    && marking_rules::returned($m, $cm->due === null ? null : (int)$cm->due),
+                'pending' => $pending[$cmid] ?? null,
+                'flagged' => $flagged[$cmid] ?? null,
+                'nostudents' => (int)($s->total ?? 0) === 0,
+            ]);
             $row['markers'] = [];
             foreach ($upcoming ? [] : $markers[$cmid] ?? [] as $markerid => $bystage) {
                 $person = $people[$markerid] ?? null;
@@ -269,8 +259,9 @@ class convenor extends base {
                 foreach ($bystage as $stage => $r) {
                     $markerbars[] = format::bar($stage, format::stage($stage), (int)$r->marked, (int)$r->ready);
                 }
-                // Each name links to the marker's email (Pierre, 2026-10-09).
-                $email = $person && empty($person->deleted) && validate_email($person->email) ? $person->email : null;
+                // Each name links to the marker's email, where Moodle would show it to me.
+                $email = $person && config::shown('hint_markeremail') && $this->can_see_email($person, (int)$cm->courseid)
+                    ? $person->email : null;
                 $row['markers'][] = ['name' => $name, 'bars' => $markerbars, 'mailto' => $email ? 'mailto:' . $email : null];
                 $row['search'] .= ' ' . \core_text::strtolower($name);
             }
@@ -278,58 +269,58 @@ class convenor extends base {
             $row['markers'] = array_values($row['markers']);
             $row['hasmarkers'] = !empty($row['markers']);
             $row['markersid'] = $row['id'] . '-markers';
-            $row['actions'] = [format::view_action($row['url'])];
-            $row['hints'] = !empty($cm->nosubmission) ? [format::nosubmission_hint($row['id'], true)] : [];
-            if ($setup = format::setup_hint($row['id'], (int)$cmid, (string)$cm->setup)) {
-                $row['hints'][] = $setup;
-            }
-            if (empty($cm->hasbrief)) {
-                $row['hints'][] = $this->brief_hint($row['id']);
-            }
-            if ($generic = genericname::hint($row['id'], (string)$cm->name, (int)$cm->courseid)) {
-                $row['hints'][] = $generic;
-            }
-            // Work that arrived after marking was finished brought this back to In progress (G6).
-            if ($section === classifier::INPROGRESS && staff::returned($m, $cm->due === null ? null : (int)$cm->due)) {
-                $text = get_string('hint_returned_convenor', 'block_le_dashboard');
-                $row['hints'][] = format::hint($row['id'], 'returned', $text);
-            }
-            if (isset($pending[$cmid])) {
-                $row['hints'][] = staff::extensions_hint($row['id'], $pending[$cmid]);
-            }
-            if (!empty($flagged[$cmid])) {
-                $row['hints'][] = format::plagiarism_hint($row['id'], (int)$flagged[$cmid]);
-            }
-            $row = format::load_error($row, $cm, (int)($s->total ?? 0) === 0);
             // Past the marking deadline with marking outstanding (G10): staff only, so the attention tone is fine.
             $late = (int)($unmarked[$cmid] ?? 0);
-            if ($cm->markingdue && (int)$cm->markingdue < $this->now && $late && !$upcoming) {
+            [$markingdue] = config::markingdue($cm);
+            if ($markingdue && $markingdue < $this->now && $late && !$upcoming && config::shown('hint_unmarkedlate')) {
                 $row['alert'] = get_string('unmarkedafterdeadline', 'block_le_dashboard', $late);
             }
             if ($section === classifier::CONVENOR_PAST) {
-                // Where it stands at a glance; the bars and markers behind Show marking (Pierre, 2026-10-07).
+                // Where it stands at a glance; the bars and markers behind Show marking.
                 $row['grading'] = format::grading($units, $released, (int)($unmarked[$cmid] ?? 0), !empty($cm->norelease));
                 $row = format::marking_detail($row, get_string('marking_all', 'block_le_dashboard'));
             }
-            $row['sortkey'] = [(int)($cm->markingdue ?: PHP_INT_MAX), (int)$cm->due];
+            // Upcoming by submission deadline, the rest by marking deadline, else deadline.
+            $row['sortkey'] = $upcoming ? (int)$cm->due : (int)($markingdue ?? $cm->due);
             $sections[$section][] = $row;
             $oldest = $oldest === null ? (int)$cm->timeindexed : min($oldest, (int)$cm->timeindexed);
         }
-        $sections[classifier::CONVENOR_PAST] = array_reverse($sections[classifier::CONVENOR_PAST]);
-        usort($sections[classifier::UNDATED], fn($a, $b) => strcmp($a['search'], $b['search']));
-        // In progress by marking deadline, then deadline.
-        usort($sections[classifier::INPROGRESS], fn($a, $b) => $a['sortkey'] <=> $b['sortkey']);
+        // Soonest first while there's work, latest first once done, undated by name; ties by name.
+        foreach ($sections as $key => &$rows) {
+            $order = $key === classifier::CONVENOR_PAST ? -1 : 1;
+            usort($rows, fn($a, $b) => ($key === classifier::UNDATED ? 0 : $order * ($a['sortkey'] <=> $b['sortkey']))
+                ?: strcmp($a['search'], $b['search']));
+        }
+        unset($rows);
         return $this->sections_context($sections, $oldest, $extra);
     }
 
     /**
-     * The hint shown on an assessment with no brief or description.
+     * Whether Moodle would show me someone's email, as on their profile: their Email visibility setting, or my
+     * capability to see hidden emails (beta27 hints audit).
      *
-     * @param string $rowid
-     * @return array
+     * @param \stdClass $person User record, with email and maildisplay.
+     * @param int $courseid The course we share, as its convenor.
+     * @return bool
      */
-    protected function brief_hint(string $rowid): array {
-        return format::hint($rowid, 'brief', get_string('briefhint_text', 'block_le_dashboard'));
+    protected function can_see_email(\stdClass $person, int $courseid): bool {
+        if (!empty($person->deleted) || !validate_email($person->email)) {
+            return false;
+        }
+        if ((int)$person->id === $this->userid) {
+            return true;
+        }
+        $display = (int)($person->maildisplay ?? \core_user::MAILDISPLAY_HIDE);
+        // Both are in the course: I convene it, and they mark in it.
+        if (in_array($display, [\core_user::MAILDISPLAY_EVERYONE, \core_user::MAILDISPLAY_COURSE_MEMBERS_ONLY])) {
+            return true;
+        }
+        // As user_get_user_details(): moodle/course:useremail shows hidden emails (editing teachers have it by default),
+        // and so does email in the identity fields for those who can see them.
+        $context = \context_course::instance($courseid);
+        return has_capability('moodle/course:useremail', $context, $this->userid)
+            || (in_array('email', \core_user\fields::get_identity_fields($context, false))
+                && has_capability('moodle/site:viewuseridentity', $context, $this->userid));
     }
 
     /**

@@ -11,6 +11,7 @@ Feature: The dashboard's controls sit together in one control bar
   # from the type buttons (a rule and a gap).
   # Today the year picker and Refresh share a top row, the type filter and search sit in a second row under the
   # summary boxes, and Show grades sits alone under the sections.
+  # Since beta33 students have the academic year too (EC3d).
   # Proposed: one bar directly under the view tabs, above the summary boxes. In order:
   #   academic year (marking and convenor views) | type filter | Show grades (student view, when a grade is
   #   released) | search
@@ -39,13 +40,13 @@ Feature: The dashboard's controls sit together in one control bar
     And the academic year "2026/27" starts on "2026-09-01"
 
   @javascript
-  Scenario: Students see the type filter, Show grades and search together above the summary
+  Scenario: Students see the academic year, type filter, Show grades and search together above the summary
     Given a summative "assign" "A1" in "M1" was due "5 days ago"
     And "student1" has submitted "A1"
     And "marker1" marks the submission of "student1" for "A1"
     And the grade of "student1" for "A1" is released
     When I log in as "student1" and view my dashboard
-    Then the control bar should hold "Type filter, Show grades, Search"
+    Then the control bar should hold "Academic year, Type filter, Show grades, Search"
     And the control bar should come before the summary boxes
     And the freshness line should come after the control bar
 
@@ -53,7 +54,7 @@ Feature: The dashboard's controls sit together in one control bar
   Scenario: Show grades only appears once a grade has been released
     Given a summative "assign" "A1" in "M1" is due "in 3 days"
     When I log in as "student1" and view my dashboard
-    Then the control bar should hold "Type filter, Search"
+    Then the control bar should hold "Academic year, Type filter, Search"
 
   @javascript
   Scenario: Markers see the academic year first in the control bar

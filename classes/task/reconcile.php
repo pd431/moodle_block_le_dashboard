@@ -17,10 +17,14 @@
 namespace block_le_dashboard\task;
 
 use block_le_dashboard\local\adapter\registry;
-use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\config;
+use block_le_dashboard\local\index\pass;
 
 /**
- * Nightly reconcile: re-indexes everything, catching missed events and direct database edits.
+ * The hourly index task. It carries on an unfinished first fill at any hour, so the
+ * index fills even where ad hoc tasks don't run, and otherwise does the nightly check between 02:00 and
+ * 06:00, which re-indexes live courses and catches missed events and direct database edits. Each run stops
+ * at the time limit and the next one carries on (pass).
  *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
@@ -34,17 +38,33 @@ class reconcile extends \core\task\scheduled_task {
 
     #[\Override]
     public function execute() {
-        // The backfill does the same work over the whole index: running both doubles the load and
-        // races it, and finishing first would hide "Preparing" before the backfill is done.
-        if (backfill::active()) {
-            mtrace('A backfill is queued or running; it does this work, so the reconcile is skipped.');
-            return;
-        }
+        $this->run(config::now());
+    }
+
+    /**
+     * One run, at a given time.
+     *
+     * @param int $now
+     * @return string|null How the pass ended (pass::DONE, LIMIT, RESTARTED, LOCKED), null when there was nothing to do.
+     */
+    public function run(int $now): ?string {
+        $trace = fn($line) => mtrace($line);
         try {
-            (new indexer())->reconcile(fn($line) => mtrace($line));
+            if (get_config('block_le_dashboard', 'backfillpending')) {
+                // The first fill comes first, whatever the hour: students see "Preparing" until it is done.
+                $result = pass::run(pass::FILL, $trace, pass::deadline());
+                if ($result === pass::DONE && pass::complete(pass::FILL)) {
+                    backfill::mark_done();
+                }
+                return $result;
+            }
+            if (!pass::night($now)) {
+                mtrace('Outside the nightly check\'s hours, or tonight\'s check is complete.');
+                return null;
+            }
+            return pass::run(pass::NIGHTLY, $trace, pass::deadline(), 0, $now);
         } finally {
             registry::flush_errors();
         }
-        backfill::mark_done();
     }
 }

@@ -43,12 +43,14 @@ Feature: Guidance and support text in popovers is edited as rich text in the set
       | convenor1 | M1     | moduleconvenor |
       | convenor1 | M1     | editingteacher |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
+    And the My assessments block keeps its hints and guidance from before beta27
     And the My assessments block treats "moduleconvenor" as a module convenor role
 
-  Scenario: The settings page has a Guidance and support section with one rich-text box per popover
+  # Beta27: the boxes moved to the Hints and guidance page, each beside its hint's switch.
+  Scenario: The Hints and guidance page has one rich-text box per popover
     When I log in as "admin"
-    And I navigate to "Plugins > Blocks > Le Dashboard > Settings" in site administration
-    Then I should see "Guidance and support"
+    And I navigate to "Plugins > Blocks > Le Dashboard > Hints and guidance" in site administration
+    Then I should see "Other guidance"
     And I should see an HTML editor for each guidance setting
     And I should not see "Late penalties link"
     And I should not see "Feedback contact link"

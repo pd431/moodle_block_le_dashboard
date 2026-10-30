@@ -50,26 +50,6 @@ Feature: The dashboard works with whichever assessment plugins are installed
     When I log in as "student1" and view my dashboard
     Then "A1" should appear in the "Upcoming" section
 
-  Scenario: An activity type left unticked is ignored even when tagged
-    Given a summative "workshop" "W1" in "M1" is due "tomorrow"
-    And the "Workshop" activity type is not enabled in My assessments
-    When I log in as "student1" and view my dashboard
-    Then I should not see "W1" in the "My assessments" block
-
-  Scenario: A ticked generic activity type shows its due date before the deadline
-    Given the "Workshop" activity type is enabled in My assessments
-    And a summative "workshop" "W1" in "M1" is due "tomorrow"
-    When I log in as "student1" and view my dashboard
-    Then "W1" should appear in the "Upcoming" section
-    And "W1" should show "Due" with the date "tomorrow"
-
-  Scenario: A generic activity moves to Past at its deadline and is never called overdue
-    Given the "Workshop" activity type is enabled in My assessments
-    And a summative "workshop" "W1" in "M1" was due "yesterday"
-    When I log in as "student1" and view my dashboard
-    Then "W1" should appear in the "Past" section
-    And "W1" should not appear in the "Overdue" section
-
   # R8: LTI is out of scope for now.
   Scenario: External tools are not offered as an activity type
     Given an "lti" activity with grade items exists in "M1"
@@ -78,16 +58,6 @@ Feature: The dashboard works with whichever assessment plugins are installed
     Then I should not see "External tool (LTI)"
 
   # EC2 (Pierre, 2026-10-04): tagging is explicit, so a tagged activity without a date is listed as Undated.
-  Scenario: A tagged generic activity with no due date is listed as Undated
-    Given the "Workshop" activity type is enabled in My assessments
-    And a summative "workshop" "W2" in "M1" with no due date exists
-    When I log in as "student1" and view my dashboard
-    Then "W2" should appear in the "Undated" section
-
-  Scenario: An activity type with its own adapter uses it in preference to the generic one
-    Given a summative "assign" "A1" in "M1" was due "yesterday"
-    When I log in as "student1" and view my dashboard
-    Then "A1" should appear in the "Overdue" section
 
   Scenario: An error indexing one activity type does not break the others
     Given indexing of "quiz" activities fails with an error

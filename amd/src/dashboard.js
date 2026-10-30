@@ -103,6 +103,13 @@ class Dashboard {
                 this.disarm(toggle.closest(SELECTORS.mitigate));
             }
         }, true);
+        // Clicking the Mitigate menu's reason line or divider leaves the menu open on it.
+        root.addEventListener('click', e => {
+            if (e.target.closest && e.target.closest('.ma-mitigate-note, .ma-mitigate-divider')) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        });
         root.addEventListener('input', e => this.input(e));
         root.addEventListener('change', e => this.change(e));
         root.addEventListener('focusin', e => this.focusin(e));
@@ -277,7 +284,8 @@ class Dashboard {
      */
     hoverIn(e) {
         const wrap = e.target.closest('.ma-tip-wrap');
-        if (!wrap) {
+        // Off, a tip opens only on click or keyboard focus (beta27 hints audit).
+        if (!wrap || this.root.dataset.nohover) {
             return;
         }
         clearTimeout(this.leaveTimer);

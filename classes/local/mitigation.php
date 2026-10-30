@@ -16,6 +16,7 @@
 
 namespace block_le_dashboard\local;
 
+use block_le_dashboard\local\adapter\registry;
 use block_le_dashboard\local\output\format;
 
 /**
@@ -38,15 +39,11 @@ class mitigation {
     protected static function available(): bool {
         global $CFG;
         $lib = $CFG->dirroot . '/blocks/rhb/lib.php';
-        if (!file_exists($lib) && defined('BEHAT_SITE_RUNNING') && get_config('block_le_dashboard', 'behatrhbstub')) {
-            // Scenarios tagged @block_rhb on a site without it.
-            $lib = $CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/rhb_stub.php';
-            if (!class_exists('\mod_coursework\models\coursework')) {
-                // Activities the scenario has the stand-in treat as coursework, on sites without mod_coursework.
-                require_once($CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/coursework_stub.php');
-            }
-        }
         if (!file_exists($lib)) {
+            // Scenarios tagged @block_rhb on a site without it.
+            $lib = testing::rhb_stub();
+        }
+        if (!$lib || !file_exists($lib)) {
             return false;
         }
         require_once($lib);
@@ -55,13 +52,13 @@ class mitigation {
 
     /** Menu item kinds; each is also the mitigate_<kind> label. */
     const KIND_SELFCERT = 'selfcert';
-    /** The request form: formal mitigation (Pierre, 2026-10-09). */
+    /** The request form: formal mitigation. */
     const KIND_REQUEST = 'request';
 
     /**
-     * The Mitigate menu of one row (option A of the Mitigate options, Pierre 2026-10-09): block_rhb's links
-     * under our labels, and for coursework "Self-certify an extension" always listed, with how many are left
-     * or, greyed, why it can't be used. Only coursework takes self-certified extensions.
+     * The Mitigate menu of one row (option A of the Mitigate options): block_rhb's links
+     * under our labels, and where the type takes self-certified extensions (adapter::takes_selfcert(), coursework)
+     * "Self-certify an extension" with how many are left, or a line saying why it can't be used.
      *
      * @param string $modname
      * @param int $instanceid
@@ -74,15 +71,17 @@ class mitigation {
             return null;
         }
         $selfcert = '';
-        $takesselfcert = $modname === 'coursework' || self::stub_coursework($modname, $instanceid);
+        // The adapter says whether the type takes self-certified extensions, and gives block_rhb what its link needs.
+        $adapter = registry::adapter_for(self::stub_coursework($modname, $instanceid) ? 'coursework' : $modname, false);
+        $takesselfcert = $adapter && $adapter->takes_selfcert();
         if ($takesselfcert) {
-            if (!function_exists('block_rhb_get_self_certification_link') || !class_exists('\mod_coursework\models\coursework')) {
+            if (!function_exists('block_rhb_get_self_certification_link')) {
                 return null;
             }
             try {
-                $coursework = \mod_coursework\models\coursework::find($instanceid);
+                $subject = $adapter->selfcert_subject($instanceid);
                 // Block_rhb's self-certification link (blocks/rhb/lib.php).
-                $selfcert = $coursework ? (string)block_rhb_get_self_certification_link($coursework) : '';
+                $selfcert = $subject ? (string)block_rhb_get_self_certification_link($subject) : '';
             } catch (\Throwable $e) {
                 debugging('block_rhb self-certification link failed: ' . $e->getMessage(), DEBUG_DEVELOPER);
             }
@@ -110,18 +109,16 @@ class mitigation {
      * @return bool
      */
     protected static function stub_coursework(string $modname, int $instanceid): bool {
-        if (!defined('BEHAT_SITE_RUNNING') || !get_config('block_le_dashboard', 'behatrhbstub')) {
-            return false;
-        }
-        return in_array("$modname:$instanceid", explode(',', (string)get_config('block_le_dashboard', 'behatcoursework')));
+        return testing::rhb_stub_coursework($modname, $instanceid);
     }
 
     /**
      * Builds the Mitigate menu from block_rhb's answers.
      * - Self-certification (coursework only): a link is live, with "N of M left" when the block's count has some
      *   left; block_rhb decides, so a link stays live whatever the count says. A delete link means it was used
-     *   here: the item is greyed and "Delete mitigation" follows it. No link: greyed, with the reason.
-     * - Formal mitigation: block_rhb's request form link.
+     *   here: a line says so and "Delete mitigation" follows it. No link: a line with the reason, and no item
+     *   (no greyed item).
+     * - Formal mitigation: block_rhb's request form link, after a divider when self-certification is listed.
      * There is no menu without at least one live link.
      *
      * @param bool $takesselfcert Whether the activity takes self-certified extensions (coursework).
@@ -129,8 +126,8 @@ class mitigation {
      * @param string $srm block_rhb's request form HTML.
      * @param array|null $count used and max (max null: no limit), or null when unknown.
      * @param int|null $here The new deadline when the student self-certified on this one.
-     * @return array|null items (each url and label, delete too for Delete mitigation, html, or greyed with a reason),
-     *     or null for no Mitigate
+     * @return array|null items (each url and label, delete too for Delete mitigation, html, info with a reason,
+     *     or divider), or null for no Mitigate
      */
     public static function menu(bool $takesselfcert, string $selfcert, string $srm, ?array $count, ?int $here): ?array {
         $request = self::item(self::KIND_REQUEST, $srm);
@@ -158,17 +155,11 @@ class mitigation {
                         $reason .= ' ' . get_string('mitigate_stillrequest', 'block_le_dashboard');
                     }
                 }
-                $item = [
-                    'greyed' => true,
-                    'live' => false,
-                    'label' => get_string('mitigate_' . self::KIND_SELFCERT, 'block_le_dashboard'),
-                    'reason' => $reason,
-                    'reasondated' => $dated,
-                ];
+                $item = ['info' => true, 'live' => false, 'reason' => $reason, 'reasondated' => $dated];
             }
             $items[] = $item;
             if ($delete) {
-                // Its own red item with a bin, confirmed by a second click in place (Pierre, 2026-10-09).
+                // Its own red item with a bin, confirmed by a second click in place.
                 $item = self::item('delete', $selfcert);
                 $items[] = isset($item['url']) ? ['delete' => true, 'live' => false] + $item
                     : ['html' => self::delete_label($selfcert)];
@@ -176,7 +167,20 @@ class mitigation {
             }
         }
         if ($request) {
+            if ($items) {
+                $items[] = ['divider' => true, 'live' => false];
+            }
             $items[] = $request;
+        }
+        // The keyboard skips the line, so the first link after it reads it out.
+        $info = array_key_first(array_filter($items, fn($item) => !empty($item['info'])));
+        if ($info !== null) {
+            foreach (array_slice($items, $info + 1, null, true) as $i => $item) {
+                if (isset($item['url'])) {
+                    $items[$i]['describedby'] = true;
+                    break;
+                }
+            }
         }
         return $live ? ['items' => $items] : null;
     }
@@ -242,10 +246,10 @@ class mitigation {
     /**
      * Self-certified extensions used and allowed, for the student summary box.
      *
-     * Needs block_rhb's selfcertmax and coursework's mitigations table. Counts
-     * self-certified extensions since the date in the student's "count from"
-     * profile field; students whose exemption field holds the exemption value
-     * have no limit. The field names and value are settings (SELFCERT_SETTINGS).
+     * Needs block_rhb's selfcertmax and an activity type that takes self-certified extensions and can count
+     * them (adapter::selfcert_used(): coursework's mitigations table). Counts those since the date in the
+     * student's "count from" profile field; students whose exemption field holds the exemption value have no
+     * limit. The field names and value are settings (SELFCERT_SETTINGS).
      *
      * @param int $userid
      * @return array|null used and max (max null means unlimited), or null when not applicable
@@ -253,7 +257,16 @@ class mitigation {
     public static function selfcert(int $userid): ?array {
         global $DB;
         $max = (int)get_config('block_rhb', 'selfcertmax');
-        if (!$max || !$DB->get_manager()->table_exists('coursework_mitigations')) {
+        if (!$max) {
+            return null;
+        }
+        // Only installed types: without coursework there is no mitigations table to count from (C4).
+        $installed = array_filter(array_keys(registry::OWN), fn($modname) => registry::module_installed($modname));
+        $adapters = array_filter(
+            array_map(fn($modname) => registry::adapter_for($modname, false), $installed),
+            fn($adapter) => $adapter && $adapter->takes_selfcert()
+        );
+        if (!$adapters) {
             return null;
         }
         $sincefield = self::setting('selfcertsincefield');
@@ -266,13 +279,16 @@ class mitigation {
             ['userid' => $userid, 'since' => $sincefield, 'exempt' => $exemptfield]
         );
         $since = !empty($fields[$sincefield]) ? (int)strtotime($fields[$sincefield]) : 0;
-        $used = $DB->count_records_sql(
-            "SELECT COUNT(1)
-               FROM {coursework_mitigations}
-              WHERE type = 'extension' AND selfcert = 1 AND allocatabletype = 'user'
-                AND allocatableid = :userid AND timecreated > :since",
-            ['userid' => $userid, 'since' => $since]
-        );
+        $used = null;
+        foreach ($adapters as $adapter) {
+            $used = $adapter->selfcert_used($userid, $since);
+            if ($used !== null) {
+                break;
+            }
+        }
+        if ($used === null) {
+            return null;
+        }
         $exempt = ($fields[$exemptfield] ?? '') === self::setting('selfcertexemptvalue');
         return ['used' => $used, 'max' => $exempt ? null : $max];
     }

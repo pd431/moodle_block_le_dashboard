@@ -16,7 +16,9 @@
 
 namespace block_le_dashboard;
 
+use block_le_dashboard\local\index\marking_row;
 use block_le_dashboard\local\view\convenor;
+use block_le_dashboard\local\view\marking_rules;
 use block_le_dashboard\local\view\staff;
 use block_le_dashboard\local\view\student;
 
@@ -126,6 +128,48 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * A student sees the selected year's assessments by their own deadline or the course, and Refresh covers the
+     * same ones (EC3d); All years shows everything.
+     */
+    public function test_student_year(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $now = time();
+        $thisyear = $DB->insert_record('block_le_dashboard_year', ['label' => 'This year', 'timestart' => $now - 60 * DAYSECS,
+            'timeend' => $now + 300 * DAYSECS, 'timecreated' => $now, 'timemodified' => $now]);
+        $lastyear = $DB->insert_record('block_le_dashboard_year', ['label' => 'Last year', 'timestart' => $now - 425 * DAYSECS,
+            'timeend' => $now - 60 * DAYSECS, 'timecreated' => $now, 'timemodified' => $now]);
+        $DB->set_field('course', 'startdate', $now - 30 * DAYSECS, ['shortname' => 'M1']);
+        $old = $gen->create_course(['shortname' => 'OLD', 'startdate' => $now - 400 * DAYSECS,
+            'enddate' => $now - 100 * DAYSECS]);
+        $gen->enrol_user($this->u['s1']->id, $old->id, 'student');
+        $exam = $gen->get_plugin_generator('mod_assign')->create_instance(['course' => $old->id, 'name' => 'Old exam',
+            'duedate' => $now - 200 * DAYSECS, 'assignsubmission_onlinetext_enabled' => 1]);
+        $this->getDataGenerator()->get_plugin_generator('block_le_dashboard')->tag($exam->cmid, 'summative');
+
+        $names = function (int $yearid): array {
+            $export = (new student($this->u['s1']->id, null, $yearid))->export();
+            $names = [];
+            foreach ($export['sections'] as $section) {
+                $names = array_merge($names, array_column($section['rows'], 'name'));
+            }
+            sort($names);
+            return $names;
+        };
+        $cmids = fn(int $yearid) => (new student($this->u['s1']->id, null, $yearid))->scope_cmids();
+        $this->assertSame(['Discussion', 'Overdue essay', 'Upcoming report'], $names($thisyear));
+        $this->assertSame(['Old exam'], $names($lastyear));
+        $this->assertSame(['Discussion', 'Old exam', 'Overdue essay', 'Upcoming report'], $names(0));
+        $this->assertNotContains((int)$exam->cmid, $cmids($thisyear));
+        $this->assertSame([(int)$exam->cmid], $cmids($lastyear));
+        $this->assertContains((int)$exam->cmid, $cmids(0));
+
+        $export = (new student($this->u['s1']->id, null, $thisyear))->export();
+        $this->assertTrue($export['hasyears']);
+        $this->assertSame(['This year'], array_column(array_filter($export['years'], fn($y) => $y['selected']), 'label'));
+    }
+
+    /**
      * Markers see only work allocated to them where allocation is on, and unallocated work is
      * left to convenors (D6).
      */
@@ -135,9 +179,10 @@ final class views_test extends \advanced_testcase {
         $this->assertArrayHasKey('Overdue essay', $tomark);
         $this->assertSame(1, $tomark['Overdue essay']['tomark']);
         $this->assertSame(['marked'], array_column($tomark['Overdue essay']['bars'], 'key'), 'one bar per kind of work');
-        $this->assertSame(['tomark', 'upcoming', 'completed'], array_column($marker['sections'], 'key'));
+        // No Upcoming section (Pierre, 2026-10-21): an early submission isn't marking until the deadline (G9).
+        $this->assertSame(['tomark', 'completed'], array_column($marker['sections'], 'key'));
         $this->assertArrayNotHasKey('Upcoming report', $tomark, 'an early submission waits for the deadline (G9)');
-        $this->assertArrayHasKey('Upcoming report', self::rows($marker, 'upcoming'));
+        $this->assertArrayNotHasKey('Upcoming report', self::rows($marker, 'completed'));
 
         $other = (new staff($this->u['other']->id))->export();
         $this->assertArrayNotHasKey('Overdue essay', self::rows($other, 'tomark'));
@@ -145,19 +190,19 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
-     * Staff Upcoming rows name their course even in a course with no marking rows yet (R1, beta22 audit: the
+     * Staff Undated rows name their course even in a course with no marking rows yet (R1, beta22 audit: the
      * course link was empty).
      */
-    public function test_staff_upcoming_names_course(): void {
+    public function test_staff_undated_names_course(): void {
         $gen = $this->getDataGenerator();
         $course = $gen->create_course(['shortname' => 'M2']);
         $gen->enrol_user($this->u['marker']->id, $course->id, 'teacher');
         $gen->enrol_user($this->u['s1']->id, $course->id, 'student');
         $cm = $gen->get_plugin_generator('mod_assign')->create_instance(['course' => $course->id, 'name' => 'Essay 2',
-            'duedate' => time() + 10 * DAYSECS, 'assignsubmission_onlinetext_enabled' => 1]);
+            'duedate' => 0, 'assignsubmission_onlinetext_enabled' => 1]);
         $gen->get_plugin_generator('block_le_dashboard')->tag($cm->cmid, 'summative');
 
-        $row = self::rows((new staff($this->u['marker']->id))->export(), 'upcoming')['Essay 2'];
+        $row = self::rows((new staff($this->u['marker']->id))->export(), 'undated')['Essay 2'];
         $this->assertSame('M2', $row['course']);
     }
 
@@ -272,19 +317,6 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
-     * Pierre, 2026-10-06 (beta14): a course from another year shows "Course (2024/25)", not the raw placeholder.
-     */
-    public function test_course_in_other_year(): void {
-        global $DB;
-        $course = $DB->get_record('course', ['shortname' => 'M1']);
-        $DB->set_field('course', 'startdate', mktime(0, 0, 0, 10, 1, 2024), ['id' => $course->id]);
-        $method = new \ReflectionMethod(convenor::class, 'with_year');
-        $text = $method->invoke(new convenor($this->u['convenor']->id), 'Module 1', (int)$course->id);
-        $this->assertStringStartsWith('Module 1 (', $text);
-        $this->assertStringNotContainsString('{$a', $text);
-    }
-
-    /**
      * PR3: names with "&" are escaped once, by the template, and search finds them.
      */
     public function test_names_escaped_once(): void {
@@ -387,11 +419,11 @@ final class views_test extends \advanced_testcase {
     public function test_returned(): void {
         $due = 1000;
         $stage = fn(?int $firstready, int $lastmarked) => (object)['firstready' => $firstready, 'lastmarked' => $lastmarked];
-        $this->assertTrue(staff::returned([$stage(1600, 1500)], $due), 'work arrived after marking finished');
-        $this->assertFalse(staff::returned([$stage(1400, 1500)], $due), 'unmarked work older than the last mark');
-        $this->assertFalse(staff::returned([$stage(1600, 900)], $due), 'marked early, before the deadline');
-        $this->assertFalse(staff::returned([$stage(null, 1500)], $due), 'nothing left to mark');
-        $this->assertTrue(staff::returned([$stage(1600, 1500)], null), 'no deadline');
+        $this->assertTrue(marking_rules::returned([$stage(1600, 1500)], $due), 'work arrived after marking finished');
+        $this->assertFalse(marking_rules::returned([$stage(1400, 1500)], $due), 'unmarked work older than the last mark');
+        $this->assertFalse(marking_rules::returned([$stage(1600, 900)], $due), 'marked early, before the deadline');
+        $this->assertFalse(marking_rules::returned([$stage(null, 1500)], $due), 'nothing left to mark');
+        $this->assertTrue(marking_rules::returned([$stage(1600, 1500)], null), 'no deadline');
     }
 
     /**
@@ -509,6 +541,34 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * "Due in" shows on every open Upcoming row however far away, while the due-soon mark keeps its 7 days; work
+     * handed in shows none (Pierre, 2026-10-29).
+     */
+    public function test_due_in_any_distance(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $due = (new \DateTime('2027-03-10 12:00', \core_date::get_user_timezone_object($student)))->getTimestamp();
+        $far = $this->getDataGenerator()->get_plugin_generator('mod_assign')->create_instance(['course' => $course->id,
+            'name' => 'Dissertation', 'duedate' => $due, 'assignsubmission_onlinetext_enabled' => 1]);
+        // On the module long before the earliest "now" below, so never a late joiner (EC10).
+        $DB->set_field('user_enrolments', 'timecreated', $due - 300 * DAYSECS, ['userid' => $student->id]);
+        $this->getDataGenerator()->get_plugin_generator('block_le_dashboard')->tag($far->cmid, 'summative');
+        foreach ([200 => 'Due in 200 days', 40 => 'Due in 40 days', 3 => 'Due in 3 days'] as $days => $text) {
+            $this->setUser($student);
+            $now = $due - $days * DAYSECS;
+            // All years: the earliest "now" falls in the year before the deadline's.
+            $export = (new student($student->id, $now, 0))->export();
+            $row = self::rows($export, 'upcoming')['Dissertation'];
+            $this->assertSame([$text], array_column($row['notes'], 'text'));
+            $this->assertSame($days <= student::DUESOON_DAYS ? 'duesoon' : null, $row['overlay']['state'] ?? null);
+        }
+        // Handed in: no countdown, as before.
+        $upcoming = self::rows((new student($this->u['s1']->id))->export(), 'upcoming');
+        $this->assertSame([], $upcoming['Upcoming report']['notes']);
+    }
+
+    /**
      * A sentence with a date in it, split around the date for the page to mark up.
      *
      * @covers \block_le_dashboard\local\output\format::dated
@@ -523,5 +583,146 @@ final class views_test extends \advanced_testcase {
         $this->assertSame('21 Oct 2026, 12:00', $dated['date']);
         $this->assertSame('.', $dated['after']);
         $this->assertSame($time, strtotime($dated['iso']));
+    }
+
+    /**
+     * CS4: an exempt or deferred student reads "Exempt" with no actions and the exemption's icon, and leaves the
+     * convenor's Submitted bar; their marking units leave every count.
+     */
+    public function test_exempt_student(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $convenorbar = function () {
+            $rows = [];
+            foreach ((new convenor($this->u['convenor']->id))->export()['sections'] as $section) {
+                $rows += array_column($section['rows'], null, 'name');
+            }
+            return array_column($rows['Overdue essay']['bars'], null, 'key')['submitted'];
+        };
+        $this->assertSame([1, 2], [$convenorbar()['value'], $convenorbar()['max']]);
+        $excuse = function (string $name, string $mitigation) use ($DB, $cmid) {
+            $params = ['cmid' => $cmid, 'userid' => $this->u[$name]->id];
+            $DB->set_field('block_le_dashboard_stu', 'mitigation', $mitigation, $params);
+            $DB->set_field('block_le_dashboard_stu', 'expected', 0, $params);
+        };
+        $excuse('s1', 'exempt');
+
+        $row = self::rows((new student($this->u['s1']->id))->export(), 'past')['Overdue essay'];
+        $this->assertSame('exempt', $row['status']['key']);
+        $this->assertSame('Exempt', $row['status']['label']);
+        $this->assertSame([], $row['actions']);
+        $this->assertArrayNotHasKey('mitigation', $row);
+        $this->assertSame('exempt', $row['mitigationoverlay']['state']);
+        $this->assertNull($row['overlay']);
+        $this->assertStringContainsString(get_string('tip_exempt', 'block_le_dashboard'), $row['tip']);
+        $this->assertSame([1, 1], [$convenorbar()['value'], $convenorbar()['max']]);
+
+        // The marker's only unit is s2's: deferred, it leaves their marking.
+        $this->assertArrayHasKey('Overdue essay', self::rows((new staff($this->u['marker']->id))->export(), 'tomark'));
+        $excuse('s2', 'deferred');
+        $DB->set_field('block_le_dashboard_mark', 'counted', 0, ['cmid' => $cmid]);
+        $this->assertArrayNotHasKey('Overdue essay', self::rows((new staff($this->u['marker']->id))->export(), 'tomark'));
+        $past = self::rows((new student($this->u['s2']->id))->export(), 'past');
+        $this->assertSame('exempt', $past['Overdue essay']['status']['key']);
+    }
+
+    /**
+     * CS3: withheld work is in no marking count, but stays in the academic conduct flag with its own sentence; a
+     * marker whose only work there is withheld keeps the assessment under Completed marking, with no bars.
+     */
+    public function test_withheld_work(): void {
+        global $DB;
+        set_config('hint_plagiarism', 1, 'block_le_dashboard');
+        $cmid = $this->a['overdue']->cmid;
+        $this->assertSame(1, $DB->count_records('block_le_dashboard_mark', ['cmid' => $cmid]));
+        $DB->set_field('block_le_dashboard_mark', 'flagged', marking_row::FLAG_WITHHELD, ['cmid' => $cmid]);
+        $DB->set_field('block_le_dashboard_mark', 'counted', 0, ['cmid' => $cmid]);
+        $withheld = get_string('hint_plagiarism_withheld_one', 'block_le_dashboard');
+
+        $staff = (new staff($this->u['marker']->id))->export();
+        $this->assertArrayNotHasKey('Overdue essay', self::rows($staff, 'tomark'));
+        $row = self::rows($staff, 'completed')['Overdue essay'];
+        $hint = array_column($row['hints'], null, 'key')['plagiarism'];
+        $this->assertSame($withheld, $hint['text']);
+        $this->assertSame('1 flagged', $hint['title']);
+        $this->assertSame([], $row['bars'] ?? []);
+
+        $convenor = (new convenor($this->u['convenor']->id))->export();
+        $rows = [];
+        foreach ($convenor['sections'] as $section) {
+            $rows += array_column($section['rows'], null, 'name');
+        }
+        $hint = array_column($rows['Overdue essay']['hints'], null, 'key')['plagiarism'];
+        $this->assertSame($withheld, $hint['text']);
+
+        // With one under investigation as well, both sentences, the open one first, over one count.
+        $hint = \block_le_dashboard\local\output\format::plagiarism_hint('r', 2, 1);
+        $this->assertSame('3 flagged', $hint['title']);
+        $this->assertSame(get_string('hint_plagiarism_text_many', 'block_le_dashboard', 2) . ' ' . $withheld, $hint['text']);
+    }
+
+    /**
+     * Beta27 hints audit: academic conduct flags are off on a new site, and off means their query isn't run either;
+     * on, the marker and the convenor both see the flag.
+     */
+    public function test_plagiarism_switch(): void {
+        global $DB;
+        $DB->set_field('block_le_dashboard_mark', 'flagged', 1, ['cmid' => $this->a['overdue']->cmid]);
+        $hints = fn(array $export, string $section) => array_column(self::rows($export, $section)['Overdue essay']['hints'], 'key');
+        $views = [
+            'tomark' => fn() => new staff($this->u['marker']->id),
+            'inprogress' => fn() => new convenor($this->u['convenor']->id),
+        ];
+
+        $reads = [];
+        foreach ($views as $section => $view) {
+            // Once first, so caches are warm for both counts.
+            $view()->export();
+            $before = $DB->perf_get_reads();
+            $this->assertNotContains('plagiarism', $hints($view()->export(), $section));
+            $reads[$section] = $DB->perf_get_reads() - $before;
+        }
+        set_config('hint_plagiarism', 1, 'block_le_dashboard');
+        foreach ($views as $section => $view) {
+            $before = $DB->perf_get_reads();
+            $this->assertContains('plagiarism', $hints($view()->export(), $section));
+            $this->assertGreaterThan($reads[$section], $DB->perf_get_reads() - $before, "$section: the query runs only when on");
+        }
+    }
+
+    /**
+     * Beta27 regression: work with several markers and no allocation (coursework double marking, or an assignment
+     * with 2 markers) is shared between the markers, and counts in Marking due soon for each one still to mark. In
+     * beta27 building that count was a PHP error, so these markers' My marking didn't load at all.
+     */
+    public function test_shared_marking_due_soon(): void {
+        global $DB;
+        $cmid = $this->a['overdue']->cmid;
+        $due = (int)$DB->get_field('block_le_dashboard_cm', 'due', ['cmid' => $cmid]);
+        $DB->update_record('block_le_dashboard_cm', (object)[
+            'id' => $DB->get_field('block_le_dashboard_cm', 'id', ['cmid' => $cmid]),
+            'hasallocation' => 0, 'stages' => 'marker1,marker2', 'markingdue' => null]);
+        $row = $DB->get_record(
+            'block_le_dashboard_mark',
+            ['cmid' => $cmid, 'unitid' => $this->u['s2']->id],
+            '*',
+            IGNORE_MULTIPLE
+        );
+        $DB->delete_records('block_le_dashboard_mark', ['cmid' => $cmid]);
+        unset($row->id);
+        foreach (['marker1', 'marker2'] as $stage) {
+            $DB->insert_record('block_le_dashboard_mark', (object)(['stage' => $stage, 'allocatedto' => null, 'marked' => 0,
+                'markedby' => null, 'timemarked' => null, 'released' => 0, 'submitted' => 1, 'unitdue' => $due] + (array)$row));
+        }
+
+        // The default marking period (12 days) puts the deadline 11 days ahead.
+        foreach (['marker', 'other'] as $name) {
+            $export = (new staff($this->u[$name]->id))->export();
+            $this->assertSame(1, self::rows($export, 'tomark')['Overdue essay']['tomark'], $name);
+            $box = array_column($export['summary'], null, 'key')['duesoon'];
+            $counts = json_decode($box['counts'], true);
+            $this->assertSame(1, $counts['15']['both'], "$name: within 15 days");
+            $this->assertSame(0, $counts['7']['both'], "$name: not within 7 days");
+        }
     }
 }

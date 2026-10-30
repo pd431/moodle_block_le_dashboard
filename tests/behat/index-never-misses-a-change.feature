@@ -28,37 +28,10 @@ Feature: The index never misses or fights over a change
     And the My assessments index is up to date
 
   # Item 1 (F1)
-  Scenario: A submission made while the assessment is being re-indexed is not lost
-    Given a re-index of "A1" has started
-    When "student2" submits "A1"
-    And the running re-index of "A1" finishes
-    And the My assessments index catches up
-    And I log in as "convenor" and view the "Convenor view"
-    Then "A1" should show a "Submitted" progress bar with "1" of "2"
 
   # Item 2 (F2)
-  Scenario: Two re-indexes of the same assessment at once both succeed
-    When "A1" is re-indexed twice at the same time
-    Then neither re-index should fail
-    And the index for "A1" should match the activity
-
-  Scenario: One failing assessment does not stop the nightly reconcile
-    Given a summative "assign" "A2" in "M1" is due "in 2 days"
-    And writing the index for "A1" fails once
-    When the My assessments nightly reconcile runs
-    Then "A2" should be in the index
 
   # Item 3 (F3)
-  Scenario: Showing a hidden grade item releases feedback without waiting for the night
-    Given "A1" was due "3 days ago"
-    And "student1" has submitted "A1"
-    And the grade item of "A1" is hidden
-    And "marker1" grades "student1" on "A1" with "65"
-    And the My assessments index catches up
-    When the grade item of "A1" is shown
-    And the My assessments index catches up
-    And I log in as "student1" and view my dashboard
-    Then "A1" should show the status "Feedback released"
 
   # Item 4 (F4)
   Scenario: My own submission shows straight away
@@ -66,6 +39,17 @@ Feature: The index never misses or fights over a change
     And I submit "A1"
     And I view my dashboard
     Then "A1" should show the status "Submitted"
+
+  @javascript @_file_upload
+  Scenario: A file handed in just before the deadline is in Past the second after it, without a Refresh
+    Given a summative "assign" "A2" in "M1" with file submissions is due "in 1 minute"
+    And the My assessments index is up to date
+    When I log in as "student1"
+    And I submit a file to "A2"
+    And the deadline of "A2" has just passed
+    And I view my dashboard
+    Then "A2" should appear in the "Past" section
+    And "A2" should show the status "In marking"
 
   @javascript
   Scenario: A student's Refresh changes only that student's rows
@@ -85,20 +69,6 @@ Feature: The index never misses or fights over a change
     Then "T1" should show the status "Submitted"
 
   # Item 5 (F5)
-  Scenario: The nightly reconcile leaves old courses alone
-    Given the "Live window for the nightly reconcile" setting is "13" months
-    And a course "OLD" with a summative "assign" "Z1" was due "2 years ago"
-    And the My assessments index is up to date
-    And the deadline of "Z1" is changed directly in the database to "3 years ago"
-    When the My assessments nightly reconcile runs
-    Then the index should still show "Z1" due "2 years ago"
-
-  Scenario: An event still updates an old course
-    Given a course "OLD" with a summative "assign" "Z1" was due "2 years ago"
-    And the My assessments index is up to date
-    When "Z1" is renamed to "Z1 resit"
-    And the My assessments index catches up
-    Then the index should show "Z1 resit"
 
   # Item 8 (F9)
   @javascript

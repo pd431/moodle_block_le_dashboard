@@ -1,4 +1,4 @@
-@block @block_le_dashboard @javascript
+@block @block_le_dashboard
 Feature: The search box and the bottom of each section are drawn cleanly
   In order that the block looks finished
   As anyone using My assessments
@@ -33,6 +33,7 @@ Feature: The search box and the bottom of each section are drawn cleanly
       | student1 | M1     | student |
     And the My assessments block is configured with summative tag "summative" and formative tag "formative"
 
+  @javascript
   Scenario: The search box's outer corners match and it is as tall as the buttons beside it
     Given a summative "assign" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard
@@ -40,24 +41,28 @@ Feature: The search box and the bottom of each section are drawn cleanly
     And the search box should have square corners where the icon meets the input
     And the search box should be as tall as the "Summative" button
 
+  @javascript
   Scenario: Focus rings the whole search box
     Given a summative "assign" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard
-    And I click on "Search assessments" "field" in the "My assessments" "block"
+    And I click on "Search assessments" "field" in the "My Assessments" "block"
     Then the search box should show its focus ring around the icon and the input
 
+  @javascript
   Scenario: With no Show more row, the last row has the section's rounded bottom corners
     Given a summative "assign" "A1" in "M1" is due "tomorrow"
     When I log in as "student1" and view my dashboard
     Then the "Upcoming" section should have no Show more row
     And the last row of the "Upcoming" section should have the card's bottom corners
 
+  @javascript
   Scenario: With a Show more row, the footer has the bottom corners
     Given 6 summative "assign" activities in "M1" are due "tomorrow"
     When I log in as "student1" and view my dashboard
     Then the "Upcoming" section should have a Show more row
     And the Show more row of the "Upcoming" section should have the card's bottom corners
 
+  @javascript
   Scenario: When search hides rows, the last row still shows rounded bottom corners
     Given 6 summative "assign" activities in "M1" are due "tomorrow"
     And a summative "assign" "Essay" in "M1" is due "tomorrow"

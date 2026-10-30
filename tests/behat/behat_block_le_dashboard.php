@@ -23,15 +23,20 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
 use Behat\Gherkin\Node\TableNode;
 use Behat\Mink\Exception\ExpectationException;
+use block_le_dashboard\fixture\failed;
+use block_le_dashboard\fixture\fixture;
+use block_le_dashboard\fixture\phrases;
+use block_le_dashboard\fixture\steps;
+use block_le_dashboard\fixture\unavailable;
 use block_le_dashboard\local\index\indexer;
 use block_le_dashboard\local\years;
 
 /**
  * Steps for the My assessments scope (logic-overhaul/scope/*.feature).
  *
- * Test data is created through each plugin's own API where it has one. Where a step sets data
- * directly, it queues the re-index the plugin's own event would have queued, so "view my
- * dashboard" (which runs pending index tasks first) sees it.
+ * Test data is written through the fixture of each activity type (tests/generator/fixture/), the write-side twin of
+ * its adapter, so no step here names a plugin's tables or classes. A fixture queues the re-index the plugin's own
+ * event would have queued, so "view my dashboard" (which runs pending index tasks first) sees it.
  *
  * @package    block_le_dashboard
  * @category   test
@@ -42,9 +47,6 @@ class behat_block_le_dashboard extends behat_base {
     /** Block selector. */
     const BLOCK = '.block_le_dashboard';
 
-    /** Module tables searched when looking up an activity by name. */
-    const MODULES = ['assign', 'quiz', 'peerwork', 'coursework', 'workshop', 'forum', 'page', 'lti', 'attendance'];
-
     /**
      * The module convenor role is needed before Background enrolments refer to it.
      *
@@ -54,6 +56,9 @@ class behat_block_le_dashboard extends behat_base {
         global $DB;
         // Ids restart with each scenario, so nothing memoised in this process still holds.
         \block_le_dashboard\local\memo::reset();
+        // The generator loads the fixtures and the steps; a scenario starts with no step state.
+        testing_util::get_data_generator()->get_plugin_generator('block_le_dashboard');
+        steps::reset();
         if (!$DB->record_exists('role', ['shortname' => 'moduleconvenor'])) {
             $roleid = create_role('Module convenor', 'moduleconvenor', '', 'editingteacher');
             set_role_contextlevels($roleid, [CONTEXT_COURSE]);
@@ -77,41 +82,15 @@ class behat_block_le_dashboard extends behat_base {
     // Helpers.
 
     /**
-     * A time from words: now, tomorrow, yesterday, "3 days ago", "in 10 days", "in 1 minute".
+     * Runs a step, skipping the scenario when this site cannot do what it asks.
      *
-     * @param string $text
-     * @return int
+     * @param callable $step
      */
-    protected static function time(string $text): int {
-        // An absolute time may name its zone ("12 October 2026 10:00 Europe/London"), which strtotime() reads
-        // only as written.
-        $absolute = trim($text);
-        $text = strtolower($absolute);
-        $map = ['now' => 0, 'tomorrow' => DAYSECS, 'yesterday' => -DAYSECS];
-        if (isset($map[$text])) {
-            return time() + $map[$text];
-        }
-        if (preg_match('/^in (\d+) (minute|hour|day|week)s?$/', $text, $m)) {
-            return strtotime("+{$m[1]} {$m[2]}");
-        }
-        if (preg_match('/^(\d+) (minute|hour|day|week)s? ago$/', $text, $m)) {
-            return strtotime("-{$m[1]} {$m[2]}");
-        }
-        $time = strtotime($absolute);
-        if ($time === false) {
-            throw new coding_exception("Unknown time '$absolute'");
-        }
-        return $time;
-    }
-
-    /**
-     * Skips the scenario when a module it needs is not installed.
-     *
-     * @param string $modname
-     */
-    protected static function require_module(string $modname): void {
-        if (!core_component::get_component_directory('mod_' . $modname)) {
-            throw new \Moodle\BehatExtension\Exception\SkippedException("mod_$modname is not installed");
+    protected static function skipping(callable $step): void {
+        try {
+            $step();
+        } catch (unavailable $e) {
+            throw new \Moodle\BehatExtension\Exception\SkippedException($e->getMessage());
         }
     }
 
@@ -122,28 +101,7 @@ class behat_block_le_dashboard extends behat_base {
      * @return cm_info
      */
     protected function cm(string $name): cm_info {
-        global $DB;
-        foreach (self::MODULES as $modname) {
-            if (!core_component::get_component_directory('mod_' . $modname)) {
-                continue;
-            }
-            if ($instance = $DB->get_record($modname, ['name' => $name], 'id, course', IGNORE_MULTIPLE)) {
-                $cm = get_coursemodule_from_instance($modname, $instance->id, $instance->course, false, MUST_EXIST);
-                return get_fast_modinfo($cm->course)->get_cm($cm->id);
-            }
-        }
-        throw new coding_exception("No activity named '$name'");
-    }
-
-    /**
-     * A user id by username.
-     *
-     * @param string $username
-     * @return int
-     */
-    protected static function userid(string $username): int {
-        global $DB;
-        return (int)$DB->get_field('user', 'id', ['username' => $username], MUST_EXIST);
+        return steps::instance()->cm($name);
     }
 
     /**
@@ -153,17 +111,7 @@ class behat_block_le_dashboard extends behat_base {
      * @return stdClass
      */
     protected static function course(string $shortname): stdClass {
-        global $DB;
-        return $DB->get_record('course', ['shortname' => $shortname], '*', MUST_EXIST);
-    }
-
-    /**
-     * Queues the re-index that the plugin's own event would have queued.
-     *
-     * @param cm_info|int $cm
-     */
-    protected static function queue($cm): void {
-        indexer::queue_cm(is_object($cm) ? (int)$cm->id : (int)$cm);
+        return steps::course($shortname);
     }
 
     /**
@@ -171,10 +119,7 @@ class behat_block_le_dashboard extends behat_base {
      * means the time has passed.
      */
     protected function catch_up(): void {
-        global $DB;
-        $due = time() - 1;
-        $DB->set_field_select('task_adhoc', 'nextruntime', $due, "component = 'block_le_dashboard' AND nextruntime > $due");
-        $this->execute('behat_general::i_run_all_adhoc_tasks');
+        steps::instance()->catch_up();
     }
 
     /**
@@ -188,6 +133,48 @@ class behat_block_le_dashboard extends behat_base {
             "//li[@data-region='ma-row'][.//a[contains(@class, 'ma-row-name')][normalize-space(.) = " .
             behat_context_helper::escape($name) . "]]";
         return $this->find('xpath', $xpath, new ExpectationException("No row for '$name'", $this->getSession()));
+    }
+
+    /**
+     * The labels of a row's dates, in the order the row shows them.
+     *
+     * @Then /^the dates of "(?P<name>[^"]*)" should be "(?P<labels>[^"]*)" in that order$/
+     * @param string $name
+     * @param string $labels Comma-separated date labels.
+     */
+    public function the_dates_should_be(string $name, string $labels): void {
+        $actual = array_map(
+            fn($e) => trim($e->getText()),
+            $this->row($name)->findAll('css', '.ma-row-dates [data-date] .ma-row-date-label')
+        );
+        $expected = array_map('trim', explode(',', $labels));
+        if ($actual !== $expected) {
+            throw new ExpectationException("'$name' shows its dates as \"" . implode(', ', $actual) . '"', $this->getSession());
+        }
+    }
+
+    /**
+     * Whether every date label of a row sits on its own line, above its date.
+     *
+     * @Then /^the date labels of "(?P<name>[^"]*)" should (?P<not>not )?be on their own lines$/
+     * @param string $name
+     * @param string $not
+     */
+    public function the_date_labels_should_be_on_their_own_lines(string $name, string $not = ''): void {
+        $this->row($name);
+        $displays = $this->evaluate_script("return Array.from(document.querySelectorAll(
+            '.block_le_dashboard li[data-region=\"ma-row\"]')).filter((li) => {
+                const a = li.querySelector('.ma-row-name');
+                return a && a.textContent.trim() === " . json_encode($name) . ";
+            }).flatMap((li) => Array.from(li.querySelectorAll('.ma-row-dates [data-date] .ma-row-date-label')))
+            .map((e) => getComputedStyle(e).display);");
+        if (!$displays) {
+            throw new ExpectationException("'$name' has no date labels", $this->getSession());
+        }
+        $own = array_unique(array_map(fn($d) => $d === 'block', $displays));
+        if ($own !== [!$not]) {
+            throw new ExpectationException("'$name' date labels display as " . implode(', ', $displays), $this->getSession());
+        }
     }
 
     /**
@@ -205,20 +192,6 @@ class behat_block_le_dashboard extends behat_base {
         return $this->row($name)->find('xpath', $xpath);
     }
 
-    /**
-     * Adds a question an attempt can be made at (an essay, which needs manual grading).
-     *
-     * @param stdClass $quiz
-     */
-    protected static function add_essay(stdClass $quiz): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/quiz/locallib.php');
-        $qgen = testing_util::get_data_generator()->get_plugin_generator('core_question');
-        $cat = $qgen->create_question_category(['contextid' => context_module::instance($quiz->cmid)->id]);
-        $question = $qgen->create_question('essay', null, ['category' => $cat->id]);
-        quiz_add_quiz_question($question->id, $quiz);
-    }
-
     // Set-up steps.
 
     /**
@@ -229,21 +202,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $formative
      */
     public function the_block_is_configured(string $summative, string $formative): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/my/lib.php');
-        $types = ['assign', 'quiz', 'peerwork', 'coursework'];
-        testing_util::get_data_generator()->get_plugin_generator('block_le_dashboard')->configure($types);
-        set_config('certaintags', $summative, 'block_le_dashboard');
-        set_config('formativetags', $formative, 'block_le_dashboard');
-        unset_config('backfillpending', 'block_le_dashboard');
-        $page = my_get_page(null, MY_PAGE_PRIVATE);
-        if (!$DB->record_exists('block_instances', ['blockname' => 'le_dashboard', 'subpagepattern' => $page->id])) {
-            $DB->insert_record('block_instances', ['blockname' => 'le_dashboard',
-                'parentcontextid' => context_system::instance()->id, 'showinsubcontexts' => 0, 'pagetypepattern' => 'my-index',
-                'subpagepattern' => $page->id, 'defaultregion' => 'content', 'defaultweight' => -10, 'configdata' => '',
-                'timecreated' => time(), 'timemodified' => time()]);
-        }
-        my_reset_page_for_all_users(MY_PAGE_PRIVATE, 'my-index');
+        steps::instance()->the_block_is_configured($summative, $formative);
     }
 
     /**
@@ -254,13 +213,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $date
      */
     public function the_academic_year_starts_on(string $label, string $date): void {
-        global $DB;
-        // A date, or a timestamp when written as ##date##.
-        $start = ctype_digit($date) ? (int)$date : strtotime($date . ' 00:00');
-        $DB->delete_records(years::TABLE, ['label' => $label]);
-        $id = $DB->insert_record(years::TABLE, ['label' => $label, 'timestart' => $start,
-            'timeend' => strtotime('+1 year', $start), 'timecreated' => time(), 'timemodified' => time()]);
-        set_config('defaultacademicyear', $id, 'block_le_dashboard');
+        steps::instance()->the_academic_year_starts_on($label, $date);
     }
 
     /**
@@ -270,8 +223,9 @@ class behat_block_le_dashboard extends behat_base {
      * grading method "First attempt|Last attempt|Highest grade", 2 markers, moderation,
      * marking workflow, reopened attempts, a cut-off "...", manual agreement, tagged "..." (a second tag),
      * N attempts allowed, marks never shown, marks shown immediately after only, marks shown after
-     * close only, a maximum grade of 0 (quiz), submission type attendance (coursework), required Submit
-     * (assign: students must click Submit, which makes the submission final).
+     * close only, a maximum grade of 0 (quiz), marks entry only, file submission or no submission types
+     * recorded (coursework), required Submit (assign: students must click Submit, which makes the submission
+     * final). Also: opens "..." and (when submissions open).
      *
      * @Given /^an? (?P<tag>summative|formative|"[^"]+") "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) (?:is|was) due "(?P<due>[^"]*)"$/
      * @param string $tag
@@ -289,8 +243,7 @@ class behat_block_le_dashboard extends behat_base {
         string $opts,
         string $due
     ): void {
-        // A quoted tag is any tag, such as one the settings don't list yet.
-        $this->create_assessment(trim($tag, '"'), $modname, $name, $course, $opts, self::time($due));
+        self::skipping(fn() => steps::instance()->an_assessment_is_due($tag, $modname, $name, $course, $opts, $due));
     }
 
     /**
@@ -310,171 +263,7 @@ class behat_block_le_dashboard extends behat_base {
         string $course,
         string $opts = ''
     ): void {
-        $this->create_assessment($tag, $modname, $name, $course, $opts, null);
-    }
-
-    /**
-     * Creates an activity of a type and tags it.
-     *
-     * @param string $tag
-     * @param string $modname
-     * @param string $name
-     * @param string $shortname
-     * @param string $opts
-     * @param int|null $due
-     */
-    protected function create_assessment(
-        string $tag,
-        string $modname,
-        string $name,
-        string $shortname,
-        string $opts,
-        ?int $due
-    ): void {
-        global $CFG, $DB;
-        self::require_module($modname);
-        $course = self::course($shortname);
-        $gen = testing_util::get_data_generator();
-        $allocation = str_contains($opts, 'marker allocation');
-        $markingdue = preg_match('/marking deadline "([^"]*)"/', $opts, $m) ? self::time($m[1]) : 0;
-        $record = ['course' => $course->id, 'name' => $name];
-        if (str_contains($opts, 'no description')) {
-            $record['intro'] = '';
-        } else if (preg_match('/description "([^"]*)"/', $opts, $m)) {
-            $record['intro'] = $m[1];
-        }
-        switch ($modname) {
-            case 'assign':
-                // EC5: "with no online submission" means the assignment only records a mark.
-                $online = str_contains($opts, 'no online submission') ? 0 : 1;
-                $record += ['duedate' => (int)$due, 'submissiondrafts' => str_contains($opts, 'required Submit') ? 1 : 0,
-                    'assignsubmission_onlinetext_enabled' => $online,
-                    'assignsubmission_file_enabled' => 0,
-                    'gradingduedate' => $markingdue,
-                    'markingworkflow' => $allocation || str_contains($opts, 'marking workflow') ? 1 : 0,
-                    'markingallocation' => $allocation ? 1 : 0];
-                if (str_contains($opts, 'team submission')) {
-                    $record += ['teamsubmission' => 1, 'requireallteammemberssubmit' => 0, 'preventsubmissionnotingroup' => 0];
-                    // Teams from one grouping, so a student's other groups (an extension group) aren't teams.
-                    if (preg_match('/team submission in grouping "([^"]*)"/', $opts, $m)) {
-                        $grouping = $DB->get_record('groupings', ['courseid' => $course->id, 'name' => $m[1]])
-                            ?: $gen->create_grouping(['courseid' => $course->id, 'name' => $m[1]]);
-                        $record['teamsubmissiongroupingid'] = $grouping->id;
-                    }
-                }
-                if (str_contains($opts, 'reopened attempts')) {
-                    $record += ['attemptreopenmethod' => 'manual', 'maxattempts' => -1];
-                }
-                if (preg_match('/cut-off "([^"]*)"/', $opts, $m)) {
-                    $record['cutoffdate'] = self::time($m[1]);
-                }
-                if (preg_match('/(\d+) markers/', $opts, $m)) {
-                    if (!$DB->get_manager()->field_exists('assign', 'markercount')) {
-                        throw new \Moodle\BehatExtension\Exception\SkippedException('Several assign markers need Moodle 5.0');
-                    }
-                    $record += ['markercount' => (int)$m[1],
-                        'multimarkmethod' => str_contains($opts, 'manual agreement') ? 'manual' : 'average'];
-                }
-                break;
-            case 'quiz':
-                require_once($CFG->dirroot . '/mod/quiz/lib.php');
-                $methods = ['first attempt' => QUIZ_ATTEMPTFIRST, 'last attempt' => QUIZ_ATTEMPTLAST,
-                    'highest grade' => QUIZ_GRADEHIGHEST];
-                $record += ['timeclose' => (int)$due, 'sumgrades' => 1];
-                if (preg_match('/grading method "([^"]*)"/', $opts, $m)) {
-                    $record['grademethod'] = $methods[strtolower($m[1])];
-                }
-                if (preg_match('/(\d+) attempts? allowed/', $opts, $m)) {
-                    $record['attempts'] = (int)$m[1];
-                }
-                break;
-            case 'peerwork':
-                $record += ['duedate' => (int)$due];
-                break;
-            case 'coursework':
-                $markers = preg_match('/(\d+) markers/', $opts, $m) ? (int)$m[1] : 1;
-                $record += ['deadline' => (int)$due, 'numberofmarkers' => $markers, 'allocationenabled' => $allocation ? 1 : 0,
-                    'moderationenabled' => str_contains($opts, 'moderation') ? 1 : 0,
-                    'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue];
-                if (str_contains($opts, 'submission type attendance')) {
-                    $record['submissiontype'] = 'attendance';
-                }
-                break;
-            case 'workshop':
-                $record += ['submissionend' => (int)$due];
-                break;
-            default:
-                $record += ['duedate' => (int)$due];
-        }
-        if (str_contains($opts, 'no grade')) {
-            // A grade of 0 is grade type None.
-            $record['grade'] = 0;
-        }
-        $instance = $gen->create_module($modname, $record);
-        if (isset($record['intro'])) {
-            // Module generators fill in an empty intro, so set it afterwards.
-            $DB->set_field($modname, 'intro', $record['intro'], ['id' => $instance->id]);
-        }
-        if (str_contains($opts, 'brief file')) {
-            get_file_storage()->create_file_from_string(['contextid' => context_module::instance($instance->cmid)->id,
-                'component' => 'mod_' . $modname, 'filearea' => 'intro', 'itemid' => 0, 'filepath' => '/',
-                'filename' => 'brief.pdf'], 'Brief');
-        }
-        if ($modname === 'quiz') {
-            self::add_essay($instance);
-            $review = ['marks never shown' => 0, 'marks shown immediately after only' => 0x11000,
-                'marks shown after close only' => 0x00010];
-            foreach ($review as $phrase => $marks) {
-                if (str_contains($opts, $phrase)) {
-                    self::set_quiz((int)$instance->id, ['reviewmarks' => $marks]);
-                }
-            }
-            if (str_contains($opts, 'a maximum grade of 0')) {
-                self::set_quiz((int)$instance->id, ['grade' => 0]);
-            }
-        }
-        if ($due) {
-            self::joined_before($course->id, $due);
-        }
-        $tags = [$tag];
-        if (preg_match('/tagged "([^"]*)"/', $opts, $m)) {
-            $tags[] = $m[1];
-        }
-        core_tag_tag::set_item_tags('core', 'course_modules', $instance->cmid, context_module::instance($instance->cmid), $tags);
-    }
-
-    /**
-     * Changes quiz settings in the database and updates its grade item, as saving the form would.
-     *
-     * @param int $quizid
-     * @param array $fields
-     */
-    protected static function set_quiz(int $quizid, array $fields): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/mod/quiz/lib.php');
-        $DB->update_record('quiz', ['id' => $quizid] + $fields);
-        $quiz = $DB->get_record('quiz', ['id' => $quizid]);
-        $quiz->cmidnumber = '';
-        quiz_grade_item_update($quiz);
-    }
-
-    /**
-     * Dates the enrolments already in a course before a deadline: students on the module when an
-     * assessment is set were there before its deadline. Students enrolled later in a scenario are
-     * late joiners (EC10).
-     *
-     * @param int $courseid
-     * @param int $due
-     */
-    protected static function joined_before(int $courseid, int $due): void {
-        global $DB;
-        $before = $due - DAYSECS;
-        $DB->execute(
-            "UPDATE {user_enrolments}
-                         SET timecreated = :t1, timestart = CASE WHEN timestart > :t2 THEN :t3 ELSE timestart END
-                       WHERE timecreated > :t4 AND enrolid IN (SELECT id FROM {enrol} WHERE courseid = :courseid)",
-            ['t1' => $before, 't2' => $before, 't3' => $before, 't4' => $before, 'courseid' => $courseid]
-        );
+        self::skipping(fn() => steps::instance()->an_assessment_with_no_due_date($tag, $modname, $name, $course, $opts));
     }
 
     /**
@@ -485,8 +274,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $shortname
      */
     public function an_activity_with_grade_items_exists(string $modname, string $shortname): void {
-        testing_util::get_data_generator()->create_module($modname, ['course' => self::course($shortname)->id,
-            'name' => ucfirst($modname) . ' with grades']);
+        self::skipping(fn() => steps::instance()->an_activity_with_grade_items_exists($modname, $shortname));
     }
 
     /**
@@ -497,13 +285,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $not
      */
     public function the_activity_type_is_enabled(string $type, string $not = ''): void {
-        global $DB;
-        $modname = $DB->get_field_sql(
-            "SELECT name FROM {modules} WHERE " . $DB->sql_like('name', ':n', false),
-            ['n' => strtolower($type)],
-            MUST_EXIST
-        );
-        \block_le_dashboard\local\adapter\registry::set_enabled($modname, $not === '');
+        steps::instance()->the_activity_type_is_enabled($type, $not);
     }
 
     /**
@@ -513,8 +295,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $tag
      */
     public function the_formative_tag_is_changed(string $tag): void {
-        set_config('formativetags', $tag, 'block_le_dashboard');
-        \block_le_dashboard\task\backfill::setting_changed('block_le_dashboard/formativetags');
+        steps::instance()->the_formative_tag_is_changed($tag);
     }
 
     /**
@@ -524,8 +305,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $type
      */
     public function the_activity_type_is_unticked(string $type): void {
-        $this->the_activity_type_is_enabled($type, 'not ');
-        \block_le_dashboard\task\backfill::queue();
+        steps::instance()->the_activity_type_is_unticked($type);
     }
 
     /**
@@ -535,7 +315,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $modname
      */
     public function indexing_fails(string $modname): void {
-        set_config('testfailtypes', $modname, 'block_le_dashboard');
+        steps::instance()->indexing_fails($modname);
     }
 
     /**
@@ -544,7 +324,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^reading student data fails for every student$/
      */
     public function reading_student_data_fails(): void {
-        set_config('testfailstudent', -1, 'block_le_dashboard');
+        steps::instance()->reading_student_data_fails();
     }
 
     /**
@@ -553,8 +333,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^reading student data works again$/
      */
     public function reading_student_data_works(): void {
-        unset_config('testfailstudent', 'block_le_dashboard');
-        unset_config('testfailtypes', 'block_le_dashboard');
+        steps::instance()->reading_student_data_works();
     }
 
     /**
@@ -564,9 +343,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $modname
      */
     public function module_is_not_installed(string $modname): void {
-        if (core_component::get_component_directory('mod_' . $modname)) {
-            throw new \Moodle\BehatExtension\Exception\SkippedException("mod_$modname is installed on this site");
-        }
+        self::skipping(fn() => steps::instance()->module_is_not_installed($modname));
     }
 
     // Access steps.
@@ -578,9 +355,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function is_hidden_from_students(string $name): void {
-        $cm = $this->cm($name);
-        set_coursemodule_visible($cm->id, 0);
-        self::queue($cm);
+        steps::instance()->is_hidden_from_students($name);
     }
 
     /**
@@ -590,9 +365,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_section_is_hidden(string $name): void {
-        $cm = $this->cm($name);
-        set_section_visible($cm->course, $cm->sectionnum, 0);
-        self::queue($cm);
+        steps::instance()->the_section_is_hidden($name);
     }
 
     /**
@@ -602,26 +375,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $shortname
      */
     public function the_course_is_hidden(string $shortname): void {
-        $course = self::course($shortname);
-        update_course((object)['id' => $course->id, 'visible' => 0]);
-    }
-
-    /**
-     * Sets an activity's availability.
-     *
-     * @param cm_info $cm
-     * @param array $conditions
-     */
-    protected static function restrict(cm_info $cm, array $conditions): void {
-        global $DB;
-        $DB->set_field(
-            'course_modules',
-            'availability',
-            json_encode(\core_availability\tree::get_root_json($conditions)),
-            ['id' => $cm->id]
-        );
-        rebuild_course_cache($cm->course, true);
-        self::queue($cm);
+        steps::instance()->the_course_is_hidden($shortname);
     }
 
     /**
@@ -632,10 +386,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $group
      */
     public function is_restricted_to_group(string $name, string $group): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $groupid = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $group], MUST_EXIST);
-        self::restrict($cm, [\availability_group\condition::get_json((int)$groupid)]);
+        steps::instance()->is_restricted_to_group($name, $group);
     }
 
     /**
@@ -648,12 +399,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $other
      */
     public function is_restricted_to_group_not(string $name, string $group, string $other): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $in = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $group], MUST_EXIST);
-        $out = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $other], MUST_EXIST);
-        $not = \core_availability\tree::get_nested_json([\availability_group\condition::get_json((int)$out)], '!|');
-        self::restrict($cm, [\availability_group\condition::get_json((int)$in), $not]);
+        steps::instance()->is_restricted_to_group_not($name, $group, $other);
     }
 
     /**
@@ -665,14 +411,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $group
      */
     public function is_added_to_group(string $user, string $how, string $group): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/group/lib.php');
-        $groupid = $DB->get_field('groups', 'id', ['name' => $group], MUST_EXIST);
-        if ($how === 'added to') {
-            groups_add_member($groupid, self::userid($user));
-        } else {
-            groups_remove_member($groupid, self::userid($user));
-        }
+        steps::instance()->is_added_to_group($user, $how, $group);
     }
 
     /**
@@ -685,15 +424,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function are_team_of(string $u1, string $u2, string $group, string $name): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $groupingid = $DB->get_field('assign', 'teamsubmissiongroupingid', ['id' => $cm->instance], MUST_EXIST);
-        $gen = testing_util::get_data_generator();
-        $g = $gen->create_group(['courseid' => $cm->course, 'name' => $group]);
-        $gen->create_grouping_group(['groupingid' => $groupingid, 'groupid' => $g->id]);
-        foreach ([$u1, $u2] as $user) {
-            $gen->create_group_member(['groupid' => $g->id, 'userid' => self::userid($user)]);
-        }
+        steps::instance()->are_team_of($u1, $u2, $group, $name);
     }
 
     /**
@@ -705,12 +436,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $shortname
      */
     public function is_available_once_complete(string $name, string $other, string $shortname): void {
-        global $DB;
-        $course = self::course($shortname);
-        $DB->set_field('course', 'enablecompletion', 1, ['id' => $course->id]);
-        $page = testing_util::get_data_generator()->create_module('page', ['course' => $course->id, 'name' => $other,
-            'completion' => COMPLETION_TRACKING_MANUAL]);
-        self::restrict($this->cm($name), [\availability_completion\condition::get_json((int)$page->cmid, COMPLETION_COMPLETE)]);
+        steps::instance()->is_available_once_complete($name, $other, $shortname);
     }
 
     /**
@@ -721,32 +447,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function is_only_available_from(string $name, string $when): void {
-        self::restrict($this->cm($name), [\availability_date\condition::get_json(
-            \availability_date\condition::DIRECTION_FROM,
-            self::time($when)
-        )]);
-    }
-
-    /**
-     * The user's enrolment.
-     *
-     * @param string $username
-     * @param string $shortname
-     * @return array [plugin, instance, userid]
-     */
-    protected static function enrolment(string $username, string $shortname): array {
-        global $DB;
-        $userid = self::userid($username);
-        $course = self::course($shortname);
-        $instance = $DB->get_record_sql(
-            "SELECT e.*
-                                           FROM {enrol} e
-                                           JOIN {user_enrolments} ue ON ue.enrolid = e.id
-                                          WHERE e.courseid = :courseid AND ue.userid = :userid",
-            ['courseid' => $course->id, 'userid' => $userid],
-            IGNORE_MULTIPLE
-        );
-        return [enrol_get_plugin($instance->enrol), $instance, $userid];
+        steps::instance()->is_only_available_from($name, $when);
     }
 
     /**
@@ -758,8 +459,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function the_enrolment_ended(string $username, string $shortname, string $when): void {
-        [$plugin, $instance, $userid] = self::enrolment($username, $shortname);
-        $plugin->update_user_enrol($instance, $userid, null, null, self::time($when));
+        steps::instance()->the_enrolment_ended($username, $shortname, $when);
     }
 
     /**
@@ -770,8 +470,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $shortname
      */
     public function the_enrolment_is_suspended(string $username, string $shortname): void {
-        [$plugin, $instance, $userid] = self::enrolment($username, $shortname);
-        $plugin->update_user_enrol($instance, $userid, ENROL_USER_SUSPENDED);
+        steps::instance()->the_enrolment_is_suspended($username, $shortname);
     }
 
     /**
@@ -782,8 +481,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $shortname
      */
     public function is_unenrolled(string $username, string $shortname): void {
-        [$plugin, $instance, $userid] = self::enrolment($username, $shortname);
-        $plugin->unenrol_user($instance, $userid);
+        steps::instance()->is_unenrolled($username, $shortname);
     }
 
     /**
@@ -794,8 +492,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $archetype
      */
     public function the_role_exists(string $name, string $archetype): void {
-        testing_util::get_data_generator()->create_role(['name' => $name,
-            'shortname' => strtolower(preg_replace('/\W/', '', $name)), 'archetype' => $archetype]);
+        steps::instance()->the_role_exists($name, $archetype);
     }
 
     /**
@@ -806,12 +503,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $kind
      */
     public function treats_as_role(string $name, string $kind): void {
-        global $DB;
-        $shortname = $DB->get_field('role', 'shortname', ['shortname' => $name])
-            ?: $DB->get_field('role', 'shortname', ['name' => $name], MUST_EXIST);
-        $setting = ['student' => 'studentrole', 'staff' => 'staffrole', 'module convenor' => 'moduleconvenorrole'][$kind];
-        $current = array_filter(explode(',', (string)get_config('block_le_dashboard', $setting)));
-        set_config($setting, implode(',', array_unique(array_merge($current, [$shortname]))), 'block_le_dashboard');
+        steps::instance()->treats_as_role($name, $kind);
     }
 
     /**
@@ -822,7 +514,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $view
      */
     public function last_opened(string $username, string $view): void {
-        set_user_preference('block_le_dashboard_view', self::view_key($view), self::userid($username));
+        steps::instance()->last_opened($username, $view);
     }
 
     /**
@@ -835,23 +527,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $only
      */
     public function is_enrolled_as(string $username, string $shortname, string $role, string $only = ''): void {
-        global $DB;
-        $userid = self::userid($username);
-        $course = self::course($shortname);
-        $roleid = (int)($DB->get_field('role', 'id', ['shortname' => $role]) ?: $DB->get_field(
-            'role',
-            'id',
-            ['name' => $role],
-            MUST_EXIST
-        ));
-        $context = context_course::instance($course->id);
-        if ($only) {
-            role_unassign_all(['userid' => $userid, 'contextid' => $context->id]);
-        }
-        testing_util::get_data_generator()->enrol_user($userid, $course->id, $roleid);
-        if (user_has_role_assignment($userid, $roleid, $context->id) === false) {
-            role_assign($roleid, $userid, $context->id);
-        }
+        steps::instance()->is_enrolled_as($username, $shortname, $role, $only);
     }
 
     /**
@@ -862,21 +538,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $text
      */
     public function the_section_title_is_customised(string $title, string $text): void {
-        global $CFG;
-        $strings = get_string_manager()->load_component_strings('block_le_dashboard', 'en');
-        $keys = array_keys(array_filter(
-            $strings,
-            fn($v, $k) => $v === $title && str_starts_with($k, 'section_'),
-            ARRAY_FILTER_USE_BOTH
-        ));
-        $dir = $CFG->langlocalroot . '/en_local';
-        check_dir_exists($dir);
-        $php = "<?php\n";
-        foreach ($keys as $key) {
-            $php .= '$string[' . var_export($key, true) . '] = ' . var_export($text, true) . ";\n";
-        }
-        file_put_contents($dir . '/block_le_dashboard.php', $php);
-        get_string_manager()->reset_caches();
+        steps::instance()->the_section_title_is_customised($title, $text);
     }
 
     // Submissions and marking.
@@ -890,9 +552,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function have_submitted(string $u1, string $u2, string $name): void {
-        foreach (array_filter([$u1, $u2]) as $username) {
-            $this->submit($this->cm($name), self::userid($username));
-        }
+        steps::instance()->have_submitted($u1, $u2, $name);
     }
 
     /**
@@ -904,24 +564,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function submitted_at(string $username, string $name, string $when): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $userid = self::userid($username);
-        $this->submit($cm, $userid);
-        $time = self::time($when);
-        if ($cm->modname === 'assign') {
-            $DB->set_field('assign_submission', 'timemodified', $time, ['assignment' => $cm->instance, 'userid' => $userid]);
-        } else if ($cm->modname === 'coursework') {
-            $DB->set_field(
-                'coursework_submissions',
-                'timesubmitted',
-                $time,
-                ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user']
-            );
-        } else {
-            throw new coding_exception("Setting the submission time of {$cm->modname} is not supported");
-        }
-        self::queue($cm);
+        steps::instance()->submitted_at($username, $name, $when);
     }
 
     /**
@@ -933,17 +576,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function has_an_extension(string $username, string $name, string $when): void {
-        global $CFG;
-        $cm = $this->cm($name);
-        if ($cm->modname !== 'assign') {
-            throw new coding_exception("Extensions on {$cm->modname} are not supported");
-        }
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        $assign = new assign($cm->context, $cm, null);
-        $flags = $assign->get_user_flags(self::userid($username), true);
-        $flags->extensionduedate = self::time($when);
-        $assign->update_user_flags($flags);
-        self::queue($cm);
+        steps::instance()->has_an_extension($username, $name, $when);
     }
 
     /**
@@ -955,14 +588,31 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function self_certified(string $username, string $name, string $when): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $record = ['courseworkid' => $cm->instance, 'allocatableid' => self::userid($username), 'allocatabletype' => 'user',
-            'extended_deadline' => self::time($when), 'type' => 'extension', 'selfcert' => 1,
-            'timecreated' => time(), 'timemodified' => time()];
-        $columns = $DB->get_columns('coursework_mitigations');
-        $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
-        self::queue($cm);
+        steps::instance()->self_certified($username, $name, $when);
+    }
+
+    /**
+     * A mitigation of one of the activity's own types (coursework: permanent or temporary).
+     *
+     * @Given /^"(?P<user>[^"]*)" has an? "(?P<type>[^"]*)" mitigation on "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $type
+     * @param string $name
+     */
+    public function has_a_mitigation_on(string $username, string $type, string $name): void {
+        steps::instance()->has_a_mitigation_on($username, $type, $name);
+    }
+
+    /**
+     * A student's mitigation of a type is taken away.
+     *
+     * @When /^the "(?P<type>[^"]*)" mitigation of "(?P<user>[^"]*)" on "(?P<name>[^"]*)" is removed$/
+     * @param string $type
+     * @param string $username
+     * @param string $name
+     */
+    public function the_mitigation_is_removed(string $type, string $username, string $name): void {
+        steps::instance()->the_mitigation_is_removed($type, $username, $name);
     }
 
     /**
@@ -971,6 +621,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^nothing happens$/
      */
     public function nothing_happens(): void {
+        steps::instance()->nothing_happens();
     }
 
     /**
@@ -982,85 +633,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $group
      */
     public function has_submitted_for_group(string $username, string $name, string $group): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $groupid = $DB->get_field('groups', 'id', ['courseid' => $cm->course, 'name' => $group], MUST_EXIST);
-        if ($cm->modname === 'assign') {
-            // A team assignment submits for the member's group (CI caught this step using peerwork's generator).
-            $this->submit($cm, self::userid($username));
-            if (
-                !$DB->record_exists('assign_submission', ['assignment' => $cm->instance, 'groupid' => $groupid,
-                    'status' => 'submitted'])
-            ) {
-                throw new coding_exception("'$username' did not submit '$name' for '$group'");
-            }
-            self::queue($cm);
-            return;
-        }
-        testing_util::get_data_generator()->get_plugin_generator('mod_peerwork')->create_submission([
-            'peerworkid' => $cm->instance, 'groupid' => $groupid, 'userid' => self::userid($username),
-            'timecreated' => time(), 'timemodified' => time()]);
-        self::queue($cm);
-    }
-
-    /**
-     * One submission through the plugin's own API or generator.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     */
-    protected function submit(cm_info $cm, int $userid): void {
-        global $DB;
-        $gen = testing_util::get_data_generator();
-        switch ($cm->modname) {
-            case 'assign':
-                $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => $userid, 'cmid' => $cm->id,
-                    'onlinetext' => 'My work']);
-                // Where students must click Submit, the generator leaves a draft: submit it, as the student would.
-                $DB->set_field(
-                    'assign_submission',
-                    'status',
-                    'submitted',
-                    ['assignment' => $cm->instance, 'userid' => $userid, 'latest' => 1]
-                );
-                break;
-            case 'quiz':
-                $this->finish_attempts($cm, $userid, 1);
-                return;
-            case 'coursework':
-                $gen->get_plugin_generator('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-                    'allocatableid' => $userid, 'allocatabletype' => 'user',
-                    'finalisedstatus' => \mod_coursework\models\submission::FINALISED_STATUS_FINALISED]);
-                break;
-            default:
-                throw new coding_exception("Submitting {$cm->modname} is not supported");
-        }
-        self::queue($cm);
-    }
-
-    /**
-     * Finishes quiz attempts, answering the essay.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     * @param int $count
-     */
-    protected function finish_attempts(cm_info $cm, int $userid, int $count): void {
-        global $USER;
-        $qgen = testing_util::get_data_generator()->get_plugin_generator('mod_quiz');
-        $saved = $USER;
-        \core\session\manager::set_user(core_user::get_user($userid));
-        for ($i = 0; $i < $count; $i++) {
-            $attempt = $qgen->create_attempt($cm->instance, $userid);
-            $qgen->submit_responses(
-                $attempt->id,
-                [1 => 'My answer'],
-                false,
-                true
-            );
-        }
-        \core\session\manager::set_user($saved);
-        self::queue($cm);
+        steps::instance()->has_submitted_for_group($username, $name, $group);
     }
 
     /**
@@ -1072,9 +645,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function have_finished(string $u1, string $u2, string $name): void {
-        foreach (array_filter([$u1, $u2]) as $username) {
-            $this->finish_attempts($this->cm($name), self::userid($username), 1);
-        }
+        steps::instance()->have_finished($u1, $u2, $name);
     }
 
     /**
@@ -1086,7 +657,18 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function has_finished_attempts(string $username, int $count, string $name): void {
-        $this->finish_attempts($this->cm($name), self::userid($username), $count);
+        steps::instance()->has_finished_attempts($username, $count, $name);
+    }
+
+    /**
+     * A quiz attempt the student never submitted, left to expire: it uses up an attempt but hands nothing in.
+     *
+     * @Given /^"(?P<user>[^"]*)" has abandoned an attempt at "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     */
+    public function has_abandoned_attempt(string $username, string $name): void {
+        steps::instance()->has_abandoned_attempt($username, $name);
     }
 
     /**
@@ -1099,41 +681,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $state
      */
     public function the_attempt_is(string $which, string $username, string $name, string $state): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $attempts = $DB->get_records('quiz_attempts', ['quiz' => $cm->instance, 'userid' => self::userid($username)], 'attempt');
-        $attempt = $which === 'first' ? reset($attempts) : end($attempts);
-        if ($state === 'has been graded') {
-            $quba = question_engine::load_questions_usage_by_activity($attempt->uniqueid);
-            $quba->manual_grade(1, 'Good', 1, FORMAT_HTML);
-            question_engine::save_questions_usage_by_activity($quba);
-            $DB->set_field('quiz_attempts', 'sumgrades', $quba->get_total_mark(), ['id' => $attempt->id]);
-            self::regrade_quiz($cm, (int)$attempt->userid);
-        } else {
-            $this->assert_ungraded($attempt);
-        }
-        self::queue($cm);
-    }
-
-    /**
-     * Writes a student's quiz grade to the gradebook, as finishing a manual grade does.
-     *
-     * @param cm_info|stdClass $cm
-     * @param int $userid
-     */
-    protected static function regrade_quiz($cm, int $userid): void {
-        \mod_quiz\quiz_settings::create((int)$cm->instance)->get_grade_calculator()->recompute_final_grade($userid);
-    }
-
-    /**
-     * Checks an attempt is still waiting for manual grading.
-     *
-     * @param stdClass $attempt
-     */
-    protected function assert_ungraded(stdClass $attempt): void {
-        if ($attempt->sumgrades !== null) {
-            throw new ExpectationException('The attempt is already graded', $this->getSession());
-        }
+        steps::instance()->the_attempt_is($which, $username, $name, $state);
     }
 
     /**
@@ -1146,14 +694,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $marker2 A second marker (Moodle 5.0+ assign with several markers).
      */
     public function the_submission_is_allocated(string $student, string $name, string $marker = '', string $marker2 = ''): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $this->allocate($cm, self::userid($student), $marker ? self::userid($marker) : 0);
-        if ($marker2) {
-            $DB->insert_record('assign_allocated_marker', ['assignment' => $cm->instance, 'student' => self::userid($student),
-                'marker' => self::userid($marker2)]);
-            self::queue($cm);
-        }
+        steps::instance()->the_submission_is_allocated($student, $name, $marker, $marker2);
     }
 
     /**
@@ -1164,50 +705,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $marker
      */
     public function both_submissions_are_allocated(string $name, string $marker): void {
-        global $DB;
-        $cm = $this->cm($name);
-        if ($cm->modname === 'assign') {
-            $students = $DB->get_fieldset_select(
-                'assign_submission',
-                'userid',
-                "assignment = :id AND status = 'submitted' AND latest = 1",
-                ['id' => $cm->instance]
-            );
-        } else {
-            $students = $DB->get_fieldset_select(
-                'coursework_submissions',
-                'allocatableid',
-                "courseworkid = :id AND allocatabletype = 'user'",
-                ['id' => $cm->instance]
-            );
-        }
-        foreach ($students as $userid) {
-            $this->allocate($cm, (int)$userid, self::userid($marker));
-        }
-    }
-
-    /**
-     * Allocates one student's marking.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     * @param int $markerid 0 for unallocated.
-     */
-    protected function allocate(cm_info $cm, int $userid, int $markerid): void {
-        global $CFG;
-        if ($cm->modname === 'assign') {
-            testing_util::get_data_generator()->get_plugin_generator('block_le_dashboard')
-                ->allocate_assign($cm->id, $userid, $markerid);
-        } else if ($cm->modname === 'coursework') {
-            if ($markerid) {
-                testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_allocation([
-                    'courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user',
-                    'assessorid' => $markerid, 'stageidentifier' => 'assessor_1', 'ismanual' => 1]);
-            }
-        } else {
-            throw new coding_exception("{$cm->modname} has no allocation");
-        }
-        self::queue($cm);
+        steps::instance()->both_submissions_are_allocated($name, $marker);
     }
 
     /**
@@ -1218,20 +716,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function moderates(string $marker, string $name): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $students = $DB->get_fieldset_select(
-            'coursework_submissions',
-            'allocatableid',
-            "courseworkid = :id AND allocatabletype = 'user'",
-            ['id' => $cm->instance]
-        );
-        foreach ($students as $userid) {
-            testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_allocation([
-                'courseworkid' => $cm->instance, 'allocatableid' => (int)$userid, 'allocatabletype' => 'user',
-                'assessorid' => self::userid($marker), 'stageidentifier' => 'moderator', 'ismanual' => 1]);
-        }
-        self::queue($cm);
+        steps::instance()->moderates($marker, $name);
     }
 
     /**
@@ -1243,7 +728,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function marks_the_submission(string $marker, string $student, string $name): void {
-        $this->feedback($this->cm($name), self::userid($student), self::userid($marker), 'assessor_1', false);
+        steps::instance()->marks_the_submission($marker, $student, $name);
     }
 
     /**
@@ -1255,28 +740,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_grade_is_released(string $student, string $name): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        require_once($CFG->libdir . '/gradelib.php');
-        $cm = $this->cm($name);
-        $userid = self::userid($student);
-        $assign = new assign($cm->context, $cm, null);
-        if ($assign->get_instance()->markingworkflow) {
-            $flags = $assign->get_user_flags($userid, true);
-            $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_RELEASED;
-            $assign->update_user_flags($flags);
-            // Pushes the grade to the gradebook, now that its state allows it.
-            $assign->update_grade($assign->get_user_grade($userid, false));
-        }
-        $where = 'assignment = :id AND userid = :userid';
-        $params = ['id' => $cm->instance, 'userid' => $userid];
-        $DB->execute("UPDATE {assign_submission} SET timemodified = timemodified - 120 WHERE $where", $params);
-        $DB->execute("UPDATE {assign_grades} SET timemodified = timemodified - 60 WHERE $where", $params);
-        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => 'assign', 'iteminstance' => $cm->instance,
-            'itemnumber' => 0, 'courseid' => $cm->course]);
-        $DB->execute("UPDATE {grade_grades} SET timemodified = timemodified - 60, timecreated = timecreated - 60
-                       WHERE itemid = :itemid AND userid = :userid", ['itemid' => $item->id, 'userid' => $userid]);
-        self::queue($cm);
+        steps::instance()->the_grade_is_released($student, $name);
     }
 
     /**
@@ -1287,17 +751,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_submission_is_reopened(string $student, string $name): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        $cm = $this->cm($name);
-        $assign = new assign($cm->context, $cm, null);
-        // Core's add_attempt() is what "Allow another attempt" calls; it isn't public.
-        $method = new ReflectionMethod($assign, 'add_attempt');
-        $method->setAccessible(true);
-        if (!$method->invoke($assign, self::userid($student))) {
-            throw new coding_exception("Could not reopen the submission of $student for $name");
-        }
-        self::queue($cm);
+        steps::instance()->the_submission_is_reopened($student, $name);
     }
 
     /**
@@ -1308,24 +762,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function both_markers_have_given_feedback(string $student, string $name): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $userid = self::userid($student);
-        if ($cm->modname === 'assign') {
-            // Moodle 5.0+: each allocated marker gives their own mark.
-            $markers = $DB->get_fieldset_select(
-                'assign_allocated_marker',
-                'marker',
-                'assignment = :a AND student = :s',
-                ['a' => $cm->instance, 's' => $userid]
-            );
-            foreach ($markers as $markerid) {
-                $this->feedback($cm, $userid, (int)$markerid, 'assessor_1', false);
-            }
-            return;
-        }
-        $this->feedback($cm, $userid, get_admin()->id, 'assessor_1', false);
-        $this->feedback($cm, $userid, get_admin()->id, 'assessor_2', false);
+        steps::instance()->both_markers_have_given_feedback($student, $name);
     }
 
     /**
@@ -1336,57 +773,10 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_agreed_grade_is_published(string $student, string $name): void {
-        $cm = $this->cm($name);
-        $this->feedback($cm, self::userid($student), get_admin()->id, 'final_agreed_1', true);
-        $coursework = \mod_coursework\models\coursework::get_from_id($cm->instance);
-        $coursework->publish_grades();
-        self::queue($cm);
-    }
-
-    /**
-     * Coursework feedback at a stage, or an assign grade.
-     *
-     * @param cm_info $cm
-     * @param int $userid
-     * @param int $markerid
-     * @param string $stage
-     * @param bool $final
-     * @param float $mark
-     */
-    protected function feedback(cm_info $cm, int $userid, int $markerid, string $stage, bool $final, float $mark = 60): void {
-        global $CFG;
-        if ($cm->modname === 'assign') {
-            require_once($CFG->dirroot . '/mod/assign/locallib.php');
-            $assign = new assign($cm->context, $cm, null);
-            $grade = $assign->get_user_grade($userid, true);
-            if ((int)($assign->get_instance()->markercount ?? 1) > 1) {
-                // Moodle 5.0+ with several markers: a marker's own mark, not the final grade.
-                $grade->grader = $markerid;
-                $assign->update_mark($grade, 60);
-                self::queue($cm);
-                return;
-            }
-            $grade->grade = $mark;
-            $grade->grader = $markerid;
-            $assign->update_grade($grade);
-            if ($assign->get_instance()->markingworkflow) {
-                // Under marking workflow, a marker's work is done when it goes to review.
-                $flags = $assign->get_user_flags($userid, true);
-                $flags->workflowstate = ASSIGN_MARKING_WORKFLOW_STATE_READYFORREVIEW;
-                $assign->update_user_flags($flags);
-            }
-        } else {
-            testing_util::get_data_generator()->get_plugin_generator('mod_coursework')->create_feedback([
-                'courseworkid' => $cm->instance, 'allocatableid' => $userid, 'assessorid' => $markerid,
-                'stage_identifier' => $stage, 'grade' => 60, 'isfinalgrade' => $final ? 1 : 0, 'finalised' => 1]);
-        }
-        self::queue($cm);
+        steps::instance()->the_agreed_grade_is_published($student, $name);
     }
 
     // Freshness steps (perf review F1 to F5, F9).
-
-    /** @var array|null A student index row saved by "without the index being told". */
-    protected static ?array $savedrow = null;
 
     /**
      * A re-index of an assessment is running: its task has started and read the old data.
@@ -1395,15 +785,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function a_reindex_has_started(string $name): void {
-        global $DB;
-        self::queue($this->cm($name));
-        $DB->set_field_select(
-            'task_adhoc',
-            'timestarted',
-            time(),
-            'classname = :c AND timestarted IS NULL',
-            ['c' => '\\block_le_dashboard\\task\\reindex']
-        );
+        steps::instance()->a_reindex_has_started($name);
     }
 
     /**
@@ -1414,7 +796,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function submits(string $username, string $name): void {
-        $this->submit($this->cm($name), self::userid($username));
+        steps::instance()->submits($username, $name);
     }
 
     /**
@@ -1424,16 +806,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_running_reindex_finishes(string $name): void {
-        global $DB;
-        $DB->delete_records_select(
-            'task_adhoc',
-            'classname = :c AND timestarted IS NOT NULL',
-            ['c' => '\\block_le_dashboard\\task\\reindex']
-        );
+        steps::instance()->the_running_reindex_finishes($name);
     }
-
-    /** @var string[] Output of the parallel re-indexes. */
-    protected static array $parallel = [];
 
     /**
      * Re-indexes an assessment in two processes at once.
@@ -1442,19 +816,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function reindexed_twice_at_once(string $name): void {
-        global $CFG;
-        $cm = $this->cm($name);
-        $script = $CFG->dirroot . '/blocks/le_dashboard/tests/fixtures/behat_reindex.php';
-        $procs = [];
-        foreach ([1, 2] as $i) {
-            $procs[$i] = proc_open([PHP_BINARY, $script, (string)$cm->id], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes[$i]);
-        }
-        self::$parallel = [];
-        foreach ($procs as $i => $proc) {
-            $out = stream_get_contents($pipes[$i][1]) . stream_get_contents($pipes[$i][2]);
-            $code = proc_close($proc);
-            self::$parallel[] = "exit $code: " . trim($out);
-        }
+        steps::instance()->reindexed_twice_at_once($name);
     }
 
     /**
@@ -1463,11 +825,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Then /^neither re-index should fail$/
      */
     public function neither_reindex_should_fail(): void {
-        foreach (self::$parallel as $result) {
-            if (!str_starts_with($result, 'exit 0: ok')) {
-                throw new ExpectationException("A re-index failed: $result", $this->getSession());
-            }
-        }
+        steps::instance()->neither_reindex_should_fail();
     }
 
     /**
@@ -1477,13 +835,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_index_should_match(string $name): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $expected = count(indexer::students((int)$cm->course));
-        $rows = $DB->count_records('block_le_dashboard_stu', ['cmid' => $cm->id]);
-        if (!$DB->record_exists('block_le_dashboard_cm', ['cmid' => $cm->id]) || $rows !== $expected) {
-            throw new ExpectationException("'$name' has $rows student rows, not $expected", $this->getSession());
-        }
+        steps::instance()->the_index_should_match($name);
     }
 
     /**
@@ -1493,7 +845,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function writing_fails_once(string $name): void {
-        set_config('testfailwrite', $this->cm($name)->id, 'block_le_dashboard');
+        steps::instance()->writing_fails_once($name);
     }
 
     /**
@@ -1504,11 +856,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $not
      */
     public function should_be_in_the_index(string $name, string $not = ''): void {
-        global $DB;
-        $in = $DB->record_exists('block_le_dashboard_cm', ['cmid' => $this->cm($name)->id]);
-        if ($in === (bool)$not) {
-            throw new ExpectationException("'$name' is " . ($in ? '' : 'not ') . 'in the index', $this->getSession());
-        }
+        steps::instance()->should_be_in_the_index($name, $not);
     }
 
     /**
@@ -1519,8 +867,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function was_due(string $name, string $when): void {
-        $this->the_deadline_is_changed_directly($name, $when);
-        (new indexer())->index_cm((int)$this->cm($name)->id);
+        steps::instance()->was_due($name, $when);
     }
 
     /**
@@ -1531,12 +878,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $state
      */
     public function the_grade_item_is(string $name, string $state): void {
-        global $CFG;
-        require_once($CFG->libdir . '/gradelib.php');
-        $cm = $this->cm($name);
-        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
-            'itemnumber' => 0, 'courseid' => $cm->course]);
-        $item->set_hidden($state === 'hidden' ? 1 : 0);
+        steps::instance()->the_grade_item_is($name, $state);
     }
 
     /**
@@ -1549,7 +891,20 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $grade
      */
     public function grades_with(string $marker, string $student, string $name, string $grade): void {
-        $this->feedback($this->cm($name), self::userid($student), self::userid($marker), 'assessor_1', true, (float)$grade);
+        steps::instance()->grades_with($marker, $student, $name, $grade);
+    }
+
+    /**
+     * A final grade saved under a grader id that is no real user, as Turnitin's grade sync does (-1).
+     *
+     * @Given /^the grade of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is saved as "(?P<grade>[\d.]+)" with grader id "(?P<id>-?\d+)"$/
+     * @param string $student
+     * @param string $name
+     * @param string $grade
+     * @param string $id
+     */
+    public function grade_saved_with_grader_id(string $student, string $name, string $grade, string $id): void {
+        steps::instance()->grade_saved_with_grader_id($student, $name, $grade, (int)$id);
     }
 
     /**
@@ -1583,6 +938,22 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The logged-in student hands in a file through the assignment's page.
+     *
+     * @When /^I submit a file to "(?P<name>[^"]*)"$/
+     * @param string $name
+     */
+    public function i_submit_a_file_to(string $name): void {
+        $this->getSession()->visit($this->locate_path('/mod/assign/view.php?id=' . $this->cm($name)->id));
+        $this->execute('behat_forms::press_button', [get_string('addsubmission', 'assign')]);
+        $this->execute(
+            'behat_repository_upload::i_upload_file_to_filemanager',
+            ['lib/tests/fixtures/empty.txt', get_string('pluginname', 'assignsubmission_file')]
+        );
+        $this->execute('behat_forms::press_button', [get_string('savechanges')]);
+    }
+
+    /**
      * Opens the dashboard without running pending index tasks.
      *
      * @When /^I view my dashboard$/
@@ -1600,12 +971,41 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function submitted_untold(string $username, string $name): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $userid = self::userid($username);
-        $this->submit($cm, $userid);
-        $DB->delete_records('task_adhoc', ['classname' => '\\block_le_dashboard\\task\\reindex']);
-        self::$savedrow = (array)$DB->get_record('block_le_dashboard_stu', ['cmid' => $cm->id, 'userid' => $userid]);
+        steps::instance()->submitted_untold($username, $name);
+    }
+
+    /**
+     * A student uploads a file to a coursework and the file sub-plugin's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" uploads a file to coursework "(?P<name>[^"]*)" and the upload event fires$/
+     * @param string $username
+     * @param string $name
+     */
+    public function uploads_a_file_and_the_event_fires(string $username, string $name): void {
+        steps::instance()->uploads_a_file_and_the_event_fires($username, $name);
+    }
+
+    /**
+     * A student self-certifies through block_rhb and coursework's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" self-certifies "(?P<name>[^"]*)" to "(?P<when>[^"]*)" and the mitigation added event fires$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function self_certifies_and_the_event_fires(string $username, string $name, string $when): void {
+        steps::instance()->self_certifies_and_the_event_fires($username, $name, $when);
+    }
+
+    /**
+     * A student's self-certification is removed and coursework's event fires; nothing else tells the index.
+     *
+     * @When /^"(?P<user>[^"]*)" removes the self-certification of "(?P<name>[^"]*)" and the mitigation removed event fires$/
+     * @param string $username
+     * @param string $name
+     */
+    public function removes_the_self_certification_and_the_event_fires(string $username, string $name): void {
+        steps::instance()->removes_the_self_certification_and_the_event_fires($username, $name);
     }
 
     /**
@@ -1616,13 +1016,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_index_row_should_be_unchanged(string $username, string $name): void {
-        global $DB;
-        $row = (array)$DB->get_record('block_le_dashboard_stu', ['cmid' => $this->cm($name)->id,
-            'userid' => self::userid($username)]);
-        unset($row['id'], self::$savedrow['id']);
-        if ($row != self::$savedrow) {
-            throw new ExpectationException("The index row of '$username' changed", $this->getSession());
-        }
+        steps::instance()->the_index_row_should_be_unchanged($username, $name);
     }
 
     /**
@@ -1634,17 +1028,8 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $group
      */
     public function are_in_group(string $u1, string $u2, string $group): void {
-        $ids = [self::userid($u1), self::userid($u2)];
-        $shared = array_intersect_key(enrol_get_all_users_courses($ids[0]), enrol_get_all_users_courses($ids[1]));
-        $gen = testing_util::get_data_generator();
-        $g = $gen->create_group(['courseid' => reset($shared)->id, 'name' => $group]);
-        foreach ($ids as $id) {
-            $gen->create_group_member(['groupid' => $g->id, 'userid' => $id]);
-        }
+        steps::instance()->are_in_group($u1, $u2, $group);
     }
-
-    /** Setting names in steps, to their keys. */
-    const SETTINGS = ['Live window for the nightly reconcile' => 'reconcilemonths'];
 
     /**
      * Sets a number setting.
@@ -1654,7 +1039,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $value
      */
     public function the_setting_is(string $setting, int $value): void {
-        set_config(self::SETTINGS[$setting], $value, 'block_le_dashboard');
+        steps::instance()->the_setting_is($setting, $value);
     }
 
     /**
@@ -1668,8 +1053,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $due
      */
     public function a_course_with(string $course, string $tag, string $modname, string $name, string $due): void {
-        testing_util::get_data_generator()->create_course(['shortname' => $course, 'fullname' => $course]);
-        $this->create_assessment($tag, $modname, $name, $course, '', self::time($due));
+        self::skipping(fn() => steps::instance()->a_course_with($course, $tag, $modname, $name, $due));
     }
 
     /**
@@ -1680,14 +1064,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function the_index_should_show(string $name, string $when = ''): void {
-        global $DB;
-        $row = $DB->get_record('block_le_dashboard_cm', ['cmid' => $this->cm($name)->id]);
-        if (!$row || $row->name !== $name) {
-            throw new ExpectationException("The index doesn't show '$name'", $this->getSession());
-        }
-        if ($when !== '' && date('Y-m-d', (int)$row->due) !== date('Y-m-d', self::time($when))) {
-            throw new ExpectationException("The index shows '$name' due " . date('Y-m-d', (int)$row->due), $this->getSession());
-        }
+        steps::instance()->the_index_should_show($name, $when);
     }
 
     /**
@@ -1698,9 +1075,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $new
      */
     public function is_renamed(string $name, string $new): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/course/lib.php');
-        set_coursemodule_name($this->cm($name)->id, $new);
+        steps::instance()->is_renamed($name, $new);
     }
 
     /**
@@ -1710,11 +1085,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function reindexed_once(string $name): void {
-        global $DB;
-        $time = (int)$DB->get_field('block_le_dashboard_cm', 'timeindexed', ['cmid' => $this->cm($name)->id]);
-        if ($time > time() - MINSECS) {
-            throw new ExpectationException("'$name' was re-indexed again", $this->getSession());
-        }
+        steps::instance()->reindexed_once($name);
     }
 
     // Index steps.
@@ -1725,7 +1096,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^the My assessments index (?:is up to date|catches up)$/
      */
     public function the_index_catches_up(): void {
-        $this->catch_up();
+        steps::instance()->the_index_catches_up();
     }
 
     /**
@@ -1734,7 +1105,17 @@ class behat_block_le_dashboard extends behat_base {
      * @When /^the My assessments nightly reconcile runs$/
      */
     public function the_nightly_reconcile_runs(): void {
-        (new \block_le_dashboard\task\reconcile())->execute();
+        steps::instance()->the_nightly_reconcile_runs();
+    }
+
+    /**
+     * Time passes until the deadline is one second behind.
+     *
+     * @When /^the deadline of "(?P<name>[^"]*)" has just passed$/
+     * @param string $name
+     */
+    public function the_deadline_has_just_passed(string $name): void {
+        steps::instance()->the_deadline_has_just_passed($name);
     }
 
     /**
@@ -1745,11 +1126,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function the_deadline_is_changed_directly(string $name, string $when): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $field = ['assign' => 'duedate', 'quiz' => 'timeclose', 'coursework' => 'deadline', 'workshop' => 'submissionend',
-            'peerwork' => 'duedate'][$cm->modname];
-        $DB->set_field($cm->modname, $field, self::time($when), ['id' => $cm->instance]);
+        steps::instance()->the_deadline_is_changed_directly($name, $when);
     }
 
     /**
@@ -1759,33 +1136,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $minutes
      */
     public function minutes_pass(int $minutes): void {
-        global $DB;
-        $shift = $minutes * MINSECS;
-        // The index and the activities' own times move together, so a re-index agrees.
-        $fields = [
-            'block_le_dashboard_cm' => ['due', 'cutoff', 'markingdue', 'timeindexed'],
-            'block_le_dashboard_stu' => ['due', 'cutoff', 'timesubmitted', 'timereleased'],
-            'block_le_dashboard_mark' => ['timeready', 'unitdue', 'timemarked'],
-            'quiz' => ['timeclose'],
-            'assign' => ['duedate', 'cutoffdate', 'gradingduedate', 'allowsubmissionsfromdate'],
-            'assign_overrides' => ['duedate', 'cutoffdate'],
-            'assign_user_flags' => ['extensionduedate'],
-            'assign_submission' => ['timecreated', 'timemodified'],
-            'assign_grades' => ['timecreated', 'timemodified'],
-            'assign_mark' => ['timecreated', 'timemodified'],
-            'grade_grades' => ['timecreated', 'timemodified'],
-        ];
-        $dbman = $DB->get_manager();
-        foreach ($fields as $table => $columns) {
-            if (!$dbman->table_exists($table)) {
-                continue;
-            }
-            foreach ($columns as $field) {
-                if ($dbman->field_exists($table, $field)) {
-                    $DB->execute("UPDATE {{$table}} SET $field = $field - :s WHERE $field > 0", ['s' => $shift]);
-                }
-            }
-        }
+        steps::instance()->minutes_pass($minutes);
     }
 
     /**
@@ -1796,18 +1147,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $count
      */
     public function convenes_modules(string $username, int $count): void {
-        global $DB;
-        $gen = testing_util::get_data_generator();
-        $userid = self::userid($username);
-        $roleid = (int)$DB->get_field('role', 'id', ['shortname' => 'moduleconvenor'], MUST_EXIST);
-        for ($i = 1; $i <= $count; $i++) {
-            $course = $gen->create_course(['shortname' => "BULK$i", 'fullname' => "Bulk module $i"]);
-            $gen->enrol_user($userid, $course->id, $roleid);
-            $a = $gen->create_module('assign', ['course' => $course->id, 'name' => "Bulk assessment $i",
-                'duedate' => time() + 7 * DAYSECS]);
-            core_tag_tag::set_item_tags('core', 'course_modules', $a->cmid, context_module::instance($a->cmid), ['summative']);
-        }
-        $this->catch_up();
+        self::skipping(fn() => steps::instance()->convenes_modules($username, $count));
     }
 
     // Navigation.
@@ -1864,6 +1204,20 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Opens one view for an academic year, without logging in again.
+     *
+     * @When /^I view the "(?P<view>[^"]*)" for academic year "(?P<year>[^"]*)"$/
+     * @param string $view
+     * @param string $year
+     */
+    public function i_view_for_year(string $view, string $year): void {
+        $this->i_view_my_dashboard_again();
+        $this->open_view($view);
+        $this->execute('behat_forms::i_set_the_field_to', [get_string('academicyear', 'block_le_dashboard'), $year]);
+        $this->wait_for_pending_js();
+    }
+
+    /**
      * Clicks a view's tab, unless it is the only (or already active) view.
      *
      * @param string $view
@@ -1894,12 +1248,7 @@ class behat_block_le_dashboard extends behat_base {
      * @return string
      */
     protected static function view_key(string $label): string {
-        foreach (['student', 'staff', 'convenor'] as $key) {
-            if (get_string('view_' . $key, 'block_le_dashboard') === $label) {
-                return $key;
-            }
-        }
-        throw new coding_exception("Unknown view '$label'");
+        return steps::view_key($label);
     }
 
     /**
@@ -1938,7 +1287,7 @@ class behat_block_le_dashboard extends behat_base {
     public function the_view_should_be_open(string $view): void {
         $open = $this->view_on_screen();
         if ($open !== self::view_key($view)) {
-            throw new ExpectationException("The '$view' is not open (open: '$open')", $this->getSession());
+            throw new failed("The '$view' is not open (open: '$open')");
         }
     }
 
@@ -1963,16 +1312,6 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function i_click_on_the_activity_icon(string $name): void {
         $this->activity_icon($name)->click();
-    }
-
-    /**
-     * Hovers over a row's activity icon.
-     *
-     * @When /^I hover over the activity icon of "(?P<name>[^"]*)"$/
-     * @param string $name
-     */
-    public function i_hover_over_the_activity_icon(string $name): void {
-        $this->activity_icon($name)->mouseOver();
     }
 
     /**
@@ -2035,15 +1374,32 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * Which Font Awesome icon a row's activity icon is.
+     * A row's activity icon is the module's own, as on the course page (Pierre's UAT, 2026-10-19).
      *
-     * @Then /^the activity icon of "(?P<name>[^"]*)" should be the "(?P<icon>[^"]*)" icon$/
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should be the "(?P<mod>[a-z]+)" module's own icon$/
      * @param string $name
-     * @param string $icon
+     * @param string $mod
      */
-    public function the_activity_icon_should_be(string $name, string $icon): void {
-        if (!$this->activity_icon($name)->find('css', '.ma-row-faicon.' . $icon)) {
-            throw new ExpectationException("The icon of '$name' is not '$icon'", $this->getSession());
+    public function the_activity_icon_should_be_the_modules(string $name, string $mod): void {
+        global $OUTPUT;
+        $img = $this->activity_icon($name)->find('css', '.ma-row-modicon img.activityicon');
+        $expected = $OUTPUT->image_url('monologo', $mod)->out(false);
+        if (!$img || $img->getAttribute('src') !== $expected) {
+            $src = $img ? $img->getAttribute('src') : 'no image';
+            throw new ExpectationException("The icon of '$name' is $src, not $expected", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's activity icon has its module's purpose colour.
+     *
+     * @Then /^the activity icon of "(?P<name>[^"]*)" should use the "(?P<purpose>[a-z]+)" purpose colour$/
+     * @param string $name
+     * @param string $purpose
+     */
+    public function the_activity_icon_should_use_purpose(string $name, string $purpose): void {
+        if (!$this->activity_icon($name)->find('css', '.ma-row-modicon.activityiconcontainer.' . $purpose)) {
+            throw new ExpectationException("The icon of '$name' doesn't use the $purpose colour", $this->getSession());
         }
     }
 
@@ -2067,23 +1423,23 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Clears an assessment's latest individual deadline in the index, as rows indexed before beta31 have it.
+     *
+     * @Given /^the index row of "(?P<name>[^"]*)" has no latest individual deadline$/
+     * @param string $name
+     */
+    public function the_index_row_has_no_latest_due(string $name): void {
+        steps::instance()->the_index_row_has_no_latest_due($name);
+    }
+
+    /**
      * Switches off an activity's due date, as unticking Enable in its settings does.
      *
      * @When /^the due date of "(?P<name>[^"]*)" is switched off$/
      * @param string $name
      */
     public function the_due_date_is_switched_off(string $name): void {
-        global $CFG, $DB;
-        $cm = $this->cm($name);
-        $field = ['quiz' => 'timeclose', 'workshop' => 'submissionend', 'coursework' => 'deadline'][$cm->modname] ?? 'duedate';
-        $DB->set_field($cm->modname, $field, 0, ['id' => $cm->instance]);
-        if ($cm->modname === 'assign') {
-            require_once($CFG->dirroot . '/mod/assign/locallib.php');
-            $assign = new assign(context_module::instance($cm->id), null, null);
-            $assign->update_calendar($cm->id);
-        }
-        rebuild_course_cache($cm->course, true);
-        \core\event\course_module_updated::create_from_cm(get_fast_modinfo($cm->course)->get_cm($cm->id))->trigger();
+        steps::instance()->the_due_date_is_switched_off($name);
     }
 
     /**
@@ -2093,9 +1449,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $url
      */
     public function the_guidance_link_is(string $url): void {
-        set_config('briefguidanceurl', $url, 'block_le_dashboard');
-        // The old setting, carried into its guidance box as the upgrade does.
-        \block_le_dashboard\local\guidance::migrate();
+        steps::instance()->the_guidance_link_is($url);
     }
 
     /**
@@ -2105,7 +1459,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $hours
      */
     public function the_mitigate_window_is(int $hours): void {
-        set_config('mitigationcloses', $hours, 'block_le_dashboard');
+        steps::instance()->the_mitigate_window_is($hours);
     }
 
     /**
@@ -2116,7 +1470,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $which
      */
     public function block_rhb_offers(string $what, string $which): void {
-        set_config($which === 'the request form' ? 'behatrhbsrm' : 'behatrhbselfcert', $what, 'block_le_dashboard');
+        steps::instance()->block_rhb_offers($what, $which);
     }
 
     /**
@@ -2127,10 +1481,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $url
      */
     public function the_feedback_contact_is(string $text, string $url): void {
-        set_config('feedbackcontact', $text, 'block_le_dashboard');
-        set_config('feedbackcontacturl', $url, 'block_le_dashboard');
-        // The old setting, carried into its guidance box as the upgrade does.
-        \block_le_dashboard\local\guidance::migrate();
+        steps::instance()->the_feedback_contact_is($text, $url);
     }
 
     /**
@@ -2170,14 +1521,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function the_grade_was_released(string $student, string $name, string $when): void {
-        global $DB;
-        $this->the_grade_is_released($student, $name);
-        $cm = $this->cm($name);
-        $time = self::time($when);
-        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
-            'itemnumber' => 0, 'courseid' => $cm->course]);
-        $DB->set_field('grade_grades', 'timemodified', $time, ['itemid' => $item->id, 'userid' => self::userid($student)]);
-        self::queue($cm);
+        steps::instance()->the_grade_was_released($student, $name, $when);
     }
 
     /**
@@ -2292,15 +1636,75 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Sets the site's grade display type and re-indexes.
+     *
+     * @Given /^the grade display type is "(?P<label>[^"]*)"$/
+     * @param string $label
+     */
+    public function the_grade_display_type_is(string $label): void {
+        steps::instance()->the_grade_display_type_is($label);
+    }
+
+    /**
+     * The words of a row's grade line: its label and its grade, without the hints after them.
+     *
+     * @Then /^the grade line of "(?P<name>[^"]*)" should read "(?P<text>[^"]*)"$/
+     * @param string $name
+     * @param string $text
+     */
+    public function the_grade_line_should_read(string $name, string $text): void {
+        $grade = $this->row($name)->find('css', '[data-region="ma-grade"]');
+        $label = $grade ? $grade->find('css', '.ma-grade-label') : null;
+        $value = $grade ? $grade->find('css', '.ma-grade-value') : null;
+        $got = $label && $value ? trim($label->getText()) . ' ' . trim($value->getText()) : '';
+        if ($got !== $text) {
+            throw new ExpectationException("The grade line of '$name' reads '$got', not '$text'", $this->getSession());
+        }
+    }
+
+    /**
+     * A row's grade line is on one line, or breaks only between its label and its grade: the label and the grade each
+     * sit on one line box, and the grade is on the label's line or the next.
+     *
+     * @Then /^the grade line of "(?P<name>[^"]*)" should be on one line or break only before the grade$/
+     * @param string $name
+     */
+    public function the_grade_line_breaks_only_before_the_grade(string $name): void {
+        $rowid = $this->row($name)->getAttribute('id');
+        $lines = $this->evaluate_script("return (function() {
+            var grade = document.querySelector('#$rowid [data-region=\"ma-grade\"]');
+            var tops = function(el) {
+                var range = document.createRange();
+                range.selectNodeContents(el);
+                var seen = [];
+                Array.from(range.getClientRects()).forEach(function(r) {
+                    var top = Math.round(r.top);
+                    if (r.width > 0 && !seen.some(function(t) { return Math.abs(t - top) < 4; })) {
+                        seen.push(top);
+                    }
+                });
+                return seen;
+            };
+            return grade ? {label: tops(grade.querySelector('.ma-grade-label')),
+                value: tops(grade.querySelector('.ma-grade-value'))} : null;
+        })()");
+        if (!$lines || count($lines['label']) !== 1 || count($lines['value']) !== 1) {
+            throw new ExpectationException("The grade line of '$name' breaks inside the label or the grade: " .
+                json_encode($lines), $this->getSession());
+        }
+        if ($lines['value'][0] < $lines['label'][0] - 3) {
+            throw new ExpectationException("The grade of '$name' sits above its label", $this->getSession());
+        }
+    }
+
+    /**
      * Sets the late penalties link.
      *
      * @Given /^the My assessments late penalty link is "(?P<url>[^"]*)"$/
      * @param string $url
      */
     public function the_late_penalty_link_is(string $url): void {
-        set_config('latenoteurl', $url, 'block_le_dashboard');
-        // The old setting, carried into its guidance box as the upgrade does.
-        \block_le_dashboard\local\guidance::migrate();
+        steps::instance()->the_late_penalty_link_is($url);
     }
 
     /**
@@ -2325,18 +1729,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $status
      */
     public function the_submission_is_flagged(string $student, string $name, string $status = '0'): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $submissionid = $DB->get_field('coursework_submissions', 'id', ['courseworkid' => $cm->instance,
-            'allocatableid' => self::userid($student), 'allocatabletype' => 'user'], MUST_EXIST);
-        $record = ['courseworkid' => $cm->instance, 'submissionid' => $submissionid, 'status' => $status];
-        foreach ($DB->get_columns('coursework_plagiarism_flags') as $column) {
-            if ($column->name !== 'id' && !isset($record[$column->name]) && $column->not_null && !$column->has_default) {
-                $record[$column->name] = in_array($column->meta_type, ['C', 'X']) ? '' : 0;
-            }
-        }
-        $DB->insert_record('coursework_plagiarism_flags', $record);
-        self::queue($cm);
+        steps::instance()->the_submission_is_flagged($student, $name, $status);
     }
 
     /** Control names in steps, to the control bar's parts. */
@@ -2444,6 +1837,168 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A hint's accessible name, which is the title its popover shows.
+     *
+     * @Then /^the "(?P<key>[a-z]+)" hint of "(?P<name>[^"]*)" should be titled "(?P<title>[^"]*)"$/
+     * @param string $key
+     * @param string $name
+     * @param string $title
+     */
+    public function the_hint_should_be_titled(string $key, string $name, string $title): void {
+        $hint = $this->row($name)->find('css', '[data-hint="' . $key . '"]')
+            ?? throw new ExpectationException("'$name' has no $key hint", $this->getSession());
+        $shown = (string)$hint->getAttribute('aria-label');
+        if ($shown !== $title) {
+            throw new ExpectationException("The $key hint of '$name' is titled '$shown'", $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a marker's name on a convenor row links to their email.
+     *
+     * @Then /^the marker "(?P<marker>[^"]*)" of "(?P<name>[^"]*)" should (?P<not>not )?link to their email$/
+     * @param string $marker
+     * @param string $name
+     * @param string $not
+     */
+    public function the_marker_should_link_to_their_email(string $marker, string $name, string $not = ''): void {
+        foreach ($this->row($name)->findAll('css', '.ma-marker-name') as $el) {
+            if (trim($el->getText()) !== $marker) {
+                continue;
+            }
+            $links = $el->getTagName() === 'a' && str_starts_with((string)$el->getAttribute('href'), 'mailto:');
+            if ($links === (bool)$not) {
+                throw new ExpectationException(
+                    "'$marker' " . ($links ? 'links' : 'does not link') . ' to their email',
+                    $this->getSession()
+                );
+            }
+            return;
+        }
+        throw new ExpectationException("'$name' lists no marker '$marker'", $this->getSession());
+    }
+
+    /**
+     * A site upgraded from before beta27 whose admin never saved the hint and guidance settings.
+     *
+     * @Given /^the My assessments guidance settings were never saved before the beta27 upgrade$/
+     */
+    public function guidance_never_saved(): void {
+        steps::instance()->guidance_never_saved();
+    }
+
+    /**
+     * Hints and guidance as a site upgraded to beta27 has them (config::keep_today()): every hint on, marking deadlines
+     * shown to students as set, and the old guidance text. For scenarios written before beta27's neutral defaults.
+     *
+     * @Given /^the My assessments block keeps its hints and guidance from before beta27$/
+     */
+    public function keeps_hints_from_before_beta27(): void {
+        steps::instance()->keeps_hints_from_before_beta27();
+    }
+
+    /**
+     * Runs the upgrade step that keeps an older site's hints and guidance as they were (config::keep_today()).
+     *
+     * @When /^the site was upgraded from before the hint switches existed$/
+     */
+    public function upgraded_from_before_the_hint_switches(): void {
+        steps::instance()->upgraded_from_before_the_hint_switches();
+    }
+
+    /**
+     * A plugin setting's saved value.
+     *
+     * @Then /^the "(?P<name>[a-z_]+)" setting should (?P<how>contain|be) "(?P<value>[^"]*)"$/
+     * @param string $name
+     * @param string $how
+     * @param string $value
+     */
+    public function the_setting_should_be(string $name, string $how, string $value): void {
+        steps::instance()->the_setting_should_be($name, $how, $value);
+    }
+
+    /**
+     * A theme with rounder corners than Bootstrap's default, as Boost Union can set (raw SCSS on Boost).
+     *
+     * @Given /^the theme sets its border radius to "(?P<radius>[0-9.]+rem)"$/
+     * @param string $radius
+     */
+    public function the_theme_sets_its_border_radius(string $radius): void {
+        steps::instance()->the_theme_sets_its_border_radius($radius);
+    }
+
+    /**
+     * The type filter's outer corners against the search box's.
+     *
+     * @Then /^the outer corners of the type filter should have the same radius as the search box$/
+     */
+    public function the_type_filter_outer_corners(): void {
+        $js = "(function() {
+            var root = document.querySelector('" . self::BLOCK . "');
+            var r = function(el, corner) { return getComputedStyle(el)['border' + corner + 'Radius']; };
+            var buttons = root.querySelectorAll('.ma-type-filter > .ma-filter-btn');
+            var search = root.querySelector('.ma-search .input-group-text');
+            return JSON.stringify({search: r(search, 'TopLeft'), first: [r(buttons[0], 'TopLeft'), r(buttons[0], 'BottomLeft')],
+                last: [r(buttons[buttons.length - 1], 'TopRight'), r(buttons[buttons.length - 1], 'BottomRight')]});
+        })()";
+        $got = json_decode($this->evaluate_script($js), true);
+        $corners = array_merge($got['first'], $got['last']);
+        // The theme's radius must have reached the page, or the check proves nothing.
+        $expected = steps::$themeradius === null ? null : round((float)steps::$themeradius * 16) . 'px';
+        if (($expected !== null && $got['search'] !== $expected) || array_unique($corners) !== [$got['search']]) {
+            throw new ExpectationException('The type filter has corners ' . implode(', ', $corners) . ' and the search box '
+                . $got['search'], $this->getSession());
+        }
+    }
+
+    /**
+     * The joins between the type filter's buttons.
+     *
+     * @Then /^the inner corners of the type filter should be square$/
+     */
+    public function the_type_filter_inner_corners(): void {
+        $js = "(function() {
+            var buttons = document.querySelectorAll('" . self::BLOCK . " .ma-type-filter > .ma-filter-btn');
+            var out = [];
+            buttons.forEach(function(b, i) {
+                var cs = getComputedStyle(b);
+                if (i > 0) { out.push(cs.borderTopLeftRadius, cs.borderBottomLeftRadius); }
+                if (i < buttons.length - 1) { out.push(cs.borderTopRightRadius, cs.borderBottomRightRadius); }
+            });
+            return JSON.stringify(out);
+        })()";
+        $corners = json_decode($this->evaluate_script($js), true);
+        if (array_unique($corners) !== ['0px']) {
+            throw new ExpectationException('Inner corners: ' . implode(', ', $corners), $this->getSession());
+        }
+    }
+
+    /**
+     * Picks a summary box's window, as the user's own preference, then reloads the page (with or without JavaScript).
+     *
+     * @When /^I set the "(?P<label>[^"]*)" summary box window to "(?P<option>[^"]*)"$/
+     * @param string $label
+     * @param string $option
+     */
+    public function i_set_the_summary_box_window(string $label, string $option): void {
+        foreach ($this->find_all('css', self::BLOCK . ' [data-region="ma-box"]') as $box) {
+            if (trim($box->find('css', '.ma-box-label')->getText()) !== $label) {
+                continue;
+            }
+            foreach ($box->findAll('css', 'select option') as $opt) {
+                if (trim($opt->getText()) === $option) {
+                    set_user_preference('block_le_dashboard_window', $opt->getAttribute('value'), $this->get_session_user());
+                    $this->getSession()->reload();
+                    return;
+                }
+            }
+            throw new ExpectationException("The '$label' box has no '$option' option", $this->getSession());
+        }
+        throw new ExpectationException("No '$label' summary box", $this->getSession());
+    }
+
+    /**
      * Nothing in the block is wider than the block.
      *
      * @Then /^the My assessments block should not scroll sideways$/
@@ -2474,13 +2029,39 @@ class behat_block_le_dashboard extends behat_base {
         }
     }
 
-    /** Hint names in steps, to the hint keys rows carry. */
-    const HINTS = ['brief' => 'brief', 'unallocated' => 'unallocated', 'returned work' => 'returned',
-        'returned' => 'returned', 'feedback contact' => 'feedbackcontact', 'feedback' => 'feedbackcontact',
-        'feedbackcontact' => 'feedbackcontact', 'extension' => 'extensions', 'extensions' => 'extensions',
-        'setup' => 'setup', 'check settings' => 'setup', 'nodeadline' => 'nodeadline', 'received' => 'received', 'late' => 'late',
-        'late penalty' => 'late', 'plagiarism' => 'plagiarism', 'hidden' => 'hidden', 'nosubmission' => 'nosubmission',
-        'load error' => 'loaderror', 'generic name' => 'genericname'];
+    /**
+     * The flags under a row's name, in order (hints beside a date, pill or grade aren't flags).
+     *
+     * @Then /^the hints of "(?P<name>[^"]*)" should be "(?P<hints>[^"]*)" in that order$/
+     * @param string $name
+     * @param string $hints Comma-separated hint names, as in HINTS.
+     */
+    public function the_hints_should_be(string $name, string $hints): void {
+        $actual = array_map(fn($e) => $e->getAttribute('data-hint'), $this->row($name)->findAll('css', '.ma-flags [data-hint]'));
+        $expected = array_map(fn($h) => steps::HINTS[trim($h)], explode(',', $hints));
+        if ($actual !== $expected) {
+            throw new ExpectationException("'$name' has the hints " . implode(', ', $actual), $this->getSession());
+        }
+    }
+
+    /**
+     * Whether a hint sits beside one of a row's dates.
+     *
+     * @Then /^the (?P<hint>[a-z ]+?) hint of "(?P<name>[^"]*)" should sit beside its "(?P<label>[^"]*)" date$/
+     * @param string $hint
+     * @param string $name
+     * @param string $label
+     */
+    public function the_hint_should_sit_beside_its_date(string $hint, string $name, string $label): void {
+        $xpath = ".//div[@data-date][span[contains(@class, 'ma-row-date-label')][normalize-space(.) = " .
+            behat_context_helper::escape($label) . "]]//*[@data-hint=" . behat_context_helper::escape(steps::HINTS[$hint]) . "]";
+        if (!$this->row($name)->find('xpath', $xpath)) {
+            throw new ExpectationException("'$name' has no $hint hint beside its '$label' date", $this->getSession());
+        }
+        if ($this->row($name)->find('css', '.ma-flags [data-hint="' . steps::HINTS[$hint] . '"]')) {
+            throw new ExpectationException("'$name' also has the $hint hint in its flags", $this->getSession());
+        }
+    }
 
     /**
      * Clicks a row's hint.
@@ -2490,7 +2071,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function i_click_on_the_hint(string $hint, string $name): void {
-        $button = $this->row($name)->find('css', '[data-hint="' . self::HINTS[$hint] . '"]')
+        $button = $this->row($name)->find('css', '[data-hint="' . steps::HINTS[$hint] . '"]')
             ?? throw new ExpectationException("'$name' has no $hint hint", $this->getSession());
         $button->click();
     }
@@ -2504,7 +2085,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $hint
      */
     public function should_have_a_hint(string $name, string $not, string $hint): void {
-        $has = (bool)$this->row($name)->find('css', '[data-hint="' . self::HINTS[$hint] . '"]');
+        $has = (bool)$this->row($name)->find('css', '[data-hint="' . steps::HINTS[$hint] . '"]');
         if ($has === (bool)$not) {
             throw new ExpectationException("'$name' " . ($has ? 'has' : 'has no') . " $hint hint", $this->getSession());
         }
@@ -2655,14 +2236,26 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
-     * A row's due date.
+     * A row's due date, labelled Due or, under an extension, Extended deadline.
      *
      * @Then /^"(?P<name>[^"]*)" should show the due date "(?P<when>[^"]*)"$/
      * @param string $name
      * @param string $when
      */
     public function should_show_the_due_date(string $name, string $when): void {
-        $this->row_date($this->row($name), $name, get_string('date_due', 'block_le_dashboard'), $when);
+        // A student's deadline under an extension is labelled as the extended one (CS5).
+        $row = $this->row($name);
+        $label = get_string('date_due', 'block_le_dashboard');
+        $extended = get_string('date_extendeddeadline', 'block_le_dashboard');
+        try {
+            $this->row_date($row, $name, $label, $when);
+        } catch (\Throwable $e) {
+            try {
+                $this->row_date($row, $name, $extended, $when);
+            } catch (\Throwable $other) {
+                throw $e;
+            }
+        }
     }
 
     /**
@@ -2697,7 +2290,7 @@ class behat_block_le_dashboard extends behat_base {
         if (!$time) {
             throw new ExpectationException("'$name' has no '$label' date", $this->getSession());
         }
-        $expected = date('Y-m-d', self::time($when));
+        $expected = date('Y-m-d', phrases::time($when));
         if (substr($time->getAttribute('datetime'), 0, 10) !== $expected) {
             throw new ExpectationException(
                 "'$name' $label is {$time->getAttribute('datetime')}, not $expected",
@@ -2866,8 +2459,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function the_index_was_last_updated(string $when): void {
-        global $DB;
-        $DB->set_field('block_le_dashboard_cm', 'timeindexed', self::time($when));
+        steps::instance()->the_index_was_last_updated($when);
     }
 
     /**
@@ -2929,9 +2521,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $group
      */
     public function the_group_is_deleted(string $group): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/group/lib.php');
-        groups_delete_group($DB->get_field('groups', 'id', ['idnumber' => $group], MUST_EXIST));
+        steps::instance()->the_group_is_deleted($group);
     }
 
     /**
@@ -2943,9 +2533,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $state
      */
     public function the_enrolment_method_is(string $method, string $shortname, string $state): void {
-        global $DB;
-        $instance = $DB->get_record('enrol', ['courseid' => self::course($shortname)->id, 'enrol' => $method], '*', MUST_EXIST);
-        enrol_get_plugin($method)->update_status($instance, $state === 'enabled' ? ENROL_INSTANCE_ENABLED : ENROL_INSTANCE_DISABLED);
+        steps::instance()->the_enrolment_method_is($method, $shortname, $state);
     }
 
     /**
@@ -2956,10 +2544,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function deleted_from_the_course_page(string $name): void {
-        global $CFG, $DB;
-        require_once($CFG->dirroot . '/course/lib.php');
-        course_delete_module($this->cm($name)->id, true);
-        $DB->delete_records('task_adhoc', ['classname' => '\\core_course\\task\\course_delete_modules']);
+        steps::instance()->deleted_from_the_course_page($name);
     }
 
     /**
@@ -2970,10 +2555,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_submission_is_reverted_to_draft(string $student, string $name): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        $cm = $this->cm($name);
-        (new assign($cm->context, $cm, null))->revert_to_draft(self::userid($student));
+        steps::instance()->the_submission_is_reverted_to_draft($student, $name);
     }
 
     /**
@@ -2984,14 +2566,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_submission_is_locked(string $student, string $name): void {
-        global $CFG;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        $cm = $this->cm($name);
-        $assign = new assign($cm->context, $cm, null);
-        $flags = $assign->get_user_flags(self::userid($student), true);
-        $flags->locked = 1;
-        $assign->update_user_flags($flags);
-        self::queue($cm);
+        steps::instance()->the_submission_is_locked($student, $name);
     }
 
     /**
@@ -3005,30 +2580,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_teacher_locks_submissions(string $teacher, string $action, string $student, string $name): void {
-        global $CFG, $USER;
-        require_once($CFG->dirroot . '/mod/assign/locallib.php');
-        $cm = $this->cm($name);
-        $saved = $USER;
-        \core\session\manager::set_user(core_user::get_user(self::userid($teacher)));
-        try {
-            $assign = new assign($cm->context, $cm, null);
-            $action === 'locks' ? $assign->lock_submission(self::userid($student))
-                : $assign->unlock_submission(self::userid($student));
-        } finally {
-            \core\session\manager::set_user($saved);
-        }
-    }
-
-    /**
-     * Sets the resubmission contact, and its link.
-     *
-     * @Given /^the "Resubmission contact" setting is "(?P<text>[^"]*)"(?: with link "(?P<url>[^"]*)")?$/
-     * @param string $text
-     * @param string $url
-     */
-    public function the_resubmission_contact_is(string $text, string $url = ''): void {
-        set_config('resubmitcontact', $text, 'block_le_dashboard');
-        set_config('resubmitcontacturl', $url, 'block_le_dashboard');
+        steps::instance()->the_teacher_locks_submissions($teacher, $action, $student, $name);
     }
 
     /**
@@ -3039,7 +2591,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $html
      */
     public function the_guidance_setting_is(string $name, string $html): void {
-        set_config($name, str_replace('\\"', '"', $html), 'block_le_dashboard');
+        steps::instance()->the_guidance_setting_is($name, $html);
     }
 
     /**
@@ -3049,7 +2601,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_guidance_setting_is_empty(string $name): void {
-        set_config($name, '', 'block_le_dashboard');
+        steps::instance()->the_guidance_setting_is_empty($name);
     }
 
     /**
@@ -3411,10 +2963,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $shortname
      */
     public function the_start_date_is_removed(string $shortname): void {
-        global $DB;
-        $id = self::course($shortname)->id;
-        $DB->set_field('course', 'startdate', 0, ['id' => $id]);
-        rebuild_course_cache($id, true);
+        steps::instance()->the_start_date_is_removed($shortname);
     }
 
     /**
@@ -3423,7 +2972,7 @@ class behat_block_le_dashboard extends behat_base {
      * @When /^the rebuild task runs$/
      */
     public function the_rebuild_task_runs(): void {
-        $this->catch_up();
+        steps::instance()->the_rebuild_task_runs();
     }
 
     /**
@@ -3432,11 +2981,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^the index holds a row for an activity that no longer exists$/
      */
     public function the_index_holds_an_orphan(): void {
-        global $DB;
-        $row = $DB->get_record(\block_le_dashboard\local\index\indexer::CM, [], '*', IGNORE_MULTIPLE);
-        unset($row->id);
-        $row->cmid = (int)$DB->get_field_sql('SELECT MAX(id) FROM {course_modules}') + 1000;
-        $DB->insert_record(\block_le_dashboard\local\index\indexer::CM, $row);
+        steps::instance()->the_index_holds_an_orphan();
     }
 
     /**
@@ -3445,8 +2990,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^an admin has rebuilt the index and the rebuild task has not run yet$/
      */
     public function the_index_was_rebuilt_but_not_run(): void {
-        \block_le_dashboard\local\index\indexer::purge();
-        set_config('backfillpending', time(), 'block_le_dashboard');
+        steps::instance()->the_index_was_rebuilt_but_not_run();
     }
 
     // Beta17: flags and popovers, submittability, no online submission, audit fixes.
@@ -3459,7 +3003,7 @@ class behat_block_le_dashboard extends behat_base {
      * @return \Behat\Mink\Element\NodeElement
      */
     protected function flag(string $key, string $name): \Behat\Mink\Element\NodeElement {
-        $key = self::HINTS[$key] ?? $key;
+        $key = steps::HINTS[$key] ?? $key;
         return $this->row($name)->find('css', '[data-hint="' . $key . '"]')
             ?? throw new ExpectationException("'$name' has no $key icon", $this->getSession());
     }
@@ -3471,10 +3015,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $version
      */
     public function the_site_runs_moodle(string $version): void {
-        global $CFG;
-        if (((int)$CFG->branch >= 500) !== ($version !== '4.5')) {
-            throw new \Moodle\BehatExtension\Exception\SkippedException("Needs Moodle $version");
-        }
+        self::skipping(fn() => steps::instance()->the_site_runs_moodle($version));
     }
 
     /**
@@ -3488,6 +3029,44 @@ class behat_block_le_dashboard extends behat_base {
     public function the_flag_should_show_the_icon(string $key, string $name, string $icon): void {
         if (!$this->flag($key, $name)->find('css', 'i.' . $icon)) {
             throw new ExpectationException("The $key flag of '$name' doesn't show $icon", $this->getSession());
+        }
+    }
+
+    /**
+     * The plugin's own half-dashed file, used where Moodle's Font Awesome has none (Moodle 4.5).
+     *
+     * @Then /^the "(?P<key>[a-z ]+)" flag of "(?P<name>[^"]*)" should show the plugin's own half-dashed file$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_flag_should_show_own_half_dashed_file(string $key, string $name): void {
+        $this->the_flag_should_show_the_icon($key, $name, 'ma-icon-file-half-dashed');
+    }
+
+    /**
+     * The plugin's half-dashed file is drawn, as a mask filled with the flag's text colour.
+     *
+     * @Then /^the "(?P<key>[a-z ]+)" flag of "(?P<name>[^"]*)" should draw the plugin's own half-dashed file in the flag's text colour$/
+     * @param string $key
+     * @param string $name
+     */
+    public function the_flag_should_draw_own_half_dashed_file(string $key, string $name): void {
+        $this->the_flag_should_show_own_half_dashed_file($key, $name);
+        $xpath = json_encode($this->flag($key, $name)->find('css', 'i.ma-icon-file-half-dashed')->getXpath());
+        $result = $this->evaluate_script("return (function() {
+            const i = document.evaluate($xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+            const before = getComputedStyle(i, '::before');
+            const mask = before.maskImage || before.webkitMaskImage || '';
+            if (!mask.includes('file-half-dashed')) {
+                return 'no mask: ' + mask;
+            }
+            if (before.backgroundColor !== getComputedStyle(i).color) {
+                return 'filled ' + before.backgroundColor + ', text is ' + getComputedStyle(i).color;
+            }
+            return parseFloat(before.width) > 0 && parseFloat(before.height) > 0 ? '' : 'not drawn: ' + before.width;
+        })();");
+        if ($result !== '') {
+            throw new ExpectationException("The half-dashed file of '$name' isn't drawn right: $result", $this->getSession());
         }
     }
 
@@ -3717,7 +3296,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $date
      */
     public function the_icon_should_sit_next_to(string $key, string $name, string $grade, string $pill = '', string $date = ''): void {
-        $key = self::HINTS[$key] ?? $key;
+        $key = steps::HINTS[$key] ?? $key;
         $row = $this->row($name);
         if ($grade) {
             $where = $row->find('css', '[data-region="ma-grade"]');
@@ -3773,16 +3352,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $grade
      */
     public function the_gradebook_grade_is_set(string $student, string $name, string $grade): void {
-        global $CFG;
-        require_once($CFG->libdir . '/gradelib.php');
-        $cm = $this->cm($name);
-        $item = grade_item::fetch(['itemtype' => 'mod', 'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance,
-            'itemnumber' => 0, 'courseid' => $cm->course]);
-        if (!$item) {
-            throw new coding_exception("'$name' has no grade item");
-        }
-        $item->update_final_grade(self::userid($student), (float)$grade, 'gradebook', false, FORMAT_MOODLE, get_admin()->id);
-        self::queue($cm);
+        steps::instance()->the_gradebook_grade_is_set($student, $name, $grade);
     }
 
     /**
@@ -3794,11 +3364,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $when
      */
     public function has_a_quiz_override(string $username, string $name, string $when): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $DB->insert_record('quiz_overrides', ['quiz' => $cm->instance, 'userid' => self::userid($username),
-            'timeclose' => self::time($when)]);
-        self::queue($cm);
+        steps::instance()->has_a_quiz_override($username, $name, $when);
     }
 
     /**
@@ -3808,9 +3374,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_review_options_never_show_marks(string $name): void {
-        $cm = $this->cm($name);
-        self::set_quiz((int)$cm->instance, ['reviewmarks' => 0]);
-        self::queue($cm);
+        steps::instance()->the_review_options_never_show_marks($name);
     }
 
     /**
@@ -3822,22 +3386,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function grades_the_essay(string $marker, string $student, string $name): void {
-        global $DB, $USER;
-        $cm = $this->cm($name);
-        $attempts = $DB->get_records('quiz_attempts', ['quiz' => $cm->instance, 'userid' => self::userid($student)], 'attempt');
-        $attempt = end($attempts);
-        $saved = $USER;
-        \core\session\manager::set_user(core_user::get_user(self::userid($marker)));
-        try {
-            $quba = question_engine::load_questions_usage_by_activity($attempt->uniqueid);
-            $quba->manual_grade(1, 'Good', 1, FORMAT_HTML);
-            question_engine::save_questions_usage_by_activity($quba);
-            $DB->set_field('quiz_attempts', 'sumgrades', $quba->get_total_mark(), ['id' => $attempt->id]);
-            self::regrade_quiz($cm, (int)$attempt->userid);
-        } finally {
-            \core\session\manager::set_user($saved);
-        }
-        self::queue($cm);
+        steps::instance()->grades_the_essay($marker, $student, $name);
     }
 
     /**
@@ -3846,15 +3395,7 @@ class behat_block_le_dashboard extends behat_base {
      * @Given /^a backfill has started$/
      */
     public function a_backfill_has_started(): void {
-        global $DB;
-        \block_le_dashboard\task\backfill::queue();
-        $DB->set_field_select(
-            'task_adhoc',
-            'timestarted',
-            time(),
-            'classname = :c AND timestarted IS NULL',
-            ['c' => '\\' . \block_le_dashboard\task\backfill::class]
-        );
+        steps::instance()->a_backfill_has_started();
     }
 
     /**
@@ -3864,15 +3405,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $n
      */
     public function backfills_should_be_waiting(int $n): void {
-        global $DB;
-        $waiting = $DB->count_records_select(
-            'task_adhoc',
-            'classname = :c AND timestarted IS NULL',
-            ['c' => '\\' . \block_le_dashboard\task\backfill::class]
-        );
-        if ($waiting !== $n) {
-            throw new ExpectationException("$waiting backfills are waiting", $this->getSession());
-        }
+        steps::instance()->backfills_should_be_waiting($n);
     }
 
     /**
@@ -3884,10 +3417,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $category
      */
     public function is_given_the_role_on_the_category(string $username, string $role, string $category): void {
-        global $DB;
-        $catid = $DB->get_field('course_categories', 'id', ['name' => $category], MUST_EXIST);
-        $roleid = $DB->get_field('role', 'id', ['shortname' => $role], MUST_EXIST);
-        role_assign($roleid, self::userid($username), context_coursecat::instance($catid)->id);
+        steps::instance()->is_given_the_role_on_the_category($username, $role, $category);
     }
 
     /**
@@ -3898,19 +3428,18 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $not
      */
     public function a_course_reindex_should_be_queued(string $shortname, string $not = ''): void {
-        global $DB;
-        $courseid = (int)self::course($shortname)->id;
-        $queued = false;
-        foreach ($DB->get_records('task_adhoc', ['classname' => '\\' . \block_le_dashboard\task\reindex::class]) as $task) {
-            $data = json_decode($task->customdata);
-            $queued = $queued || (isset($data->courseid) && (int)$data->courseid === $courseid);
-        }
-        if ($queued === (bool)$not) {
-            throw new ExpectationException(
-                "A re-index of $shortname is " . ($queued ? '' : 'not ') . 'queued',
-                $this->getSession()
-            );
-        }
+        steps::instance()->a_course_reindex_should_be_queued($shortname, $not);
+    }
+
+    /**
+     * Whether a re-index of an assessment is waiting.
+     *
+     * @Then /^a re-index of "(?P<name>[^"]*)" should (?P<not>not )?be queued$/
+     * @param string $name
+     * @param string $not
+     */
+    public function a_reindex_should_be_queued(string $name, string $not = ''): void {
+        steps::instance()->a_reindex_should_be_queued($name, $not);
     }
 
     /**
@@ -3921,18 +3450,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function has_saved_a_draft_of(string $username, string $name): void {
-        $cm = $this->cm($name);
-        $gen = testing_util::get_data_generator();
-        if ($cm->modname === 'assign') {
-            // Under required Submit the generator leaves a draft.
-            $gen->get_plugin_generator('mod_assign')->create_submission(['userid' => self::userid($username),
-                'cmid' => $cm->id, 'onlinetext' => 'Draft']);
-        } else {
-            $gen->get_plugin_generator('mod_coursework')->create_submission(['courseworkid' => $cm->instance,
-                'allocatableid' => self::userid($username), 'allocatabletype' => 'user', 'finalised' => 0,
-                'finalisedstatus' => 0]);
-        }
-        self::queue($cm);
+        steps::instance()->has_saved_a_draft_of($username, $name);
     }
 
     /**
@@ -3944,18 +3462,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function has_saved_blank_feedback(string $marker, string $student, string $name): void {
-        global $DB;
-        $cm = $this->cm($name);
-        $submissionid = $DB->get_field(
-            'coursework_submissions',
-            'id',
-            ['courseworkid' => $cm->instance, 'allocatableid' => self::userid($student)],
-            MUST_EXIST
-        );
-        $gen = testing_util::get_data_generator()->get_plugin_generator('mod_coursework');
-        $gen->create_feedback(['submissionid' => $submissionid, 'assessorid' => self::userid($marker),
-            'grade' => null, 'feedbackcomment' => '', 'stage_identifier' => 'assessor_1', 'finalised' => 0]);
-        self::queue($cm);
+        steps::instance()->has_saved_blank_feedback($marker, $student, $name);
     }
 
     /**
@@ -4048,9 +3555,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $due
      */
     public function several_assessments_are_due(int $n, string $tag, string $modname, string $course, string $due): void {
-        for ($i = 1; $i <= $n; $i++) {
-            $this->create_assessment($tag, $modname, "Assessment $i", $course, '', self::time($due));
-        }
+        self::skipping(fn() => steps::instance()->several_assessments_are_due($n, $tag, $modname, $course, $due));
     }
 
     /**
@@ -4095,7 +3600,7 @@ class behat_block_le_dashboard extends behat_base {
         $outer = [$c['icon']['border-top-left-radius'], $c['icon']['border-bottom-left-radius'],
             $c['input']['border-top-right-radius'], $c['input']['border-bottom-right-radius']];
         if (count(array_unique($outer)) !== 1 || (float)$outer[0] <= 0) {
-            throw new ExpectationException('The search box outer corners are ' . implode(', ', $outer), $this->getSession());
+            throw new failed('The search box outer corners are ' . implode(', ', $outer));
         }
     }
 
@@ -4112,7 +3617,7 @@ class behat_block_le_dashboard extends behat_base {
         $inner = [$c['icon']['border-top-right-radius'], $c['icon']['border-bottom-right-radius'],
             $c['input']['border-top-left-radius'], $c['input']['border-bottom-left-radius']];
         if (array_filter($inner, fn($r) => (float)$r > 0)) {
-            throw new ExpectationException('The search box inner corners are ' . implode(', ', $inner), $this->getSession());
+            throw new failed('The search box inner corners are ' . implode(', ', $inner));
         }
     }
 
@@ -4141,8 +3646,8 @@ class behat_block_le_dashboard extends behat_base {
     public function the_search_box_shows_its_focus_ring(): void {
         $c = $this->computed(['group' => '.ma-search .input-group', 'input' => '.ma-search .form-control'], ['box-shadow']);
         if (in_array($c['group']['box-shadow'], ['', 'none']) || !in_array($c['input']['box-shadow'], ['', 'none'])) {
-            throw new ExpectationException("Focus ring: group '{$c['group']['box-shadow']}', input " .
-                "'{$c['input']['box-shadow']}'", $this->getSession());
+            throw new failed("Focus ring: group '{$c['group']['box-shadow']}', input " .
+                "'{$c['input']['box-shadow']}'");
         }
     }
 
@@ -4247,20 +3752,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $tag
      */
     public function every_compatible_activity_is_tagged(string $courses, string $tag): void {
-        global $DB;
-        preg_match_all('/"([^"]*)"/', $courses, $m);
-        foreach ($m[1] as $shortname) {
-            $course = self::course($shortname);
-            foreach (get_fast_modinfo($course->id)->get_cms() as $cm) {
-                if (
-                    $DB->record_exists('grade_items', ['courseid' => $course->id, 'itemtype' => 'mod',
-                        'itemmodule' => $cm->modname, 'iteminstance' => $cm->instance])
-                ) {
-                    core_tag_tag::add_item_tag('core', 'course_modules', $cm->id, $cm->context, $tag);
-                }
-            }
-        }
-        \cache::make('block_le_dashboard', 'untagged')->purge();
+        steps::instance()->every_compatible_activity_is_tagged($courses, $tag);
     }
 
     /**
@@ -4270,9 +3762,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $url
      */
     public function the_tagging_guidance_link_is(string $url): void {
-        set_config('untaggedguidanceurl', $url, 'block_le_dashboard');
-        // The old setting, carried into its guidance box as the upgrade does.
-        \block_le_dashboard\local\guidance::migrate();
+        steps::instance()->the_tagging_guidance_link_is($url);
     }
 
     /**
@@ -4305,8 +3795,7 @@ class behat_block_le_dashboard extends behat_base {
         string $due,
         string $zone
     ): void {
-        $time = (new \DateTime($due, new \DateTimeZone($zone)))->getTimestamp();
-        $this->create_assessment($tag, $modname, $name, $course, '', $time);
+        self::skipping(fn() => steps::instance()->an_assessment_is_due_in_zone($tag, $modname, $name, $course, $due, $zone));
     }
 
     /**
@@ -4317,7 +3806,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $zone
      */
     public function it_is_now(string $when, string $zone): void {
-        set_config('behatnow', (new \DateTime($when, new \DateTimeZone($zone)))->getTimestamp(), 'block_le_dashboard');
+        steps::instance()->it_is_now($when, $zone);
     }
 
     /**
@@ -4328,8 +3817,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $zone
      */
     public function the_user_has_the_time_zone(string $username, string $zone): void {
-        global $DB;
-        $DB->set_field('user', 'timezone', $zone, ['id' => self::userid($username)]);
+        steps::instance()->the_user_has_the_time_zone($username, $zone);
     }
 
     /**
@@ -4460,7 +3948,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $n
      */
     public function block_rhb_allows(int $n): void {
-        set_config('selfcertmax', $n, 'block_rhb');
+        steps::instance()->block_rhb_allows($n);
     }
 
     /**
@@ -4471,19 +3959,12 @@ class behat_block_le_dashboard extends behat_base {
      * @param int $n
      */
     public function has_used_self_certified_extensions(string $username, int $n): void {
-        global $DB;
-        $columns = $DB->get_columns('coursework_mitigations');
-        for ($i = 0; $i < $n; $i++) {
-            $record = ['courseworkid' => 0, 'allocatableid' => self::userid($username), 'allocatabletype' => 'user',
-                'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
-                'timecreated' => time(), 'timemodified' => time()];
-            $DB->insert_record('coursework_mitigations', array_intersect_key($record, $columns));
-        }
+        steps::instance()->has_used_self_certified_extensions($username, $n);
     }
 
     /**
-     * The items of a row's Mitigate menu, in order: live (a link), greyed (with its reason starting with the
-     * note) or html (block_rhb's own), with a live item's count as its note.
+     * The items of a row's Mitigate menu, in order: live (a link, with its count as the note), info (a line
+     * starting with the item text, which the next link reads out), html (block_rhb's own) or divider ("---").
      *
      * @Then /^the Mitigate menu of "(?P<name>[^"]*)" should list:$/
      * @param string $name
@@ -4491,12 +3972,13 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function the_mitigate_menu_should_list(string $name, TableNode $table): void {
         $menu = $this->mitigate_menu($name);
-        $items = $menu->findAll('css', '.ma-mitigate-item');
+        $items = $menu->findAll('css', '.ma-mitigate-item, .ma-mitigate-divider');
         $rows = $table->getHash();
         if (count($items) !== count($rows)) {
             throw new ExpectationException("The Mitigate menu of '$name' has " . count($items) . ' items: ' .
                 $menu->getText(), $this->getSession());
         }
+        $info = null;
         foreach ($rows as $i => $row) {
             $item = $items[$i];
             $note = trim($row['note']);
@@ -4505,13 +3987,19 @@ class behat_block_le_dashboard extends behat_base {
             if ($left) {
                 $label = trim(substr($label, 0, -strlen(trim($left->getText()))));
             }
-            if ($row['state'] === 'greyed') {
-                $reason = $menu->find('css', '#' . $item->getAttribute('aria-describedby'));
-                $ok = $item->getAttribute('aria-disabled') === 'true' && $label === $row['item']
-                    && $reason && str_starts_with(trim($reason->getText()), $note);
+            if ($row['state'] === 'divider') {
+                $ok = $item->hasClass('dropdown-divider') && $row['item'] === '---';
+            } else if ($row['state'] === 'info') {
+                $ok = $item->hasClass('ma-mitigate-note') && str_starts_with($label, $row['item'])
+                    && !$item->find('css', 'a, button');
+                $info = $item->getAttribute('id');
             } else {
                 $ok = $item->getAttribute('aria-disabled') !== 'true' && $label === $row['item']
                     && ($note === '' ? !$left : $left && trim($left->getText()) === $note);
+                if ($ok && $info !== null && $item->getAttribute('href') !== null) {
+                    $ok = $item->getAttribute('aria-describedby') === $info;
+                    $info = null;
+                }
             }
             if (!$ok) {
                 throw new ExpectationException("Item " . ($i + 1) . " of the Mitigate menu of '$name' is '" .
@@ -4636,7 +4124,7 @@ class behat_block_le_dashboard extends behat_base {
             $ok = self::within($followed);
         }
         if (!$ok) {
-            throw new ExpectationException("block_rhb's delete link was " . ($not ? '' : 'not ') . 'followed', $this->getSession());
+            throw new failed("block_rhb's delete link was " . ($not ? '' : 'not ') . 'followed');
         }
     }
 
@@ -4673,10 +4161,7 @@ class behat_block_le_dashboard extends behat_base {
      * @param string $name
      */
     public function the_rhb_stand_in_treats_as_coursework(string $name): void {
-        $cm = $this->cm($name);
-        $list = array_filter(explode(',', (string)get_config('block_le_dashboard', 'behatcoursework')));
-        $list[] = $cm->modname . ':' . $cm->instance;
-        set_config('behatcoursework', implode(',', $list), 'block_le_dashboard');
+        steps::instance()->the_rhb_stand_in_treats_as_coursework($name);
     }
 
     /**
@@ -4743,6 +4228,125 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected function notice(): \Behat\Mink\Element\NodeElement {
         return $this->find('css', self::BLOCK . ' [data-region="ma-notice"]');
+    }
+
+    // Beta27: index passes with a time limit (index-passes.feature).
+
+    /**
+     * Each index run stops as at its time limit after this many courses.
+     *
+     * @Given /^every My assessments index run has a time limit of (?P<n>\d+) courses?$/
+     * @param int $n
+     */
+    public function every_index_run_has_a_limit(int $n): void {
+        steps::instance()->every_index_run_has_a_limit($n);
+    }
+
+    /**
+     * Ad hoc tasks never run: the steps that catch the index up leave them queued.
+     *
+     * @Given /^ad hoc tasks don't run$/
+     */
+    public function ad_hoc_tasks_dont_run(): void {
+        steps::instance()->ad_hoc_tasks_dont_run();
+    }
+
+    /**
+     * Rebuilds the index as the Index page's button does.
+     *
+     * @Given /^the My assessments index is rebuilt$/
+     */
+    public function the_index_is_rebuilt(): void {
+        steps::instance()->the_index_is_rebuilt();
+    }
+
+    /**
+     * One nightly check run, whatever the hour.
+     *
+     * @When /^the nightly check runs$/
+     */
+    public function the_nightly_check_runs(): void {
+        steps::instance()->the_nightly_check_runs();
+    }
+
+    /**
+     * The hourly task runs at a time of day, server time, on the same day as its last run in this scenario
+     * when that is later, or else the next day.
+     *
+     * @When /^the hourly index task runs at "(?P<time>\d\d:\d\d)"$/
+     * @param string $time
+     */
+    public function the_hourly_task_runs_at(string $time): void {
+        steps::instance()->the_hourly_task_runs_at($time);
+    }
+
+    /**
+     * The nightly check died part-way: it saved its progress up to a course, then stopped without ending.
+     *
+     * @Given /^the nightly check died after "(?P<course>[^"]*)"$/
+     * @param string $shortname
+     */
+    public function the_nightly_check_died_after(string $shortname): void {
+        steps::instance()->the_nightly_check_died_after($shortname);
+    }
+
+    /**
+     * The courses the last index run did.
+     *
+     * @Then /^the (?:last index run|first fill) should have done (?P<courses>"[^"]*"(?:(?:, | and )"[^"]*")*) only$/
+     * @param string $courses
+     */
+    public function the_last_run_should_have_done(string $courses): void {
+        steps::instance()->the_last_run_should_have_done($courses);
+    }
+
+    /**
+     * The courses the nightly check has done in this scenario so far.
+     *
+     * @Then /^the nightly check should have done (?P<courses>no courses|"[^"]*"(?:(?:, | and )"[^"]*")*) so far$/
+     * @param string $courses
+     */
+    public function the_nightly_check_should_have_done(string $courses): void {
+        steps::instance()->the_nightly_check_should_have_done($courses);
+    }
+
+    /**
+     * The Index admin page's text, as an admin sees it.
+     *
+     * @Then /^the Index page should say "(?P<text>[^"]*)"$/
+     * @param string $text
+     */
+    public function the_index_page_should_say(string $text): void {
+        $this->execute('behat_auth::i_log_in_as', ['admin']);
+        $this->getSession()->visit($this->locate_path('/blocks/le_dashboard/admin/index.php'));
+        $this->execute('behat_general::assert_page_contains_text', [$text]);
+    }
+
+    /**
+     * Runs the command-line rebuild's work, as cli/rebuild.php does.
+     *
+     * @When /^I run the command-line rebuild$/
+     */
+    public function i_run_the_command_line_rebuild(): void {
+        steps::instance()->i_run_the_command_line_rebuild();
+    }
+
+    /**
+     * Every course with a tagged assessment is in the index.
+     *
+     * @Then /^it should finish with every course done$/
+     */
+    public function it_should_finish_with_every_course_done(): void {
+        steps::instance()->it_should_finish_with_every_course_done();
+    }
+
+    /**
+     * Whether a first fill (backfill ad hoc task) is queued, and "Preparing" pending.
+     *
+     * @Then /^no first fill should be queued$/
+     */
+    public function no_first_fill_should_be_queued(): void {
+        steps::instance()->no_first_fill_should_be_queued();
     }
 
     // Colour modes (Moodle 5.3).

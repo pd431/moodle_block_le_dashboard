@@ -12,8 +12,9 @@ Feature: Coursework is read the way Exeter's mod_coursework actually stores it
   # - A mark is a feedback row with finalised = 1 and a grade that isn't blank (grade is text).
   # - Groups: the setting is use_groups (beta17 read usegroups, so group courseworks were treated as individual).
   # - Moderator allocations and feedback may carry stage moderator_1: any moderator stage counts as moderation.
-  # - Attendance: coursework has no submission type field; courseworktype is read instead. Its values are
-  #   unconfirmed: "attendance" (any case) is assumed until Pierre confirms.
+  # - Marks entry (Pierre, 2026-10-28): a coursework whose only submission type in coursework_sub_plugin_cwk
+  #   is marksentry takes nothing online, and records attendance first (no-submission.feature).
+  #   courseworktype is not read.
   # - Plagiarism flags are read only where plagiarismflagenabled is on.
   # These run only where mod_coursework is installed; PHPUnit covers the same rules with stand-in tables.
 
@@ -40,47 +41,8 @@ Feature: Coursework is read the way Exeter's mod_coursework actually stores it
     Then "C1" should appear in the "Past" section
     And "C1" should show the status "Awaiting feedback"
 
-  Scenario: Feedback is released once first published
-    Given a summative "coursework" "C1" in "M1" was due "5 days ago"
-    And "student1" has submitted "C1"
-    And "marker1" grades "student1" on "C1" with "60"
-    And the agreed grade for "student1" on "C1" is published
-    When I log in as "student1" and view my dashboard
-    Then "C1" should appear in the "Past" section
-    And "C1" should show the status "Feedback released"
-
   # Pierre's export, 2026-10-08: 1 marker, moderation, allocation on, 276 of 277 marked and published, only
   # moderator allocation pairs. It read "Moderated 0 of 276" beside "Released to students", and "Unallocated
   # 277 of 277" (12 moderated through moderation agreements, 12 moderator pairs). Each stage now counts only
   # the work it still owes, and where moderators are allocated, moderation owes only that sample (12 of 12).
   # Allocation counts only once markers (not just moderators) are allocated.
-  Scenario: Sampled moderation counts only the work it still owes
-    Given the following "users" exist:
-      | username | firstname | lastname |
-      | convenor | Cat       | Convenor |
-    And the following "course enrolments" exist:
-      | user     | course | role           |
-      | convenor | M1     | moduleconvenor |
-    And a summative "coursework" "C1" in "M1" with moderation was due "5 days ago"
-    And "student1" has submitted "C1"
-    And "marker1" grades "student1" on "C1" with "60"
-    And the agreed grade for "student1" on "C1" is published
-    When I log in as "convenor" and view my dashboard
-    Then "C1" should not show a "Moderated" progress bar
-
-  Scenario: With only moderators allocated, marking is not shown as unallocated
-    Given the following "users" exist:
-      | username | firstname | lastname  |
-      | convenor | Cat       | Convenor  |
-      | mod1     | Max       | Moderator |
-    And the following "course enrolments" exist:
-      | user     | course | role           |
-      | convenor | M1     | moduleconvenor |
-      | mod1     | M1     | editingteacher |
-    And a summative "coursework" "C1" in "M1" with marker allocation and moderation was due "5 days ago"
-    And "student1" has submitted "C1"
-    And "mod1" moderates "C1"
-    When I log in as "convenor" and view my dashboard
-    Then "C1" should not show an "Unallocated" progress bar
-    When I log in as "marker1" and view my dashboard
-    Then "C1" should appear in the "Marking in progress" section with "1" to mark

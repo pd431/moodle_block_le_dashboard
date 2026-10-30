@@ -16,6 +16,8 @@
 
 namespace block_le_dashboard\local\view;
 
+use block_le_dashboard\local\index\student_row;
+
 /**
  * The rules that put assessments into sections. Pure functions of stored
  * values and "now", so buckets change at the deadline without re-indexing.
@@ -49,15 +51,17 @@ class classifier {
     /** Status: generic type past its deadline. */
     const STATUS_CLOSED = 'closed';
     /** Status: a new attempt is open (assign "Allow another attempt"), whatever the deadline. Shown with no
-     * pill: it is ordinary upcoming work (Pierre, 2026-10-06). */
+     * pill: it is ordinary upcoming work. */
     const STATUS_REOPENED = 'reopened';
     /** Status: generic type with no deadline (EC2). */
     const STATUS_OPEN = 'open';
-    /** Status: handed in, no deadline, not graded yet: stays in Undated until it is (Pierre, 2026-10-04). */
+    /** Status: handed in, no deadline, not graded yet: stays in Undated until it is. */
     const STATUS_RECEIVED = 'received';
     /** Student status: nothing to hand in online, the date has passed and no grade is out yet. */
     const STATUS_AWAITING = 'awaiting';
-    /** Statuses of the ordinary case, shown with no pill (Pierre, 2026-10-04). */
+    /** Student status: exempt or deferred, nothing is expected of them here (CS4). */
+    const STATUS_EXEMPT = 'exempt';
+    /** Statuses of the ordinary case, shown with no pill. */
     const PLAIN_STATUSES = [self::STATUS_PENDING, self::STATUS_DUE, self::STATUS_OPEN, self::STATUS_REOPENED];
 
     /**
@@ -65,23 +69,27 @@ class classifier {
      *
      * - Generic types (submitted unknown): Upcoming before the deadline, Past after, never Overdue (R5).
      * - Unsubmitted after the cut-off (or a quiz's close): Overdue while the student can still ask for
-     *   mitigation (Mitigate is shown), else Past, "Not submitted" (R2; coordinator, 2026-10-06).
+     *   mitigation (Mitigate is shown), else Past, "Not submitted" (R2).
      * - Unsubmitted after the deadline: Overdue for the threshold, then Past.
      * - Unsubmitted with a released grade (work handed in another way, a 0 for non-submission): as
      *   submitted and released, never Overdue (F1).
      * - Nothing to hand in online (attendance, in person, mark-only): Upcoming until the date, then Past,
      *   "Awaiting feedback" until the grade is out. Never Overdue.
      * - Work the student can no longer hand in (past the cut-off or a quiz's close, or every quiz
-     *   attempt used with none finished): Past at once, whatever the deadline.
+     *   attempt used with none finished): Past once the deadline has passed; before it, Upcoming with
+     *   "Can't submit", as work a teacher locked.
      * - Submitted: Upcoming until the deadline, then Past (in marking, or released). A final submission
-     *   (finalised, locked by a teacher, every quiz attempt used) too (Pierre, 2026-10-09).
+     *   (finalised, locked by a teacher, every quiz attempt used) too.
      * - A reopened attempt not yet resubmitted: Upcoming, with no pill (G13).
      * - No deadline (EC2): Undated until released ("Received" once handed in), then Past; a reopened
      *   attempt stays in Upcoming.
      * - Joined the course after the deadline (EC10): once the deadline plus the grace period has
      *   passed, Past and "Not submitted" at once; inside the grace period, Overdue as anyone else.
+     * - Exempt or deferred (CS4): "Exempt", by the date alone: Upcoming until it, then Past, never Overdue;
+     *   Undated without one.
      *
-     * @param \stdClass $row due, cutoff, submitted, timereleased, reopened, enrolstart, nosubmission, norelease
+     * @param \stdClass $row due, cutoff, submitted, timereleased, reopened, enrolstart, nosubmission, norelease,
+     *                       mitigation
      * @param int $now
      * @param int $thresholddays
      * @param int $grace Grace period in seconds.
@@ -89,6 +97,9 @@ class classifier {
      */
     public static function student(\stdClass $row, int $now, int $thresholddays, int $grace = 0): array {
         $due = $row->due === null ? null : (int)$row->due;
+        if (student_row::excused($row->mitigation ?? null)) {
+            return [$due === null ? self::UNDATED : ($due >= $now ? self::UPCOMING : self::PAST), self::STATUS_EXEMPT];
+        }
         $released = $row->timereleased !== null && (int)$row->timereleased <= $now;
         // Grades never released here: finished once marked, with no grade claimed (F10).
         $done = empty($row->norelease) ? self::STATUS_RELEASED : self::STATUS_SUBMITTED;
@@ -113,7 +124,7 @@ class classifier {
             }
             if ($due >= $now) {
                 // Handed in early: Upcoming until the deadline, even when it can't be changed any more
-                // (Pierre, 2026-10-09, reversing 2026-10-06); the row then says why instead of offering Submit.
+                // (reversing the earlier rule); the row then says why instead of offering Submit.
                 return [self::UPCOMING, self::STATUS_SUBMITTED];
             }
             return [self::PAST, self::STATUS_INMARKING];
@@ -125,8 +136,9 @@ class classifier {
             return [($due !== null && $due >= $now) ? self::UPCOMING : self::PAST, $done];
         }
         if (!self::submittable($row, $now)) {
-            // Locked by a teacher before the deadline: Upcoming, saying why there's no Submit (B1).
-            if (self::teacher_locked($row) && $due !== null && $due >= $now) {
+            // Can't be handed in before the deadline (locked by a teacher, B1, or every quiz attempt used with none
+            // finished): Upcoming, saying why there's no Submit.
+            if ($due !== null && $due >= $now) {
                 return [self::UPCOMING, self::STATUS_PENDING];
             }
             // Nothing can be handed in any more: Past, with Mitigate while its window is open.
@@ -149,7 +161,7 @@ class classifier {
     }
 
     /**
-     * Whether the student can still hand the work in (Pierre, 2026-10-06): Upcoming and Overdue hold only
+     * Whether the student can still hand the work in: Upcoming and Overdue hold only
      * work that is. The adapters fold every technical limit into the student's cut-off: an assignment's
      * cut-off, a quiz's close, overrides and extensions, and a quiz's last allowed attempt. A reopened
      * attempt is always open.
@@ -172,7 +184,7 @@ class classifier {
      * @return bool
      */
     public static function teacher_locked(\stdClass $row): bool {
-        return ($row->lockreason ?? null) === \block_le_dashboard\local\index\student_row::LOCK_TEACHER
+        return ($row->lockreason ?? null) === student_row::LOCK_TEACHER
             && empty($row->submitted);
     }
 
@@ -180,7 +192,7 @@ class classifier {
     const TOMARK = 'tomark';
     /** Staff section: all my units marked. */
     const COMPLETED = 'completed';
-    /** Staff and convenor section: deadline ahead. */
+    /** Convenor section: deadline ahead. */
     const STAFF_UPCOMING = 'upcoming';
     /** Convenor section: deadline passed, marking or release outstanding. */
     const INPROGRESS = 'inprogress';
@@ -188,57 +200,44 @@ class classifier {
     const CONVENOR_PAST = 'past';
 
     /**
-     * Where an assessment goes in a marker's view.
-     *
-     * Past the deadline with nothing to mark and extensions still to come, an assessment
-     * stays in Upcoming deadlines (G9).
+     * Where an assessment goes in a marker's view. There is no Upcoming section: work
+     * before its deadline isn't marking yet. Past the deadline with nothing of mine to mark, an assessment
+     * goes to Completed marking once my share is marked, with its Extensions hint while extensions run, and
+     * nowhere before that; late work brings it back to Marking in progress (G6).
      *
      * @param int $tomark My units ready and not marked.
-     * @param int $mine My units in total.
+     * @param int $own My own units: allocated to me or marked by me. Work without allocation that colleagues
+     *                 marked counts as mine to mark, but isn't my own once done.
      * @param int|null $due
      * @param int $now
-     * @param bool $pending Students whose marking is mine have extensions still to come.
+     * @param int $withheld My units whose results are withheld (CS3): in no count, but they keep the row in
+     *                      Completed marking as my own work would.
      * @return string|null Section, or null when it isn't shown in the marking sections.
      */
-    public static function staff(int $tomark, int $mine, ?int $due, int $now, bool $pending = false): ?string {
+    public static function staff(int $tomark, int $own, ?int $due, int $now, int $withheld = 0): ?string {
         if ($tomark > 0) {
             return self::TOMARK;
         }
+        $mine = $own > 0 || $withheld > 0;
         if ($due === null) {
-            // No deadline: all my marking done is finished (Pierre, 2026-10-04); with none yet,
+            // No deadline: all my marking done is finished; with none yet,
             // work may still arrive (EC2).
-            return $mine > 0 ? self::COMPLETED : self::UNDATED;
+            return $mine ? self::COMPLETED : self::UNDATED;
         }
-        if ($pending && $due !== null && $due < $now) {
-            return self::STAFF_UPCOMING;
-        }
-        if ($mine > 0 && $due < $now) {
-            return self::COMPLETED;
-        }
-        return null;
+        return $mine && $due < $now ? self::COMPLETED : null;
     }
 
     /**
-     * Where an assessment goes in the convenor view.
+     * Where an assessment goes in the convenor view. Past its deadline with nothing to mark or release, it goes to
+     * Past at once, and late work brings it back to In progress.
      *
      * @param int|null $due
      * @param int $now
      * @param int $submitted Submitted units.
-     * @param int $outstanding Ready units not marked at some stage, plus marked units not released.
-     * @param int $thresholddays Days after the deadline an assessment with no submissions stays in progress.
-     * @param int|null $students Students who can take it now, if known: with none left, nothing more can arrive (EC4).
-     * @param bool $closed Nothing more can be handed in: a generic type, or every cut-off has passed (F3).
+     * @param int $outstanding Ready units not marked at some stage, marked units not released, and extensions to come.
      * @return string
      */
-    public static function convenor(
-        ?int $due,
-        int $now,
-        int $submitted,
-        int $outstanding,
-        int $thresholddays,
-        ?int $students = null,
-        bool $closed = false
-    ): string {
+    public static function convenor(?int $due, int $now, int $submitted, int $outstanding): string {
         if ($due !== null && $due >= $now) {
             return self::STAFF_UPCOMING;
         }
@@ -246,11 +245,8 @@ class classifier {
             return self::INPROGRESS;
         }
         if ($due === null) {
-            // Finished work goes to Past whatever its date (Pierre, 2026-10-04).
+            // Finished work goes to Past whatever its date.
             return $submitted > 0 ? self::CONVENOR_PAST : self::UNDATED;
-        }
-        if ($submitted === 0 && $students !== 0 && !$closed && $due >= $now - $thresholddays * DAYSECS) {
-            return self::INPROGRESS;
         }
         return self::CONVENOR_PAST;
     }
