@@ -163,11 +163,12 @@
 }
 
 [data-bs-theme=dark] .block_le_dashboard_dashboard a:not(.btn, .dropdown-item) {
+    --ma-underline: color-mix(in srgb, currentcolor 70%, transparent);
     text-decoration: underline;
     /* stylelint-disable-next-line declaration-no-important */
     text-decoration-thickness: 1px !important;
     /* stylelint-disable-next-line declaration-no-important */
-    text-decoration-color: color-mix(in srgb, currentcolor 70%, transparent) !important;
+    text-decoration-color: var(--ma-underline) !important;
     text-underline-offset: 0.22em;
 }
 

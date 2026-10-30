@@ -346,12 +346,16 @@ $ma-state-tones: (
         // course and marker names as links. Hover brings it to full colour.
         // Boost's own rule has an ID (#region-main a:not(...)) and resets
         // the line's colour and thickness, so they have to be !important.
+        // The mix sits in a variable: stylelint's validator doesn't know
+        // color-mix() in a property.
         a:not(.btn, .dropdown-item) {
+            --ma-underline: color-mix(in srgb, currentcolor 70%, transparent);
+
             text-decoration: underline;
             // stylelint-disable-next-line declaration-no-important
             text-decoration-thickness: 1px !important;
             // stylelint-disable-next-line declaration-no-important
-            text-decoration-color: color-mix(in srgb, currentcolor 70%, transparent) !important;
+            text-decoration-color: var(--ma-underline) !important;
             text-underline-offset: 0.22em;
 
             &:hover {

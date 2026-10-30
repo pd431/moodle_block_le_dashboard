@@ -4061,8 +4061,11 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function delete_mitigation_should_be_destructive(string $name): void {
         $item = $this->mitigate_menu($name)->find('css', '[data-action="mitigate-delete"]');
-        $red = $item ? $this->evaluate_script('return getComputedStyle(document.evaluate(' . json_encode($item->getXpath()) .
-            ', document, null, 9, null).singleNodeValue).color') : '';
+        // The computed colour can be in any colour space (oklch for the block's tones), so the canvas turns it into rgb.
+        $red = $item ? $this->evaluate_script('const x = document.createElement("canvas").getContext("2d"); ' .
+            'x.fillStyle = getComputedStyle(document.evaluate(' . json_encode($item->getXpath()) .
+            ', document, null, 9, null).singleNodeValue).color; x.fillRect(0, 0, 1, 1); ' .
+            'const d = x.getImageData(0, 0, 1, 1).data; return "rgb(" + d[0] + ", " + d[1] + ", " + d[2] + ")"') : '';
         if (
             !$item || trim($item->getText()) !== 'Delete mitigation' || !$item->find('css', 'i.fa-trash-can')
                 || !preg_match('/^rgba?\((\d+), (\d+), (\d+)/', (string)$red, $m) || !($m[1] > 150 && $m[2] < 100 && $m[3] < 100)
@@ -4436,11 +4439,12 @@ class behat_block_le_dashboard extends behat_base {
     public function every_control_should_meet_its_contrast_targets_when_hovered(): void {
         $failures = [];
         $kinds = [];
-        $selector = self::BLOCK . ' :is(.nav-link, .btn, .ma-flag, .ma-row-iconbtn, .ma-untagged-summary, a, select,' .
-            ' .dropdown-item)';
+        // A list, not :is(): Moodle 4.5's Mink turns CSS into XPath with a parser that has no :is().
+        $controls = ['.nav-link', '.btn', '.ma-flag', '.ma-row-iconbtn', '.ma-untagged-summary', 'a', 'select', '.dropdown-item'];
+        $selector = implode(', ', array_map(fn($control) => self::BLOCK . ' ' . $control, $controls));
         foreach ($this->getSession()->getPage()->findAll('css', $selector) as $control) {
-            $kind = $control->getTagName() . ' ' . preg_replace('/\b(active|show|ma-row-\S*--\S+)\b/', '',
-                (string) $control->getAttribute('class'));
+            $classes = preg_replace('/\b(active|show|ma-row-\S*--\S+)\b/', '', (string) $control->getAttribute('class'));
+            $kind = $control->getTagName() . ' ' . $classes;
             if (isset($kinds[$kind]) || !$control->isVisible()) {
                 continue;
             }
@@ -4467,12 +4471,12 @@ class behat_block_le_dashboard extends behat_base {
         $inblock = 'return !!document.activeElement.closest(' . json_encode(self::BLOCK) . ')';
         $this->evaluate_script('document.activeElement.blur(); document.body.focus()');
         for ($i = 0; $i < 100 && !$this->evaluate_script($inblock); $i++) {
-            $this->execute('behat_general::i_press_named_key', ['', 'tab']);
+            $this->press_tab();
         }
         $failures = [];
         for ($stops = 0; $stops < 300 && $this->evaluate_script($inblock); $stops++) {
             $failures = array_merge($failures, $this->contrast('focus', self::BLOCK));
-            $this->execute('behat_general::i_press_named_key', ['', 'tab']);
+            $this->press_tab();
         }
         if ($stops < 5) {
             throw new ExpectationException("Tab reached only $stops controls in the block", $this->getSession());
@@ -4577,8 +4581,11 @@ class behat_block_le_dashboard extends behat_base {
      */
     protected function block_link(string $name): \Behat\Mink\Element\NodeElement {
         if (str_starts_with($name, 'course of ')) {
-            return $this->row(substr($name, strlen('course of ')))->find('css', '.ma-row-course') ??
+            $link = $this->row(substr($name, strlen('course of ')))->find('css', '.ma-row-course');
+            if (!$link) {
                 throw new ExpectationException("No course link in the row for '$name'", $this->getSession());
+            }
+            return $link;
         }
         foreach ($this->getSession()->getPage()->findAll('css', self::BLOCK . ' a') as $link) {
             if (trim($link->getText()) === $name && $link->isVisible()) {
@@ -4586,6 +4593,20 @@ class behat_block_le_dashboard extends behat_base {
             }
         }
         throw new ExpectationException("No \"$name\" link in the My assessments block", $this->getSession());
+    }
+
+    /**
+     * Presses Tab as a W3C key action, which goes to whatever has focus. Behat's key step sends it to the focused
+     * element instead, and WebDriver refuses that when the element is not one it counts as interactable.
+     */
+    protected function press_tab(): void {
+        $tab = "\u{E004}";
+        $this->getSession()->getDriver()->getWebDriver()->executeCustomCommand('/session/:sessionId/actions', 'POST', [
+            'actions' => [['type' => 'key', 'id' => 'keyboard', 'actions' => [
+                ['type' => 'keyDown', 'value' => $tab],
+                ['type' => 'keyUp', 'value' => $tab],
+            ]]],
+        ]);
     }
 
     /**
