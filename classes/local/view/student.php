@@ -24,7 +24,7 @@ use block_le_dashboard\local\output\format;
 use block_le_dashboard\local\scope;
 
 /**
- * The student view: my own assessments, in Overdue, Upcoming and Past.
+ * The student view: my own assessments, in Overdue, Upcoming and Past, of the selected academic year.
  *
  * One query on the index, then the live uservisible check on the few rows
  * returned (R1: any restriction hides the assessment, dates included).
@@ -66,6 +66,9 @@ class student extends base {
     /** A pending assessment is due soon within this many days (rc6). */
     const DUESOON_DAYS = 7;
 
+    /** The deadline that places a row in an academic year: the student's own (EC3d). */
+    const DEADLINES = ['s.due'];
+
     /** @var array|null Rows, once loaded. */
     protected ?array $rows = null;
 
@@ -98,6 +101,8 @@ class student extends base {
         }
         [$insql, $params] = $DB->get_in_or_equal(array_keys($courses), SQL_PARAMS_NAMED);
         $params['userid'] = $this->userid;
+        [$yearsql, $yearparams] = $this->in_year_sql('c', self::DEADLINES);
+        $params += $yearparams;
         $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue, c.opens,
                                                 c.hiddenfromstudents, c.nosubmission, c.norelease, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
@@ -105,7 +110,7 @@ class student extends base {
                                            FROM {block_le_dashboard_stu} s
                                            JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0
-                                            AND c.courseid $insql", $params);
+                                            AND c.courseid $insql AND $yearsql", $params);
         $rows = [];
         foreach ($records as $r) {
             // The course record is at hand, so modinfo needn't fetch it again (F7).
@@ -125,11 +130,13 @@ class student extends base {
     #[\Override]
     public function scope_cmids(): array {
         global $DB;
-        return array_map('intval', $DB->get_fieldset_select(
-            'block_le_dashboard_stu',
-            'cmid',
-            'userid = :userid',
-            ['userid' => $this->userid]
+        [$yearsql, $yearparams] = $this->in_year_sql('c', self::DEADLINES);
+        return array_map('intval', $DB->get_fieldset_sql(
+            "SELECT s.cmid
+               FROM {block_le_dashboard_stu} s
+               JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
+              WHERE s.userid = :userid AND $yearsql",
+            ['userid' => $this->userid] + $yearparams
         ));
     }
 
@@ -212,6 +219,8 @@ class student extends base {
             $this->undated($sections[classifier::UNDATED]),
             $this->section(classifier::PAST, $sections[classifier::PAST]),
         ]), $oldest, [
+            'hasyears' => true,
+            'years' => $this->years(),
             'hasgradestoggle' => $hasgrades,
             'showgrades' => (bool)get_user_preferences('block_le_dashboard_showgrades', false, $this->userid),
         ]);
@@ -288,7 +297,7 @@ class student extends base {
 
     /**
      * Plain lines under the dates (G5), each at the precision its size needs: time left to submit,
-     * and how soon it is due. How late work was is the clock's title, not a line.
+     * and how soon it is due, on every row still open for submission. How late work was is the clock's title, not a line.
      *
      * @param \stdClass $r
      * @param string $section
@@ -304,8 +313,9 @@ class student extends base {
         if ($section === classifier::OVERDUE && $until && $until > $this->now) {
             $notes[] = format::countdown('stillsubmit', $until, $this->now);
         }
+        // How soon it is due, however far away; the due-soon mark keeps its window (DUESOON_DAYS).
         $open = in_array($status, [classifier::STATUS_PENDING, classifier::STATUS_DUE]) && !$this->not_yet_open($r);
-        if ($open && $due && $due > $this->now && $due - $this->now < self::DUESOON_DAYS * DAYSECS) {
+        if ($open && $due && $due > $this->now) {
             $notes[] = format::countdown('duein', $due, $this->now);
         }
         return $notes;

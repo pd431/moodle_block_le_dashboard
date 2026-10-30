@@ -128,6 +128,48 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * A student sees the selected year's assessments by their own deadline or the course, and Refresh covers the
+     * same ones (EC3d); All years shows everything.
+     */
+    public function test_student_year(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $now = time();
+        $thisyear = $DB->insert_record('block_le_dashboard_year', ['label' => 'This year', 'timestart' => $now - 60 * DAYSECS,
+            'timeend' => $now + 300 * DAYSECS, 'timecreated' => $now, 'timemodified' => $now]);
+        $lastyear = $DB->insert_record('block_le_dashboard_year', ['label' => 'Last year', 'timestart' => $now - 425 * DAYSECS,
+            'timeend' => $now - 60 * DAYSECS, 'timecreated' => $now, 'timemodified' => $now]);
+        $DB->set_field('course', 'startdate', $now - 30 * DAYSECS, ['shortname' => 'M1']);
+        $old = $gen->create_course(['shortname' => 'OLD', 'startdate' => $now - 400 * DAYSECS,
+            'enddate' => $now - 100 * DAYSECS]);
+        $gen->enrol_user($this->u['s1']->id, $old->id, 'student');
+        $exam = $gen->get_plugin_generator('mod_assign')->create_instance(['course' => $old->id, 'name' => 'Old exam',
+            'duedate' => $now - 200 * DAYSECS, 'assignsubmission_onlinetext_enabled' => 1]);
+        $this->getDataGenerator()->get_plugin_generator('block_le_dashboard')->tag($exam->cmid, 'summative');
+
+        $names = function (int $yearid): array {
+            $export = (new student($this->u['s1']->id, null, $yearid))->export();
+            $names = [];
+            foreach ($export['sections'] as $section) {
+                $names = array_merge($names, array_column($section['rows'], 'name'));
+            }
+            sort($names);
+            return $names;
+        };
+        $cmids = fn(int $yearid) => (new student($this->u['s1']->id, null, $yearid))->scope_cmids();
+        $this->assertSame(['Discussion', 'Overdue essay', 'Upcoming report'], $names($thisyear));
+        $this->assertSame(['Old exam'], $names($lastyear));
+        $this->assertSame(['Discussion', 'Old exam', 'Overdue essay', 'Upcoming report'], $names(0));
+        $this->assertNotContains((int)$exam->cmid, $cmids($thisyear));
+        $this->assertSame([(int)$exam->cmid], $cmids($lastyear));
+        $this->assertContains((int)$exam->cmid, $cmids(0));
+
+        $export = (new student($this->u['s1']->id, null, $thisyear))->export();
+        $this->assertTrue($export['hasyears']);
+        $this->assertSame(['This year'], array_column(array_filter($export['years'], fn($y) => $y['selected']), 'label'));
+    }
+
+    /**
      * Markers see only work allocated to them where allocation is on, and unallocated work is
      * left to convenors (D6).
      */
@@ -496,6 +538,34 @@ final class views_test extends \advanced_testcase {
         $this->assertSame('duein', $countdown['kind']);
         $this->assertSame($at('2026-10-15 12:00'), strtotime($countdown['until']));
         $this->assertSame($at('2026-10-13 20:00'), strtotime($countdown['now']));
+    }
+
+    /**
+     * "Due in" shows on every open Upcoming row however far away, while the due-soon mark keeps its 7 days; work
+     * handed in shows none (Pierre, 2026-10-29).
+     */
+    public function test_due_in_any_distance(): void {
+        global $DB;
+        $course = $this->getDataGenerator()->create_course();
+        $student = $this->getDataGenerator()->create_and_enrol($course, 'student');
+        $due = (new \DateTime('2027-03-10 12:00', \core_date::get_user_timezone_object($student)))->getTimestamp();
+        $far = $this->getDataGenerator()->get_plugin_generator('mod_assign')->create_instance(['course' => $course->id,
+            'name' => 'Dissertation', 'duedate' => $due, 'assignsubmission_onlinetext_enabled' => 1]);
+        // On the module long before the earliest "now" below, so never a late joiner (EC10).
+        $DB->set_field('user_enrolments', 'timecreated', $due - 300 * DAYSECS, ['userid' => $student->id]);
+        $this->getDataGenerator()->get_plugin_generator('block_le_dashboard')->tag($far->cmid, 'summative');
+        foreach ([200 => 'Due in 200 days', 40 => 'Due in 40 days', 3 => 'Due in 3 days'] as $days => $text) {
+            $this->setUser($student);
+            $now = $due - $days * DAYSECS;
+            // All years: the earliest "now" falls in the year before the deadline's.
+            $export = (new student($student->id, $now, 0))->export();
+            $row = self::rows($export, 'upcoming')['Dissertation'];
+            $this->assertSame([$text], array_column($row['notes'], 'text'));
+            $this->assertSame($days <= student::DUESOON_DAYS ? 'duesoon' : null, $row['overlay']['state'] ?? null);
+        }
+        // Handed in: no countdown, as before.
+        $upcoming = self::rows((new student($this->u['s1']->id))->export(), 'upcoming');
+        $this->assertSame([], $upcoming['Upcoming report']['notes']);
     }
 
     /**

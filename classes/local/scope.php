@@ -164,43 +164,56 @@ class scope {
     }
 
     /**
-     * SQL for an indexed assessment (block_le_dashboard_cm, by alias) belonging to an academic year (EC3): its
-     * default deadline or the latest deadline any student has falls in the year, or its course belongs to the
-     * year (year_sql()). No restriction for All years. in_year() is the same rule in PHP.
+     * SQL for an indexed assessment (block_le_dashboard_cm, by alias) belonging to an academic year (EC3): one of
+     * its deadlines falls in the year, or its course belongs to the year (year_sql()). No restriction for All years.
+     * in_year() is the same rule in PHP.
      *
-     * @param string $alias
+     * Staff count the default deadline and the latest deadline any student has; a student counts their own
+     * (block_le_dashboard_stu.due), so others' extensions don't move their row (EC3d).
+     *
+     * @param string $alias The index row, for its course.
      * @param \stdClass|null $year timestart, timeend; null for All years.
+     * @param string[]|null $deadlines Deadline columns, qualified; null for the staff pair on $alias.
      * @return array [sql, params]
      */
-    public static function in_year_sql(string $alias, ?\stdClass $year): array {
+    public static function in_year_sql(string $alias, ?\stdClass $year, ?array $deadlines = null): array {
         static $n = 0;
         if (!$year) {
             return ['1 = 1', []];
         }
         $p = 'iy' . ++$n;
         $c = $alias;
-        $sql = "(($c.due >= :{$p}d1 AND $c.due < :{$p}d2)
-                 OR ($c.latestdue >= :{$p}l1 AND $c.latestdue < :{$p}l2)
-                 OR $c.courseid IN (SELECT {$p}c.id FROM {course} {$p}c WHERE " . self::year_sql($p . 'c', $p) . '))';
         $start = (int)$year->timestart;
         $end = (int)$year->timeend;
-        return [$sql, ["{$p}d1" => $start, "{$p}d2" => $end, "{$p}l1" => $start, "{$p}l2" => $end]
-            + self::year_params($year, $p)];
+        $or = [];
+        $params = [];
+        foreach ($deadlines ?? ["$c.due", "$c.latestdue"] as $i => $column) {
+            $or[] = "($column >= :{$p}s$i AND $column < :{$p}e$i)";
+            $params += ["{$p}s$i" => $start, "{$p}e$i" => $end];
+        }
+        $or[] = "$c.courseid IN (SELECT {$p}c.id FROM {course} {$p}c WHERE " . self::year_sql($p . 'c', $p) . ')';
+        return ['(' . implode(' OR ', $or) . ')', $params + self::year_params($year, $p)];
     }
 
     /**
      * The PHP twin of in_year_sql(), for one row.
      *
-     * @param \stdClass $cm Index row: due, latestdue, courseid.
+     * @param \stdClass $cm Row with courseid and the deadline fields.
      * @param int[] $yearcourses Courses belonging to the year by year_sql().
      * @param \stdClass|null $year
+     * @param string[]|null $deadlines Deadline fields of $cm; null for the staff pair, due and latestdue.
      * @return bool
      */
-    public static function in_year(\stdClass $cm, array $yearcourses, ?\stdClass $year): bool {
+    public static function in_year(\stdClass $cm, array $yearcourses, ?\stdClass $year, ?array $deadlines = null): bool {
         if (!$year) {
             return true;
         }
         $within = fn($time) => $time !== null && (int)$time >= (int)$year->timestart && (int)$time < (int)$year->timeend;
-        return $within($cm->due) || $within($cm->latestdue) || in_array((int)$cm->courseid, $yearcourses, true);
+        foreach ($deadlines ?? ['due', 'latestdue'] as $field) {
+            if ($within($cm->$field)) {
+                return true;
+            }
+        }
+        return in_array((int)$cm->courseid, $yearcourses, true);
     }
 }

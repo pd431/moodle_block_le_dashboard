@@ -39,7 +39,7 @@ class factory {
             throw new \moodle_exception('noaccesstoview', 'block_le_dashboard');
         }
         return match ($key) {
-            scope::STUDENT => new student($userid),
+            scope::STUDENT => new student($userid, null, $yearid),
             scope::STAFF => new staff($userid, null, $yearid),
             scope::CONVENOR => new convenor($userid, null, $yearid),
         };

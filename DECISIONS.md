@@ -72,6 +72,11 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   their row, not "Due" (Pierre: "should trigger 'extended deadline' instead of due"). Any activity type, since the
   index records the mitigation the same way for all. Staff rows are unchanged: their extensions hint already
   names the latest extended deadline.
+- **CS6** A coursework grade whose grader id is not a real user (0 or below: Turnitin-synced grades are saved by
+  -1) was marked by the marker allocated to that unit at that stage, even one who has since left the module; with
+  no allocation it is no one's, so it is the convenor's auto-marked work (Pierre, 2026-10-29: "turnitin grade
+  should count as marked by the marker"). lasteditedbyuser is not a fallback: it is -1 too, and an editor isn't
+  always the marker.
 
 ## D: logic overhaul design v2 (2026-10-02)
 
@@ -96,6 +101,11 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   course belongs to the year (EC3b). Nothing outside it is shown or counted, outstanding marking included; All
   years shows everything. Changed by Pierre on 2026-10-28, replacing the exception that kept outstanding marking
   of other years in view with its course's year in brackets.
+- **EC3d** The student view follows the year picker as staff do: an assessment shows in the selected year when the
+  student's own deadline (an extension included) falls in it, or when its course belongs to the year (EC3b).
+  Overdue work of another year is not shown or counted (Pierre, 2026-10-29: "Someone looking at their performance
+  last year doesn't need to be harassed by a deadline they missed yesterday"). Other students' extensions don't
+  move it. The default is the year containing today, then the student's last choice; All years shows everything.
 - **EC4** Students whose enrolment ended or was suspended keep their rows, flagged inactive, so their
   submitted work is still marked; unenrolled students leave.
 - **EC5** An assignment with no online submission behaves like the generic tier for students (no Submitted

@@ -44,7 +44,7 @@ abstract class base {
      *
      * @param int $userid
      * @param int|null $now
-     * @param int|null $yearid Academic year (staff and convenor views); null for the default.
+     * @param int|null $yearid Academic year; null for the default.
      */
     public function __construct(int $userid, ?int $now = null, ?int $yearid = null) {
         $this->userid = $userid;
@@ -179,10 +179,11 @@ abstract class base {
      * no restriction under All years.
      *
      * @param string $alias
+     * @param string[]|null $deadlines Deadline columns, as scope::in_year_sql() takes them.
      * @return array [sql, params]
      */
-    protected function in_year_sql(string $alias = 'c'): array {
-        return scope::in_year_sql($alias, $this->year());
+    protected function in_year_sql(string $alias = 'c', ?array $deadlines = null): array {
+        return scope::in_year_sql($alias, $this->year(), $deadlines);
     }
 
     /**
