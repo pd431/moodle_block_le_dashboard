@@ -111,3 +111,9 @@ allowed.
   MariaDB.
 - Behat: `--tags @block_le_dashboard`. Scenarios that need mod_coursework skip on sites without
   it. The `*-assign.feature` files run the same coursework rules with Assignment instead.
+
+## Releasing
+
+Work goes on a branch (`betaN`), where CI runs on every push. When CI is green, the branch is pushed to `main`;
+nothing goes to `main` red. Each build on `main` is tagged `v<release>` from `version.php` by
+`.github/workflows/tag.yml`, which never moves a tag: a broken tagged build gets a new beta, not a rewritten one.
