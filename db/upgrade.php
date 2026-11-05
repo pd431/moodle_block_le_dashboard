@@ -135,14 +135,19 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
     }
 
     if ($oldversion < 2026110500) {
-        // The hub dashboard reads whether marking is anonymous and whether marks go through a send step
-        // (HB1): re-index.
+        // The hub dashboard reads whether marking is anonymous, whether marks go through a send step and when
+        // each unit's marks were sent (HB1): re-index.
         $table = new xmldb_table('block_le_dashboard_cm');
         $field = new xmldb_field('anonymous', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'norelease');
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }
         $field = new xmldb_field('sendstep', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'anonymous');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $table = new xmldb_table('block_le_dashboard_mark');
+        $field = new xmldb_field('timesent', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'counted');
         if (!$dbman->field_exists($table, $field)) {
             $dbman->add_field($table, $field);
         }

@@ -242,6 +242,7 @@ $string['privacy:metadata:mark:flagged'] = 'Whether the submission is flagged fo
 $string['privacy:metadata:mark:markedby'] = 'Who marked the submission.';
 $string['privacy:metadata:mark:timemarked'] = 'When the submission was marked.';
 $string['privacy:metadata:mark:timeready'] = 'When the work became ready to mark at this stage.';
+$string['privacy:metadata:mark:timesent'] = 'When the marks were sent to the hub, where the activity has that step.';
 $string['privacy:metadata:mark:unitdue'] = 'The deadline that applies to the work.';
 $string['privacy:metadata:mark:unitid'] = 'The student or group the submission belongs to.';
 $string['privacy:metadata:preference:lastrefresh'] = 'When the user last pressed Refresh, in each view.';

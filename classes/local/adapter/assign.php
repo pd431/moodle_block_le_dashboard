@@ -43,6 +43,9 @@ class assign extends base {
     /** Workflow states that mean this stage's marking is done. */
     const MARKED_STATES = ['readyforreview', 'inreview', 'readyforrelease', 'released'];
 
+    /** Workflow states past the send step: the marks have gone to the hub (HB2). */
+    const SENT_STATES = ['readyforrelease', 'released'];
+
     #[\Override]
     public function modname(): string {
         return 'assign';
@@ -343,6 +346,7 @@ class assign extends base {
 
         // One unit per submission and stage: the group for team submissions, else the student.
         $units = [];
+        $finalstage = end($cmrow->stages);
         foreach ($submissions as $userid => $s) {
             $isgroup = !empty($a->teamsubmission) && !empty($s->groupid);
             // Only a grade on this attempt counts: a reopened attempt starts unmarked.
@@ -356,6 +360,10 @@ class assign extends base {
                 $final = $final && in_array($flags[$userid]->workflowstate ?? '', self::MARKED_STATES);
             }
             $allocated = $allocations[$userid] ?? [];
+            // Sent once the final stage is ready for release; assign keeps no time for the change, so the
+            // grade's last change stands for it (HB2).
+            $timesent = $final && $a->markingworkflow && $grade
+                && in_array($flags[$userid]->workflowstate ?? '', self::SENT_STATES) ? (int)$grade->timemodified : null;
             $stages = [];
             $submitted = (int)$s->timemodified ?: null;
             if ($markers === 1) {
@@ -397,6 +405,7 @@ class assign extends base {
                         timemarked: $timemarked,
                         released: isset($released[$userid]),
                         timeready: $timeready,
+                        timesent: $stage === $finalstage ? $timesent : null,
                     );
                     continue;
                 }
@@ -410,6 +419,9 @@ class assign extends base {
                 if ($marked && $timemarked > (int)$unit->timemarked) {
                     $unit->markedby = $markedby;
                     $unit->timemarked = $timemarked;
+                }
+                if ($timesent !== null && $stage === $finalstage) {
+                    $unit->timesent = max((int)$unit->timesent, $timesent);
                 }
             }
         }

@@ -339,6 +339,36 @@ final class writer_test extends \advanced_testcase {
     }
 
     /**
+     * A unit's marks are sent to the hub once assign's workflow reaches Ready for release (HB2): a marked unit
+     * still in review has no time sent; one released has.
+     */
+    public function test_time_sent(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $s1 = $gen->create_and_enrol($course, 'student');
+        $s2 = $gen->create_and_enrol($course, 'student');
+        $teacher = $gen->create_and_enrol($course, 'editingteacher');
+        $a = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() - DAYSECS,
+            'markingworkflow' => 1, 'assignsubmission_onlinetext_enabled' => 1]);
+        $this->ma->tag($a->cmid);
+        $cm = get_fast_modinfo($course)->get_cm($a->cmid);
+        $fixture = $this->ma->fixture('assign');
+        foreach ([$s1, $s2] as $s) {
+            $fixture->submit($cm, $s->id);
+            $fixture->mark($cm, $s->id, $teacher->id);
+        }
+        $fixture->release($cm, $s2->id);
+        (new indexer())->index_cm($a->cmid);
+
+        $units = $DB->get_records(indexer::MARK, ['cmid' => $a->cmid], '', 'unitid, marked, timesent');
+        $this->assertEquals(1, $units[$s1->id]->marked);
+        $this->assertNull($units[$s1->id]->timesent, 'in review: not sent');
+        $this->assertEquals(1, $units[$s2->id]->marked);
+        $this->assertNotEmpty($units[$s2->id]->timesent, 'released: sent');
+    }
+
+    /**
      * No online submission: an activity tagged in-person has no submission state, and every student is a
      * marking unit, marked once the gradebook holds their grade.
      */

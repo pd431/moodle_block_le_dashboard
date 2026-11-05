@@ -234,6 +234,7 @@ class writer {
                 'released' => $row->released ? 1 : 0,
                 'flagged' => $row->flagged,
                 'counted' => $row->counted ? 1 : 0,
+                'timesent' => $row->timesent,
             ];
         }
 
