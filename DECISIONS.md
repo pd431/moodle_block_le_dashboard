@@ -11,7 +11,7 @@ test checklist (2026-10-05, codes carried from rc6); **CS** coursework schema at
 case review (2026-10-03); **F** support map audit fixes (2026-10-06), performance review (2026-10-04) and
 maintainability audit (2026-10-22); **G** workflow gaps review (2026-10-03); **P** rc6 performance review
 (2026-09-30); **PR** production readiness review (2026-10-05); **R** Pierre's answers to the v1 design
-review (2026-10-02).
+review (2026-10-02); **HB** hub dashboard (block_le_hub) scope (2026-11-05).
 
 ## A: dev architecture audit (2026-10-06)
 
@@ -188,6 +188,20 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   answer to Q2).
 - **G13** A reopened attempt not yet resubmitted is Upcoming with Submit and no pill.
 - **G15** Bars whose units are groups say so, since submissions count students.
+
+## HB: hub dashboard, block_le_hub (2026-11-05)
+
+The hub dashboard is a separate block that reads this block's index. What follows is what this block owns for it.
+
+- **HB1** The index holds the facts the hub needs and no hub rule: whether an assessment is marked anonymously
+  (cm.anonymous), whether its marks go through a send-to-hub step (cm.sendstep), and when each unit's marks were
+  sent (mark.timesent). Whose turn it is, and why, is the hub's to say from those columns.
+- **HB2** Assign's send step is its marking workflow: a unit's marks are sent once its final stage is Ready for
+  release or Released. Assign keeps no time for that change, so the grade's last change stands for it; a mark
+  changed after sending therefore moves the time with it, and the hub can't tell the two apart on assign.
+  Coursework has no identified send step yet: sendstep is off and nothing is ever sent there, until Pierre names
+  the column.
+- **HB3** Anonymous marking is the activity's own blind marking setting (assign and coursework blindmarking).
 
 ## P: rc6 performance review (2026-09-30)
 
