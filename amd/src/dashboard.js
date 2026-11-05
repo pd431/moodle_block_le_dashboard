@@ -31,12 +31,7 @@ import Notification from 'core/notification';
 import {getString} from 'core/str';
 import {setUserPreference} from 'core_user/repository';
 import {localise} from './localtime';
-
-/** Milliseconds the pointer rests on a tip trigger before its tip opens, as a tooltip does. */
-const HOVER_DELAY = 500;
-
-/** Milliseconds a hover-opened tip stays after the pointer leaves, to reach a link in it. */
-const HOVER_GRACE = 200;
+import {Tips} from './tips';
 
 const SELECTORS = {
     view: '[data-region="ma-view"]',
@@ -52,30 +47,6 @@ const SELECTORS = {
     filterEmpty: '[data-region="ma-filter-empty"]',
     search: '[data-action="search"]',
     typeButton: '[data-action="filter-type"]',
-};
-
-/** Pixels an open tip keeps from the window's edges. */
-const EDGE = 8;
-
-/**
- * Slides an open tip sideways back into the window when its anchor would put it past an edge, so it
- * stays next to its control at every width (beta23 anchoring check).
- *
- * @param {HTMLElement} tip
- */
-const keepOnScreen = (tip) => {
-    const box = tip.getBoundingClientRect();
-    const width = document.documentElement.clientWidth;
-    let shift = 0;
-    if (box.right > width - EDGE) {
-        shift = width - EDGE - box.right;
-    }
-    if (box.left + shift < EDGE) {
-        shift = EDGE - box.left;
-    }
-    if (shift) {
-        tip.style.transform = `translateX(${Math.round(shift)}px)`;
-    }
 };
 
 /**
@@ -112,24 +83,8 @@ class Dashboard {
         });
         root.addEventListener('input', e => this.input(e));
         root.addEventListener('change', e => this.change(e));
-        root.addEventListener('focusin', e => this.focusin(e));
-        root.addEventListener('focusout', e => this.focusout(e));
-        root.addEventListener('keydown', e => this.keydown(e));
-        root.addEventListener('mouseover', e => this.hoverIn(e));
-        root.addEventListener('mouseout', e => this.hoverOut(e));
-        // Escape with focus outside the block closes a tip a hover opened.
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Escape' && !this.root.contains(e.target)) {
-                this.cancelHover();
-                this.closeTips();
-            }
-        });
-        // Like Moodle's help icons: a click anywhere else closes an open tip.
-        document.addEventListener('click', e => {
-            if (!e.target.closest || !e.target.closest('.ma-tip-wrap')) {
-                this.closeTips();
-            }
-        });
+        // The hint popovers, shared with the Hub dashboard (block_le_dashboard/tips).
+        this.tips = new Tips(root);
         this.apply();
         localise(root).catch(Notification.exception);
     }
@@ -180,11 +135,7 @@ class Dashboard {
         }
         const action = target.dataset.action;
         if (action === 'tip') {
-            this.cancelHover();
-            // A click on a tip a hover opened keeps it open; otherwise it toggles.
-            const open = target.dataset.opened === 'hover' || target.getAttribute('aria-expanded') !== 'true';
-            this.closeTips(target);
-            this.setTip(target, open);
+            this.tips.click(target);
         } else if (action === 'filter-type') {
             this.type = target.dataset.type;
             setUserPreference('block_le_dashboard_type', this.type).catch(Notification.exception);
@@ -241,167 +192,6 @@ class Dashboard {
         } else if (action === 'refresh') {
             this.load('block_le_dashboard_refresh', this.viewKey, this.yearId());
         }
-    }
-
-    /**
-     * The tip a trigger controls.
-     *
-     * @param {HTMLElement} trigger
-     * @returns {HTMLElement|null}
-     */
-    tipFor(trigger) {
-        return document.getElementById(trigger.getAttribute('aria-controls'));
-    }
-
-    /**
-     * Opens or closes one tip.
-     *
-     * @param {HTMLElement} trigger
-     * @param {boolean} open
-     * @param {string} how What opened it: click (or keyboard focus) or hover
-     */
-    setTip(trigger, open, how = 'click') {
-        const tip = this.tipFor(trigger);
-        if (tip) {
-            tip.style.transform = '';
-            tip.hidden = !open;
-            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (open) {
-                trigger.dataset.opened = how;
-                keepOnScreen(tip);
-            } else {
-                delete trigger.dataset.opened;
-            }
-        }
-    }
-
-    /**
-     * The pointer resting on a tip trigger opens its tip after a moment, like a tooltip, unless
-     * another tip was opened on purpose (a click or the keyboard). Moving back into a tip or its
-     * trigger keeps a hover-opened tip open.
-     *
-     * @param {MouseEvent} e
-     */
-    hoverIn(e) {
-        const wrap = e.target.closest('.ma-tip-wrap');
-        // Off, a tip opens only on click or keyboard focus (beta27 hints audit).
-        if (!wrap || this.root.dataset.nohover) {
-            return;
-        }
-        clearTimeout(this.leaveTimer);
-        const trigger = e.target.closest('[data-action="tip"]');
-        if (!trigger || trigger.getAttribute('aria-expanded') === 'true' || this.hoverTrigger === trigger) {
-            return;
-        }
-        this.cancelHover();
-        this.hoverTrigger = trigger;
-        this.hoverTimer = setTimeout(() => {
-            this.hoverTrigger = null;
-            const pinned = this.root.querySelector('[data-action="tip"][aria-expanded="true"]:not([data-opened="hover"])');
-            if (!pinned && trigger.isConnected && trigger.getAttribute('aria-expanded') !== 'true') {
-                this.closeTips(trigger);
-                this.setTip(trigger, true, 'hover');
-            }
-        }, HOVER_DELAY);
-    }
-
-    /**
-     * Leaving a trigger cancels its pending hover; leaving a tip a hover opened, and its trigger,
-     * closes it after a short grace, so the pointer can cross the gap to a link in it.
-     *
-     * @param {MouseEvent} e
-     */
-    hoverOut(e) {
-        const wrap = e.target.closest('.ma-tip-wrap');
-        if (!wrap || (e.relatedTarget && wrap.contains(e.relatedTarget))) {
-            return;
-        }
-        if (this.hoverTrigger && wrap.contains(this.hoverTrigger)) {
-            this.cancelHover();
-        }
-        const trigger = wrap.querySelector('[data-action="tip"][data-opened="hover"]');
-        if (trigger) {
-            clearTimeout(this.leaveTimer);
-            this.leaveTimer = setTimeout(() => {
-                if (trigger.dataset.opened === 'hover') {
-                    this.setTip(trigger, false);
-                }
-            }, HOVER_GRACE);
-        }
-    }
-
-    /**
-     * Cancels a hover that hasn't opened its tip yet.
-     */
-    cancelHover() {
-        clearTimeout(this.hoverTimer);
-        this.hoverTrigger = null;
-    }
-
-    /**
-     * Closes every open tip, except the one a trigger controls.
-     *
-     * @param {HTMLElement|null} except
-     */
-    closeTips(except = null) {
-        this.root.querySelectorAll('[data-action="tip"][aria-expanded="true"]').forEach(trigger => {
-            if (trigger !== except) {
-                this.setTip(trigger, false);
-            }
-        });
-    }
-
-    /**
-     * Keyboard focus on a tip trigger opens its tip (a mouse click is handled by click()).
-     *
-     * @param {FocusEvent} e
-     */
-    focusin(e) {
-        const trigger = e.target.closest('[data-action="tip"]');
-        if (trigger && trigger.matches(':focus-visible') && trigger !== this.escaped) {
-            this.closeTips(trigger);
-            this.setTip(trigger, true);
-        }
-    }
-
-    /**
-     * A tip closes when focus leaves both its trigger and the tip itself.
-     *
-     * @param {FocusEvent} e
-     */
-    focusout(e) {
-        const wrap = e.target.closest('.ma-tip-wrap');
-        if (wrap && !(e.relatedTarget && wrap.contains(e.relatedTarget))) {
-            const trigger = wrap.querySelector('[data-action="tip"]');
-            if (trigger) {
-                this.setTip(trigger, false);
-            }
-        }
-    }
-
-    /**
-     * Escape closes an open tip and returns focus to its trigger.
-     *
-     * @param {KeyboardEvent} e
-     */
-    keydown(e) {
-        if (e.key !== 'Escape') {
-            return;
-        }
-        const wrap = e.target.closest('.ma-tip-wrap');
-        const trigger = wrap ? wrap.querySelector('[data-action="tip"][aria-expanded="true"]') : null;
-        if (!trigger) {
-            // Focus is elsewhere (a tip a hover opened): close whatever is open.
-            this.cancelHover();
-            this.closeTips();
-            return;
-        }
-        this.setTip(trigger, false);
-        // Focus goes back to the trigger without reopening the tip.
-        this.escaped = trigger;
-        trigger.focus();
-        this.escaped = null;
-        e.preventDefault();
     }
 
     /**
