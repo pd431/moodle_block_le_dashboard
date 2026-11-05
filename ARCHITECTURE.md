@@ -39,7 +39,7 @@ Each line is a concern, the one file that owns it, and the test that fails when 
 | Shared adapter mechanics: gradebook release, group membership, overrides, chunking | `adapter/base.php` | |
 | Which adapter serves which type; which types the site enables | `adapter/registry.php` | |
 | Who is in a course (students, markers, enrol start, availability) | `index/enrolment.php` | `enrolment_test` |
-| Writing one assessment to the three tables, and the transaction, locks and retries around it; the latest deadline any student has (`cm.latestdue`); whether a mark counts and a student is expected, from the adapter's rows | `index/writer.php` | `writer_test` |
+| Writing one assessment to the three tables, and the transaction, locks and retries around it; the latest deadline any student has (`cm.latestdue`); whether a mark counts and a student is expected, from the adapter's rows; the hub's facts (`cm.anonymous`, `cm.sendstep`, `mark.timesent`), which the adapters supply and block_le_hub reads (HB1) | `index/writer.php` | `writer_test` |
 | Background re-indexes: what is queued, how it coalesces, when it runs | `index/queue.php` | `queue_test` |
 | The timed walk over courses that carries on where it stopped | `index/pass.php` | `pass_test` |
 | The one entry point callers use for any index operation | `index/indexer.php` (facade only, no rules) | `indexer_test` |

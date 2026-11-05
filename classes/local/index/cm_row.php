@@ -38,6 +38,9 @@ final class cm_row {
      *                          tagged as done in person: every student is ready to mark at the deadline.
      * @param bool $releases Whether grades are ever released to students. False: the adapter reports a
      *                       fully marked unit as released, and students see it finished with no grade (F10).
+     * @param bool $anonymous Whether marking is anonymous (blind marking) (HB3).
+     * @param bool $sendstep Whether marks pass through a send-to-hub step before release, so that
+     *                       marking_row::$timesent means something here (HB1, HB2).
      */
     public function __construct(
         /** @var int|null When submissions open. */
@@ -56,6 +59,10 @@ final class cm_row {
         public bool $submissions = true,
         /** @var bool Whether grades are ever released to students here (false: a quiz that never shows marks). */
         public bool $releases = true,
+        /** @var bool Anonymous (blind) marking. */
+        public bool $anonymous = false,
+        /** @var bool Marks go through a send-to-hub step. */
+        public bool $sendstep = false,
     ) {
     }
 }

@@ -58,6 +58,8 @@ final class marking_row {
      * @param int $flagged A FLAG_ constant: the unit's academic conduct (plagiarism) check.
      * @param bool $counted Whether the unit is in the marking counts. Withheld work and exempt or deferred students
      *                      are not (CS3); their rows are kept so the flag hint still counts them.
+     * @param int|null $timesent When the unit's marks were sent to the hub, when the activity has such a step
+     *                           (cm_row::$sendstep) and the unit has passed it (HB1, HB2). Null otherwise.
      */
     public function __construct(
         /** @var int User or group id. */
@@ -86,6 +88,8 @@ final class marking_row {
         public int $flagged = self::FLAG_NONE,
         /** @var bool In the marking counts. */
         public bool $counted = true,
+        /** @var int|null When the marks were sent to the hub. */
+        public ?int $timesent = null,
     ) {
     }
 }

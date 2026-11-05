@@ -43,6 +43,9 @@ class assign extends base {
     /** Workflow states that mean this stage's marking is done. */
     const MARKED_STATES = ['readyforreview', 'inreview', 'readyforrelease', 'released'];
 
+    /** Workflow states past the send step: the marks have gone to the hub (HB2). */
+    const SENT_STATES = ['readyforrelease', 'released'];
+
     #[\Override]
     public function modname(): string {
         return 'assign';
@@ -101,6 +104,9 @@ class assign extends base {
             hasallocation: !empty($a->markingworkflow) && !empty($a->markingallocation),
             stages: $stages,
             submissions: self::submissions_enabled($a),
+            anonymous: !empty($a->blindmarking),
+            // The marking workflow is assign's send step: Ready for release says the marks have gone (HB2).
+            sendstep: !empty($a->markingworkflow),
         );
     }
 
@@ -340,6 +346,7 @@ class assign extends base {
 
         // One unit per submission and stage: the group for team submissions, else the student.
         $units = [];
+        $finalstage = end($cmrow->stages);
         foreach ($submissions as $userid => $s) {
             $isgroup = !empty($a->teamsubmission) && !empty($s->groupid);
             // Only a grade on this attempt counts: a reopened attempt starts unmarked.
@@ -353,6 +360,11 @@ class assign extends base {
                 $final = $final && in_array($flags[$userid]->workflowstate ?? '', self::MARKED_STATES);
             }
             $allocated = $allocations[$userid] ?? [];
+            // Sent once the final stage is ready for release, marked or not: the state can be set without a grade,
+            // which is the "sent before marking finished" case. Assign keeps no time for the change, so the grade's
+            // last change stands for it, or the submission's when there is no grade yet (HB2).
+            $timesent = $a->markingworkflow && in_array($flags[$userid]->workflowstate ?? '', self::SENT_STATES)
+                ? (int)(($grades[$userid] ?? null)?->timemodified ?: $s->timemodified) : null;
             $stages = [];
             $submitted = (int)$s->timemodified ?: null;
             if ($markers === 1) {
@@ -394,6 +406,7 @@ class assign extends base {
                         timemarked: $timemarked,
                         released: isset($released[$userid]),
                         timeready: $timeready,
+                        timesent: $stage === $finalstage ? $timesent : null,
                     );
                     continue;
                 }
@@ -407,6 +420,9 @@ class assign extends base {
                 if ($marked && $timemarked > (int)$unit->timemarked) {
                     $unit->markedby = $markedby;
                     $unit->timemarked = $timemarked;
+                }
+                if ($timesent !== null && $stage === $finalstage) {
+                    $unit->timesent = max((int)$unit->timesent, $timesent);
                 }
             }
         }

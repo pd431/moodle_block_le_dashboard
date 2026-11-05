@@ -68,6 +68,7 @@ class provider implements
             'allocatedto' => 'privacy:metadata:mark:allocatedto',
             'markedby' => 'privacy:metadata:mark:markedby',
             'timemarked' => 'privacy:metadata:mark:timemarked',
+            'timesent' => 'privacy:metadata:mark:timesent',
             'timeready' => 'privacy:metadata:mark:timeready',
             'unitdue' => 'privacy:metadata:mark:unitdue',
             'flagged' => 'privacy:metadata:mark:flagged',
@@ -161,7 +162,7 @@ class provider implements
                 "(unitid = :u1 AND unittype = 'user') OR allocatedto = :u2 OR markedby = :u3",
                 ['u1' => $userid, 'u2' => $userid, 'u3' => $userid],
                 '',
-                'id, cmid, stage, allocatedto, marked, markedby, timemarked, flagged'
+                'id, cmid, stage, allocatedto, marked, markedby, timemarked, timesent, flagged'
             ));
             // Students allocated to this person as marker, counted per assessment.
             $allocated = array_values($DB->get_records_sql(
