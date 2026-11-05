@@ -128,6 +128,9 @@ class coursework extends base {
             hasallocation: !empty($cw->allocationenabled) && self::has_assessor_pairs((int)$cw->id),
             stages: array_keys(self::stage_map($cw, self::marks_entry_only((int)$cw->id))),
             submissions: !self::marks_entry_only((int)$cw->id),
+            anonymous: !empty($cw->blindmarking),
+            // No send-to-hub step identified in coursework yet (HB2).
+            sendstep: false,
         );
     }
 

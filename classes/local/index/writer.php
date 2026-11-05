@@ -352,6 +352,8 @@ class writer {
             'stages' => $cmrow ? implode(',', $cmrow->stages) : '',
             'nosubmission' => !$cmrow || $cmrow->submissions ? 0 : 1,
             'norelease' => !$cmrow || $cmrow->releases ? 0 : 1,
+            'anonymous' => $cmrow && $cmrow->anonymous ? 1 : 0,
+            'sendstep' => $cmrow && $cmrow->sendstep ? 1 : 0,
             'setup' => $cmrow ? (implode(',', self::setup_problems($cm, $cmrow, $type)) ?: null) : null,
             'loaderror' => $loaderror ? 1 : 0,
             'timeindexed' => $this->now ?? time(),

@@ -315,6 +315,30 @@ final class writer_test extends \advanced_testcase {
     }
 
     /**
+     * The hub's facts on the assessment row (HB1): anonymous marking is the activity's blind marking, and assign's
+     * marking workflow is its send step (HB2, HB3). Neither is on by default.
+     */
+    public function test_anonymous_and_send_step(): void {
+        global $DB;
+        $gen = $this->getDataGenerator();
+        $course = $gen->create_course();
+        $gen->create_and_enrol($course, 'student');
+        $plain = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS]);
+        $blind = $gen->create_module('assign', ['course' => $course->id, 'duedate' => time() + DAYSECS,
+            'blindmarking' => 1, 'markingworkflow' => 1]);
+        $this->ma->tag($plain->cmid);
+        $this->ma->tag($blind->cmid);
+        (new indexer())->index_cms([$plain->cmid, $blind->cmid]);
+
+        $row = $DB->get_record(indexer::CM, ['cmid' => $plain->cmid]);
+        $this->assertEquals(0, $row->anonymous);
+        $this->assertEquals(0, $row->sendstep);
+        $row = $DB->get_record(indexer::CM, ['cmid' => $blind->cmid]);
+        $this->assertEquals(1, $row->anonymous);
+        $this->assertEquals(1, $row->sendstep);
+    }
+
+    /**
      * No online submission: an activity tagged in-person has no submission state, and every student is a
      * marking unit, marked once the gradebook holds their grade.
      */

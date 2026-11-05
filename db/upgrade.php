@@ -134,5 +134,21 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026102802, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026110500) {
+        // The hub dashboard reads whether marking is anonymous and whether marks go through a send step
+        // (HB1): re-index.
+        $table = new xmldb_table('block_le_dashboard_cm');
+        $field = new xmldb_field('anonymous', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'norelease');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        $field = new xmldb_field('sendstep', XMLDB_TYPE_INTEGER, '1', null, XMLDB_NOTNULL, null, '0', 'anonymous');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026110500, 'le_dashboard', 'block');
+    }
+
     return true;
 }

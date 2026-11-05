@@ -101,6 +101,9 @@ class assign extends base {
             hasallocation: !empty($a->markingworkflow) && !empty($a->markingallocation),
             stages: $stages,
             submissions: self::submissions_enabled($a),
+            anonymous: !empty($a->blindmarking),
+            // The marking workflow is assign's send step: Ready for release says the marks have gone (HB2).
+            sendstep: !empty($a->markingworkflow),
         );
     }
 
