@@ -197,8 +197,10 @@ The hub dashboard is a separate block that reads this block's index. What follow
   (cm.anonymous), whether its marks go through a send-to-hub step (cm.sendstep), and when each unit's marks were
   sent (mark.timesent). Whose turn it is, and why, is the hub's to say from those columns.
 - **HB2** Assign's send step is its marking workflow: a unit's marks are sent once its final stage is Ready for
-  release or Released. Assign keeps no time for that change, so the grade's last change stands for it; a mark
-  changed after sending therefore moves the time with it, and the hub can't tell the two apart on assign.
+  release or Released, whether or not a grade has been entered (the state can be set in bulk before marking, which
+  is exactly what the hub chases as sent before marking finished). Assign keeps no time for that change, so the
+  grade's last change stands for it, or the submission's time when there is no grade; a mark changed after sending
+  therefore moves the time with it, and the hub can't tell the two apart on assign.
   Coursework has no identified send step yet: sendstep is off and nothing is ever sent there, until Pierre names
   the column.
 - **HB3** Anonymous marking is the activity's own blind marking setting (assign and coursework blindmarking).

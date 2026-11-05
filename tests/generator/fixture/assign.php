@@ -54,7 +54,8 @@ final class assign extends base {
             'assignsubmission_file_filetypes' => '',
             'gradingduedate' => preg_match('/marking deadline "([^"]*)"/', $opts, $m) ? phrases::time($m[1]) : 0,
             'markingworkflow' => $allocation || str_contains($opts, 'marking workflow') ? 1 : 0,
-            'markingallocation' => $allocation ? 1 : 0];
+            'markingallocation' => $allocation ? 1 : 0,
+            'blindmarking' => str_contains($opts, 'anonymous marking') ? 1 : 0];
         if (str_contains($opts, 'team submission')) {
             $record += ['teamsubmission' => 1, 'requireallteammemberssubmit' => 0, 'preventsubmissionnotingroup' => 0];
             // Teams from one grouping, so a student's other groups (an extension group) aren't teams.

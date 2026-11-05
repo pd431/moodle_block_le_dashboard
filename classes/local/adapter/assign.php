@@ -360,10 +360,11 @@ class assign extends base {
                 $final = $final && in_array($flags[$userid]->workflowstate ?? '', self::MARKED_STATES);
             }
             $allocated = $allocations[$userid] ?? [];
-            // Sent once the final stage is ready for release; assign keeps no time for the change, so the
-            // grade's last change stands for it (HB2).
-            $timesent = $final && $a->markingworkflow && $grade
-                && in_array($flags[$userid]->workflowstate ?? '', self::SENT_STATES) ? (int)$grade->timemodified : null;
+            // Sent once the final stage is ready for release, marked or not: the state can be set without a grade,
+            // which is the "sent before marking finished" case. Assign keeps no time for the change, so the grade's
+            // last change stands for it, or the submission's when there is no grade yet (HB2).
+            $timesent = $a->markingworkflow && in_array($flags[$userid]->workflowstate ?? '', self::SENT_STATES)
+                ? (int)(($grades[$userid] ?? null)?->timemodified ?: $s->timemodified) : null;
             $stages = [];
             $submitted = (int)$s->timemodified ?: null;
             if ($markers === 1) {
