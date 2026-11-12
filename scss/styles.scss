@@ -300,8 +300,9 @@ $ma-state-tones: (
     // Moodle 5.3's dark colour mode: Boost sets data-bs-theme="dark" on the
     // html tag, and switches it in place when the user picks a mode. Boost's
     // card, list rows and inputs go dark under the block, so every colour
-    // the block sets itself is re-pointed here. Moodle 4.5 and 5.2 never set
-    // the attribute.
+    // the block sets itself is re-pointed here. Before 5.3 Moodle never sets
+    // the attribute itself, but a plugin can (local_accessibility's dark
+    // schemes do), and the block then goes dark with it.
     @at-root [data-bs-theme="dark"] & {
         // Body text is the block card's (below). Muted is the darkest grey
         // that keeps APCA Lc 75 on Boost's dark card (#343a40) and page
