@@ -241,6 +241,11 @@ abstract class base implements fixture {
     }
 
     #[\Override]
+    public function reallocate(\cm_info $cm, int $userid, int $fromid, int $toid): void {
+        $this->unsupported('Reallocating through');
+    }
+
+    #[\Override]
     public function attempts(\cm_info $cm, int $userid, int $count): void {
         $this->unsupported('Attempts at');
     }

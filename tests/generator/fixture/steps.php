@@ -1804,6 +1804,19 @@ final class steps {
     }
 
     /**
+     * Moves a submission from one marker to another through the activity itself: only its events tell the index.
+     *
+     * @param string $student
+     * @param string $name
+     * @param string $from
+     * @param string $to
+     */
+    public function the_submission_is_reallocated(string $student, string $name, string $from, string $to): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->reallocate($cm, self::userid($student), self::userid($from), self::userid($to));
+    }
+
+    /**
      * Turns off marks in every review option of a quiz.
      *
      * @param string $name

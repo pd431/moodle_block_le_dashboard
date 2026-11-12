@@ -3427,6 +3427,19 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Moves a submission from one marker to another through the activity itself: only its events tell the index.
+     *
+     * @When /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is reallocated from "(?P<from>[^"]*)" to "(?P<to>[^"]*)" through the assignment$/
+     * @param string $student
+     * @param string $name
+     * @param string $from
+     * @param string $to
+     */
+    public function the_submission_is_reallocated(string $student, string $name, string $from, string $to): void {
+        self::skipping(fn() => steps::instance()->the_submission_is_reallocated($student, $name, $from, $to));
+    }
+
+    /**
      * Turns off marks in every review option of a quiz.
      *
      * @Given /^the review options of "(?P<name>[^"]*)" never show marks$/

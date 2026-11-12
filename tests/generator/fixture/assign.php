@@ -242,6 +242,23 @@ final class assign extends base {
     }
 
     #[\Override]
+    public function reallocate(\cm_info $cm, int $userid, int $fromid, int $toid): void {
+        $assign = self::instance($cm);
+        if (!method_exists($assign, 'update_marker_allocations')) {
+            throw new unavailable('Reallocating a marker through the assignment needs Moodle 5.3');
+        }
+        self::as_user(get_admin()->id, function () use ($assign, $userid, $fromid, $toid) {
+            foreach ($assign->get_marker_allocations($userid) as $position => $allocation) {
+                if ((int)$allocation->marker === $fromid) {
+                    $assign->update_marker_allocations($userid, [$position => [$toid, $allocation->enabled]]);
+                    return;
+                }
+            }
+            throw new \coding_exception("User $fromid is not a marker of user $userid");
+        });
+    }
+
+    #[\Override]
     public function release(\cm_info $cm, int $userid): void {
         global $DB;
         $assign = self::instance($cm);

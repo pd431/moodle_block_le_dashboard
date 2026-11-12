@@ -165,4 +165,43 @@ final class optional_markers_test extends view_testcase {
         $this->step('And "A1" should appear in the "Marking in progress" section with "1" to mark');
     }
 
+    /**
+     * A marker reallocated through the assignment sees the work without waiting for the nightly check
+     */
+    public function test_a_marker_reallocated_through_the_assignment_sees_the_work_without_waiting_for_the_nightly_check(): void {
+        $this->step('Given the site runs Moodle 5.3 or later');
+        $this->step('And the following "courses" exist:', [
+            ['fullname' => 'Module 1', 'shortname' => 'M1'],
+        ]);
+        $this->step('And the following "users" exist:', [
+            ['username' => 'student1', 'firstname' => 'Sam', 'lastname' => 'Student'],
+            ['username' => 'marker1', 'firstname' => 'Mo', 'lastname' => 'Marker'],
+            ['username' => 'marker2', 'firstname' => 'Max', 'lastname' => 'Marker'],
+            ['username' => 'marker3', 'firstname' => 'Meg', 'lastname' => 'Marker'],
+            ['username' => 'convenor', 'firstname' => 'Cat', 'lastname' => 'Convenor'],
+        ]);
+        $this->step('And the following "course enrolments" exist:', [
+            ['user' => 'student1', 'course' => 'M1', 'role' => 'student'],
+            ['user' => 'marker1', 'course' => 'M1', 'role' => 'teacher'],
+            ['user' => 'marker2', 'course' => 'M1', 'role' => 'teacher'],
+            ['user' => 'marker3', 'course' => 'M1', 'role' => 'teacher'],
+            ['user' => 'convenor', 'course' => 'M1', 'role' => 'moduleconvenor'],
+        ]);
+        $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
+            . '"formative"');
+        $this->step('And the My assessments block treats "moduleconvenor" as a module convenor role');
+        $this->step('And a summative "assign" "A1" in "M1" with marker allocation, 2 markers, 1 optional marker and '
+            . 'manual agreement was due "3 days ago"');
+        $this->step('And "student1" has submitted "A1"');
+        $this->step('And the submission of "student1" for "A1" is allocated to "marker1"');
+        $this->step('And the submission of "student1" for "A1" has "marker3" as its optional marker');
+        $this->step('And the submission of "student1" for "A1" is allocated to "marker1" and "marker2"');
+        $this->step('Given the optional marker of "student1" on "A1" is switched off');
+        $this->step('And the My assessments index is up to date');
+        $this->step('When the submission of "student1" for "A1" is reallocated from "marker2" to "marker3" through the '
+            . 'assignment');
+        $this->step('And the My assessments index catches up');
+        $this->step('And I log in as "marker3" and view the "My marking"');
+        $this->step('Then "A1" should appear in the "Marking in progress" section with "1" to mark');
+    }
 }

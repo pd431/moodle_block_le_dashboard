@@ -260,6 +260,17 @@ interface fixture {
     public function optional_marker_off(\cm_info $cm, int $userid): void;
 
     /**
+     * Moves a student's marking from one marker to another through the activity's own screens, firing its events;
+     * nothing is queued, so the dashboard shows only what the block's observer did.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $fromid
+     * @param int $toid
+     */
+    public function reallocate(\cm_info $cm, int $userid, int $fromid, int $toid): void;
+
+    /**
      * Finished attempts (a quiz), answering its question each time.
      *
      * @param \cm_info $cm

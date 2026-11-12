@@ -52,6 +52,13 @@ class assign extends base {
     /** Workflow states past the send step: the marks have gone to the hub (HB2). */
     const SENT_STATES = ['readyforrelease', 'released'];
 
+    /** @var string[] Moodle 5.3 reports an allocation with these, in place of marker_updated (MV3). */
+    const LATER_EVENTS = [
+        '\mod_assign\event\marker_added',
+        '\mod_assign\event\marker_removed',
+        '\mod_assign\event\marker_enabled_updated',
+    ];
+
     #[\Override]
     public function modname(): string {
         return 'assign';
@@ -69,6 +76,7 @@ class assign extends base {
             '\mod_assign\event\submission_unlocked',
             '\mod_assign\event\extension_granted',
             '\mod_assign\event\marker_updated',
+            ...self::LATER_EVENTS,
             '\mod_assign\event\workflow_state_updated',
             '\mod_assign\event\user_override_created',
             '\mod_assign\event\user_override_updated',
