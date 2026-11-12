@@ -3440,6 +3440,16 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Deletes a course the way a site with asynchronous course deletion does.
+     *
+     * @When /^"(?P<course>[^"]*)" is queued for deletion$/
+     * @param string $shortname
+     */
+    public function the_course_is_queued_for_deletion(string $shortname): void {
+        self::skipping(fn() => steps::instance()->the_course_is_queued_for_deletion($shortname));
+    }
+
+    /**
      * Turns off marks in every review option of a quiz.
      *
      * @Given /^the review options of "(?P<name>[^"]*)" never show marks$/

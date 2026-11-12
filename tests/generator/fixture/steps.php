@@ -1817,6 +1817,24 @@ final class steps {
     }
 
     /**
+     * Deletes a course the way a site with asynchronous course deletion does: hidden and flagged at once, its
+     * contents left for cron.
+     *
+     * @param string $shortname
+     */
+    public function the_course_is_queued_for_deletion(string $shortname): void {
+        global $DB;
+        if (!$DB->get_manager()->field_exists('course', 'deletioninprogress')) {
+            throw new unavailable('Queueing a course for deletion needs Moodle 5.3');
+        }
+        set_config('enablecourseasyncdeletion', 1, 'moodlecourse');
+        delete_course(self::course($shortname), false, true);
+        if (!$DB->get_field('course', 'deletioninprogress', ['shortname' => $shortname])) {
+            throw new coding_exception("'$shortname' was not queued for deletion");
+        }
+    }
+
+    /**
      * Turns off marks in every review option of a quiz.
      *
      * @param string $name

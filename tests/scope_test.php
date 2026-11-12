@@ -63,6 +63,31 @@ final class scope_test extends \advanced_testcase {
     }
 
     /**
+     * A course queued for deletion is no longer one of a member of staff's courses (MV4).
+     */
+    public function test_course_queued_for_deletion(): void {
+        global $DB;
+        if (!$DB->get_manager()->field_exists('course', 'deletioninprogress')) {
+            $this->markTestSkipped('Courses are queued for deletion from Moodle 5.3');
+        }
+        $this->resetAfterTest();
+        $gen = $this->getDataGenerator();
+        $gen->get_plugin_generator('block_le_dashboard')->configure(['assign']);
+        $user = $gen->create_user();
+        $kept = $gen->create_course();
+        $queued = $gen->create_course();
+        $gen->enrol_user($user->id, $kept->id, 'editingteacher');
+        $gen->enrol_user($user->id, $queued->id, 'editingteacher');
+        $roleids = [(int)$DB->get_field('role', 'id', ['shortname' => 'editingteacher'])];
+        $this->assertEqualsCanonicalizing([(int)$kept->id, (int)$queued->id], scope::courses_with_roles($user->id, $roleids));
+
+        set_config('enablecourseasyncdeletion', 1, 'moodlecourse');
+        delete_course($queued, false, true);
+        local\memo::reset();
+        $this->assertSame([(int)$kept->id], scope::courses_with_roles($user->id, $roleids));
+    }
+
+    /**
      * A staff role in a course whose enrolment has ended does not count.
      */
     public function test_ended_staff_enrolment(): void {
