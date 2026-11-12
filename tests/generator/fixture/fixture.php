@@ -234,6 +234,15 @@ interface fixture {
     public function override(\cm_info $cm, int $userid, int $due): void;
 
     /**
+     * A per-student override of the due date alone, where the type has one apart from its close (a quiz on Moodle 5.3+).
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $due
+     */
+    public function override_due(\cm_info $cm, int $userid, int $due): void;
+
+    /**
      * Finished attempts (a quiz), answering its question each time.
      *
      * @param \cm_info $cm

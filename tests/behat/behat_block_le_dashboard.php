@@ -247,6 +247,30 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Creates and tags an assessment that closes apart from its due date, or never closes (a quiz on Moodle 5.3+).
+     *
+     * @Given /^a (?P<tag>\w+) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) is due "(?P<due>[^"]*)" and (?P<close>closes "[^"]*"|never closes)$/
+     * @param string $tag
+     * @param string $modname
+     * @param string $name
+     * @param string $course
+     * @param string $opts
+     * @param string $due
+     * @param string $close
+     */
+    public function an_assessment_is_due_and_closes(
+        string $tag,
+        string $modname,
+        string $name,
+        string $course,
+        string $opts,
+        string $due,
+        string $close
+    ): void {
+        self::skipping(fn() => steps::instance()->an_assessment_is_due_and_closes($tag, $modname, $name, $course, $opts, $due, $close));
+    }
+
+    /**
      * Creates and tags an assessment with no due date.
      *
      * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)" with no due date(?P<opts> and no grade)? exists$/
@@ -3011,7 +3035,7 @@ class behat_block_le_dashboard extends behat_base {
     /**
      * Skips the scenario unless the site runs that Moodle version.
      *
-     * @Given /^the site runs Moodle (?P<version>4\.5|5\.0 or later)$/
+     * @Given /^the site runs Moodle (?P<version>4\.5|5\.0 or later|5\.3 or later)$/
      * @param string $version
      */
     public function the_site_runs_moodle(string $version): void {
@@ -3365,6 +3389,18 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function has_a_quiz_override(string $username, string $name, string $when): void {
         steps::instance()->has_a_quiz_override($username, $name, $when);
+    }
+
+    /**
+     * A quiz override that moves one student's due date, leaving the close alone (Moodle 5.3+).
+     *
+     * @Given /^"(?P<user>[^"]*)" has a quiz override on "(?P<name>[^"]*)" due "(?P<when>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function has_a_quiz_override_due(string $username, string $name, string $when): void {
+        self::skipping(fn() => steps::instance()->has_a_quiz_override_due($username, $name, $when));
     }
 
     /**

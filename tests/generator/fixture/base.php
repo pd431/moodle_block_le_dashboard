@@ -226,6 +226,11 @@ abstract class base implements fixture {
     }
 
     #[\Override]
+    public function override_due(\cm_info $cm, int $userid, int $due): void {
+        $this->unsupported('A due date override on');
+    }
+
+    #[\Override]
     public function attempts(\cm_info $cm, int $userid, int $count): void {
         $this->unsupported('Attempts at');
     }
