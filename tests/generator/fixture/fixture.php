@@ -234,6 +234,43 @@ interface fixture {
     public function override(\cm_info $cm, int $userid, int $due): void;
 
     /**
+     * A per-student override of the due date alone, where the type has one apart from its close (a quiz on Moodle 5.3+).
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $due
+     */
+    public function override_due(\cm_info $cm, int $userid, int $due): void;
+
+    /**
+     * Gives a student's submission an optional marker, switched on (assign on Moodle 5.3+).
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $markerid
+     */
+    public function optional_marker(\cm_info $cm, int $userid, int $markerid): void;
+
+    /**
+     * Switches a student's optional markers off.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     */
+    public function optional_marker_off(\cm_info $cm, int $userid): void;
+
+    /**
+     * Moves a student's marking from one marker to another through the activity's own screens, firing its events;
+     * nothing is queued, so the dashboard shows only what the block's observer did.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $fromid
+     * @param int $toid
+     */
+    public function reallocate(\cm_info $cm, int $userid, int $fromid, int $toid): void;
+
+    /**
      * Finished attempts (a quiz), answering its question each time.
      *
      * @param \cm_info $cm

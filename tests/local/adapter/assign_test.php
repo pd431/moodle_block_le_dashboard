@@ -293,4 +293,46 @@ final class assign_test extends \advanced_testcase {
         $this->assertSame((int)$m1->id, $units['agreed']->allocatedto, 'G8: agreement goes to the first allocated marker');
         $this->assertFalse($units['agreed']->submitted, 'Agreement waits for every marker.');
     }
+
+    /**
+     * Allocation rows and the stage each marker has, as assign::get_marker_allocations() places them (MV2).
+     *
+     * @return array
+     */
+    public static function positions_provider(): array {
+        return [
+            'required markers in id order' => [[[5, 0, null], [6, 0, null]], 2, [1 => 5, 2 => 6]],
+            'an optional marker allocated before the second required one' => [
+                [[5, 0, null], [7, 1, 1], [6, 0, null]], 2, [1 => 5, 2 => 6, 3 => 7]],
+            'an optional marker with one required marker still missing' => [[[5, 0, null], [7, 1, 1]], 2, [1 => 5, 3 => 7]],
+            'an optional marker switched off' => [[[5, 0, null], [6, 0, null], [7, 1, 0]], 2, [1 => 5, 2 => 6]],
+            'an optional marker switched on, nobody chosen yet' => [
+                [[5, 0, null], [6, 0, null], [0, 1, 1]], 2, [1 => 5, 2 => 6, 3 => null]],
+            'two optional markers, the first switched off' => [
+                [[5, 0, null], [7, 1, 0], [8, 1, 1]], 1, [1 => 5, 2 => 8]],
+            'before optional markers: rows carry neither column' => [[[5], [6]], 2, [1 => 5, 2 => 6]],
+        ];
+    }
+
+    /**
+     * Required markers come first whatever order they were allocated in, optional ones after them, and an
+     * optional marker who is switched off has no stage.
+     *
+     * @dataProvider positions_provider
+     * @param array $rows Each [marker, optional, enabled] in id order.
+     * @param int $required
+     * @param array $expected
+     */
+    public function test_positions(array $rows, int $required, array $expected): void {
+        $allocations = [];
+        foreach ($rows as $row) {
+            $allocation = (object)['marker' => $row[0]];
+            if (count($row) > 1) {
+                $allocation->optional = $row[1];
+                $allocation->enabled = $row[2];
+            }
+            $allocations[] = $allocation;
+        }
+        $this->assertSame($expected, assign::positions($allocations, $required));
+    }
 }

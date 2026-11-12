@@ -69,6 +69,9 @@ class scope {
             $yearsql = 'AND ' . self::year_sql('c');
             $params += self::year_params($year);
         }
+        // A course queued for deletion is gone for staff from that moment, not from when cron deletes it (MV4).
+        // The flag is empty, not 0, on a course that was never queued.
+        $live = self::course_deletion_flag() ? 'AND COALESCE(c.deletioninprogress, 0) = 0' : '';
         // Role at course level, or at a category or system context above it.
         $sql = "SELECT DISTINCT c.id
                   FROM {course} c
@@ -80,8 +83,18 @@ class scope {
                        AND ue.timestart <= :now1 AND (ue.timeend = 0 OR ue.timeend > :now2)
                  WHERE c.id <> :siteid
                    AND (rctx.id = ctx.id OR ctx.path LIKE " . $DB->sql_concat('rctx.path', "'/%'") . ")
-                       $yearsql";
+                       $yearsql $live";
         return array_map('intval', $DB->get_fieldset_sql($sql, $params));
+    }
+
+    /**
+     * Whether courses carry a "being deleted" flag (Moodle 5.3+, where a course can be deleted in the background).
+     *
+     * @return bool
+     */
+    protected static function course_deletion_flag(): bool {
+        global $DB;
+        return memo::get('scope:coursedeletionflag', fn() => $DB->get_manager()->field_exists('course', 'deletioninprogress'));
     }
 
     /**

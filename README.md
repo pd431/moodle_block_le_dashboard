@@ -18,9 +18,10 @@ A different mitigation provider could be inserted in the code if desired. Withou
 
 ## Requirements
 
-- Moodle 4.5+ and 5.2+. The process is setup to run automated testing on currently supported LTS releases.
-- Tested with PostgreSQL and MariaDB
+- Moodle 4.5+ and 5.3+. The process is setup to run automated testing on currently supported LTS releases.
+- Tested with PostgreSQL and MariaDB (16 and 10.11 on Moodle 4.5; 17 and 11.4 on Moodle 5.3, which needs them)
 - Assign's marking workflows are supported from 5.2 onwards. The same release supports both 4.5 and 5+, as it checks the database schemas, not the moodle version when building the adapters.
+- On Moodle 5.3, a quiz's due date is its deadline and its close date the cut-off, optional assignment markers are counted as Moodle counts them, and a course queued for deletion leaves the staff views at once.
 - Cron must run. To avoid hammering the database with frequent and redundant query, block_le_dashboard maintains its own index of all assessment data. Edits and changes in activities trigger ad-hoc tasks, missed items get reconciled overnight.
 
 ## Install
@@ -107,7 +108,13 @@ allowed.
   a change that means to alter what a view shows rewrites it with `GOLDEN_MASTER_WRITE=1`.
 - The test seams (fault points, the Behat clock, the block_rhb stand-in) are all in
   `classes/local/testing.php`; outside a test run they do nothing.
-- CI: `.github/workflows/ci.yml` runs moodle-plugin-ci on Moodle 4.5 and 5.2 with PostgreSQL and
+- CI: `.github/workflows/ci.yml` runs moodle-plugin-ci on Moodle 4.5 and 5.3 with PostgreSQL and
   MariaDB.
 - Behat: `--tags @block_le_dashboard`. Scenarios that need mod_coursework skip on sites without
   it. The `*-assign.feature` files run the same coursework rules with Assignment instead.
+
+## Releasing
+
+Work goes on a branch (`betaN`), where CI runs on every push. When CI is green, the branch is pushed to `main`;
+nothing goes to `main` red. Each build on `main` is tagged `v<release>` from `version.php` by
+`.github/workflows/tag.yml`, which never moves a tag: a broken tagged build gets a new beta, not a rewritten one.

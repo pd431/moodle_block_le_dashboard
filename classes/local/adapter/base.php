@@ -34,6 +34,9 @@ abstract class base implements adapter {
     /** Columns of the activity's own table that the adapter reads. */
     const INSTANCE_FIELDS = '*';
 
+    /** @var string[] Those of events() that only a later Moodle than the oldest supported has: all there, or none. */
+    const LATER_EVENTS = [];
+
     #[\Override]
     public function support(): string {
         return self::SUPPORT_FULL;

@@ -136,12 +136,14 @@ final class edge_cases_test extends view_testcase {
         $this->step('And "convenor" is enrolled in "M1" as "teacher"');
         $this->step('And the My assessments block is configured with summative tag "summative" and formative tag '
             . '"formative"');
-        $this->step('Given the following "courses" exist:', [
-            ['fullname' => 'Module 0', 'shortname' => 'M0', 'startdate' => '##-400 days##'],
+        // The clock is set and the dates written out, so last year stays last year whatever today is.
+        $this->step('Given it is now "Thu 12 November 2026 10:00" in "Europe/London"');
+        $this->step('And the following "courses" exist:', [
+            ['fullname' => 'Module 0', 'shortname' => 'M0', 'startdate' => '##1 September 2025##'],
         ]);
         $this->step('And "marker1" is enrolled in "M0" as "teacher"');
         $this->step('And "student1" is enrolled in "M0" as "student"');
-        $this->step('And a summative "assign" "Old essay" in "M0" was due "370 days ago"');
+        $this->step('And a summative "assign" "Old essay" in "M0" was due "1 June 2026"');
         $this->step('And "student1" has submitted "Old essay"');
         $this->step('And "marker1" marks the submission of "student1" for "Old essay"');
         $this->step('And the My assessments index is up to date');

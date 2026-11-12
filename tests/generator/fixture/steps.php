@@ -277,6 +277,31 @@ final class steps {
     }
 
     /**
+     * Creates and tags an assessment that closes apart from its due date, or never closes (a quiz on Moodle 5.3+).
+     *
+     * @param string $tag
+     * @param string $modname
+     * @param string $name
+     * @param string $course
+     * @param string $opts As an_assessment_is_due().
+     * @param string $due
+     * @param string $close 'closes "..."' or 'never closes'.
+     */
+    public function an_assessment_is_due_and_closes(
+        string $tag,
+        string $modname,
+        string $name,
+        string $course,
+        string $opts,
+        string $due,
+        string $close
+    ): void {
+        // The fixture reads the close as one more option.
+        $opts .= ' ' . str_replace(['never closes', 'closes'], ['never closing', 'closing'], $close);
+        $this->create_assessment($tag, $modname, $name, $course, $opts, phrases::time($due));
+    }
+
+    /**
      * Creates and tags an assessment with no due date.
      *
      * @param string $tag
@@ -1701,8 +1726,12 @@ final class steps {
      * @param string $version
      */
     public function the_site_runs_moodle(string $version): void {
-        global $CFG;
-        if (((int)$CFG->branch >= 500) !== ($version !== '4.5')) {
+        global $CFG, $DB;
+        // 5.3 is told by what it brought (a course queued for deletion), not by its number.
+        $runs = $version === '5.3 or later'
+            ? $DB->get_manager()->field_exists('course', 'deletioninprogress')
+            : ((int)$CFG->branch >= 500) === ($version !== '4.5');
+        if (!$runs) {
             throw new unavailable("Needs Moodle $version");
         }
     }
@@ -1737,6 +1766,72 @@ final class steps {
     public function has_a_quiz_override(string $username, string $name, string $when): void {
         $cm = $this->cm($name);
         self::fixture($cm)->override($cm, self::userid($username), phrases::time($when));
+    }
+
+    /**
+     * A quiz override that moves one student's due date, leaving the close alone (Moodle 5.3+).
+     *
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function has_a_quiz_override_due(string $username, string $name, string $when): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->override_due($cm, self::userid($username), phrases::time($when));
+    }
+
+    /**
+     * Gives a submission an optional marker, switched on.
+     *
+     * @param string $student
+     * @param string $name
+     * @param string $marker
+     */
+    public function the_submission_has_an_optional_marker(string $student, string $name, string $marker): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->optional_marker($cm, self::userid($student), self::userid($marker));
+    }
+
+    /**
+     * Switches a student's optional marker off.
+     *
+     * @param string $student
+     * @param string $name
+     */
+    public function the_optional_marker_is_switched_off(string $student, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->optional_marker_off($cm, self::userid($student));
+    }
+
+    /**
+     * Moves a submission from one marker to another through the activity itself: only its events tell the index.
+     *
+     * @param string $student
+     * @param string $name
+     * @param string $from
+     * @param string $to
+     */
+    public function the_submission_is_reallocated(string $student, string $name, string $from, string $to): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->reallocate($cm, self::userid($student), self::userid($from), self::userid($to));
+    }
+
+    /**
+     * Deletes a course the way a site with asynchronous course deletion does: hidden and flagged at once, its
+     * contents left for cron.
+     *
+     * @param string $shortname
+     */
+    public function the_course_is_queued_for_deletion(string $shortname): void {
+        global $DB;
+        if (!$DB->get_manager()->field_exists('course', 'deletioninprogress')) {
+            throw new unavailable('Queueing a course for deletion needs Moodle 5.3');
+        }
+        set_config('enablecourseasyncdeletion', 1, 'moodlecourse');
+        delete_course(self::course($shortname), false, true);
+        if (!$DB->get_field('course', 'deletioninprogress', ['shortname' => $shortname])) {
+            throw new coding_exception("'$shortname' was not queued for deletion");
+        }
     }
 
     /**

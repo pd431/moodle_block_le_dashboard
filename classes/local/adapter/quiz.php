@@ -19,6 +19,7 @@ namespace block_le_dashboard\local\adapter;
 use block_le_dashboard\local\index\cm_row;
 use block_le_dashboard\local\index\marking_row;
 use block_le_dashboard\local\index\student_row;
+use block_le_dashboard\local\testing;
 
 /**
  * Adapter for mod_quiz.
@@ -26,8 +27,10 @@ use block_le_dashboard\local\index\student_row;
  * Close dates follow quiz_update_effective_access(): a user override's
  * value wins; otherwise the most lenient of the student's group overrides
  * (the latest close, with "no close" beating any date). The close is a hard
- * close, so it is also the cut-off. Attempt limits follow the same override
- * rules (no limit beats any number). Once a student has used every attempt and
+ * close, so it is the cut-off. Where the quiz has a due date (Moodle 5.3+, checked by
+ * schema), that is the deadline and attempts are still taken until the close; without
+ * one the close is the deadline too (MV1). Due dates and attempt limits follow the same
+ * override rules (no due date, no limit beats any number). Once a student has used every attempt and
  * none is still open, the cut-off is when the last one ended: the quiz can't be
  * attempted any more, so it goes to Past (F2: Upcoming and
  * Overdue hold only work that can still be submitted).
@@ -80,7 +83,7 @@ class quiz extends base {
         ];
     }
 
-    /** Only the columns this adapter reads. */
+    /** Only the columns this adapter reads; the due date is added where the quiz table has one (instance()). */
     const INSTANCE_FIELDS = 'id, course, timeopen, timeclose, grademethod, attempts, grade, reviewmarks, reviewmaxmarks';
 
     /** Review times, as in mod_quiz\question\display_options. */
@@ -88,13 +91,48 @@ class quiz extends base {
     /** After the quiz closes. */
     const REVIEW_AFTER_CLOSE = 0x00010;
 
+    /**
+     * Whether quizzes have a due date of their own (Moodle 5.3+).
+     *
+     * @return bool
+     */
+    protected static function has_duedate(): bool {
+        global $DB;
+        static $exists = null;
+        if ($exists === null || testing::enabled()) {
+            $exists = $DB->get_manager()->field_exists('quiz', 'duedate');
+        }
+        return $exists;
+    }
+
+    #[\Override]
+    protected function instance(\cm_info $cm): \stdClass {
+        global $DB;
+        $fields = self::INSTANCE_FIELDS . (self::has_duedate() ? ', duedate' : '');
+        return $DB->get_record('quiz', ['id' => $cm->instance], $fields, MUST_EXIST);
+    }
+
+    /**
+     * A quiz's deadline and cut-off from its due date and close: the due date is the deadline, the
+     * close the last moment an attempt is taken; a quiz with no due date is due at its close (MV1).
+     *
+     * @param mixed $duedate The due date, 0 or null for none.
+     * @param mixed $timeclose The close, 0 or null for none.
+     * @return array [int|null deadline, int|null cut-off]
+     */
+    public static function deadlines($duedate, $timeclose): array {
+        $close = self::date($timeclose);
+        return [self::date($duedate) ?? $close, $close];
+    }
+
     #[\Override]
     public function cm_row(\cm_info $cm): ?cm_row {
         $q = $this->instance($cm);
+        [$due, $cutoff] = self::deadlines($q->duedate ?? null, $q->timeclose);
         return new cm_row(
             opens: self::date($q->timeopen),
-            due: self::date($q->timeclose),
-            cutoff: self::date($q->timeclose),
+            due: $due,
+            cutoff: $cutoff,
             markingdue: null,
             hasallocation: false,
             stages: ['marked'],
@@ -135,19 +173,24 @@ class quiz extends base {
             return [];
         }
 
-        [$closes, $limits] = self::overrides($cm, $q, array_keys($rows));
-        foreach ($closes as $userid => $close) {
-            $row = $rows[$userid];
-            $row->due = self::date($close);
-            $row->cutoff = $row->due;
-            $row->individual = true;
+        [$closes, $limits, $dues] = self::overrides($cm, $q, array_keys($rows));
+        // Each student's own close, kept apart from the cut-off, which using up every attempt brings forward.
+        $ownclose = [];
+        foreach ($rows as $userid => $row) {
+            $overridden = array_key_exists($userid, $closes) || array_key_exists($userid, $dues);
+            $ownclose[$userid] = array_key_exists($userid, $closes) ? self::date($closes[$userid]) : self::date($q->timeclose);
+            if ($overridden) {
+                [$row->due, $row->cutoff] = self::deadlines($dues[$userid] ?? ($q->duedate ?? null), $ownclose[$userid]);
+                $row->individual = true;
+            }
         }
         self::close_used_up($q, $rows, $limits);
 
+        // Late is judged on the first finished attempt, as the quiz page does (MV1).
         $finished = self::chunked(array_keys($rows), function ($chunk) use ($DB, $q) {
             [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
             $params['quizid'] = $q->id;
-            return $DB->get_records_sql("SELECT userid, MAX(timefinish) AS timefinish
+            return $DB->get_records_sql("SELECT userid, MIN(timefinish) AS timefinish
                                            FROM {quiz_attempts}
                                           WHERE quiz = :quizid AND state = 'finished' AND preview = 0 AND userid $insql
                                        GROUP BY userid", $params);
@@ -170,9 +213,9 @@ class quiz extends base {
         self::apply_gradebook_release($cm, $rows);
         if ($mode === self::RELEASE_CLOSE) {
             // The gradebook shows marks at the quiz's close; the quiz page waits for the student's own (F11).
-            foreach ($rows as $row) {
-                if ($row->timereleased !== null && $row->due !== null && $row->due > $row->timereleased) {
-                    $row->timereleased = $row->due;
+            foreach ($rows as $userid => $row) {
+                if ($row->timereleased !== null && $ownclose[$userid] !== null && $ownclose[$userid] > $row->timereleased) {
+                    $row->timereleased = $ownclose[$userid];
                 }
             }
         }
@@ -289,13 +332,15 @@ class quiz extends base {
      * @param \cm_info $cm
      * @param \stdClass $q
      * @param int[] $userids
-     * @return array [userid => close (0: none) for those overridden, userid => attempt limit (0: none)]
+     * @return array [userid => close (0: none) for those overridden, userid => attempt limit (0: none),
+     *     userid => due date (0: none) for those overridden]
      */
     protected static function overrides(\cm_info $cm, \stdClass $q, array $userids): array {
         global $DB;
         $useroverrides = [];
         $groupcloses = [];
         $groupattempts = [];
+        $groupdues = [];
         foreach ($DB->get_records('quiz_overrides', ['quiz' => $q->id]) as $o) {
             if ($o->userid) {
                 $useroverrides[(int)$o->userid] = $o;
@@ -306,11 +351,15 @@ class quiz extends base {
                 if (isset($o->attempts)) {
                     $groupattempts[(int)$o->groupid] = (int)$o->attempts;
                 }
+                if (isset($o->duedate)) {
+                    $groupdues[(int)$o->groupid] = (int)$o->duedate;
+                }
             }
         }
-        $groups = ($groupcloses || $groupattempts) ? self::user_groups($cm->course, $userids) : [];
+        $groups = ($groupcloses || $groupattempts || $groupdues) ? self::user_groups($cm->course, $userids) : [];
         $closes = [];
         $limits = [];
+        $dues = [];
         foreach ($userids as $userid) {
             $mine = array_flip($groups[$userid] ?? []);
             $close = self::effective($useroverrides[$userid]->timeclose ?? null, array_intersect_key($groupcloses, $mine));
@@ -319,13 +368,17 @@ class quiz extends base {
             }
             $limit = self::effective($useroverrides[$userid]->attempts ?? null, array_intersect_key($groupattempts, $mine));
             $limits[$userid] = $limit ?? (int)$q->attempts;
+            $due = self::effective($useroverrides[$userid]->duedate ?? null, array_intersect_key($groupdues, $mine));
+            if ($due !== null) {
+                $dues[$userid] = $due;
+            }
         }
-        return [$closes, $limits];
+        return [$closes, $limits, $dues];
     }
 
     /**
-     * A user override's value wins; otherwise the most lenient group value, where 0 (no close, no limit)
-     * beats any number. Null when nothing overrides the quiz's own setting.
+     * A user override's value wins; otherwise the most lenient group value, where 0 (no close, no due
+     * date, no limit) beats any number. Null when nothing overrides the quiz's own setting.
      *
      * @param mixed $user The user override's value, or null.
      * @param int[] $groups The values of the student's group overrides.
