@@ -28,7 +28,8 @@ use block_le_dashboard\local\adapter\registry;
  */
 final class events_test extends \advanced_testcase {
     /**
-     * Each adapter's events are in db/events.php, and those of installed modules exist.
+     * Each adapter's events are in db/events.php, and those of installed modules exist, the ones only a later
+     * Moodle has aside.
      */
     public function test_adapter_events_are_observed(): void {
         global $CFG;
@@ -39,10 +40,14 @@ final class events_test extends \advanced_testcase {
             foreach ($class::events() as $event) {
                 $this->assertArrayHasKey($event, $observed, "$modname needs $event observed");
                 $this->assertSame('\block_le_dashboard\observer::module_event', $observed[$event]);
-                if (registry::module_installed($modname)) {
+                if (registry::module_installed($modname) && !in_array($event, $class::LATER_EVENTS)) {
                     $this->assertTrue(class_exists($event), "$event does not exist");
                 }
             }
+            // Events a later Moodle brought (MV3) are all there or all missing: a misspelt one stands out.
+            $later = array_filter($class::LATER_EVENTS, 'class_exists');
+            $this->assertContains(count($later), [0, count($class::LATER_EVENTS)], "$modname: " . implode(', ', $later));
+            $this->assertSame([], array_diff($class::LATER_EVENTS, $class::events()));
         }
     }
 

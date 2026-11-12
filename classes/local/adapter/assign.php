@@ -35,6 +35,12 @@ use block_le_dashboard\local\testing;
  * (markercount). Each marker's own mark is a stage (marker1..n, from assign_mark),
  * and with the manual method someone then sets the final grade (agreed).
  *
+ * Moodle 5.3+ (checked by schema): an assignment can also have optional markers,
+ * switched on per student. Required markers take the first stages in the order they
+ * were allocated, optional ones the stages after them, and a student has an optional
+ * stage only when it is switched on for them, as assign::get_marker_allocations() and
+ * expected_marker_count() (MV2).
+ *
  * @package    block_le_dashboard
  * @copyright  2026 Pierre Camaly de Brosses - University of Exeter, based on CoSector's my_assessment dashboard
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -45,6 +51,13 @@ class assign extends base {
 
     /** Workflow states past the send step: the marks have gone to the hub (HB2). */
     const SENT_STATES = ['readyforrelease', 'released'];
+
+    /** @var string[] Moodle 5.3 reports an allocation with these, in place of marker_updated (MV3). */
+    const LATER_EVENTS = [
+        '\mod_assign\event\marker_added',
+        '\mod_assign\event\marker_removed',
+        '\mod_assign\event\marker_enabled_updated',
+    ];
 
     #[\Override]
     public function modname(): string {
@@ -63,6 +76,7 @@ class assign extends base {
             '\mod_assign\event\submission_unlocked',
             '\mod_assign\event\extension_granted',
             '\mod_assign\event\marker_updated',
+            ...self::LATER_EVENTS,
             '\mod_assign\event\workflow_state_updated',
             '\mod_assign\event\user_override_created',
             '\mod_assign\event\user_override_updated',
@@ -88,7 +102,7 @@ class assign extends base {
     #[\Override]
     public function cm_row(\cm_info $cm): ?cm_row {
         $a = $this->instance($cm);
-        $markers = self::markercount($a);
+        $markers = self::markercount($a) + self::optionalcount($a);
         $stages = ['marked'];
         if ($markers > 1) {
             $stages = array_map(fn($i) => 'marker' . $i, range(1, $markers));
@@ -129,13 +143,65 @@ class assign extends base {
     }
 
     /**
-     * Number of markers per submission (always 1 before Moodle 5.0).
+     * Number of required markers per submission (always 1 before Moodle 5.0).
      *
      * @param \stdClass $a
      * @return int
      */
     protected static function markercount(\stdClass $a): int {
         return max(1, (int)($a->markercount ?? 1));
+    }
+
+    /**
+     * Number of optional markers a submission can have on top of the required ones (Moodle 5.3+, MV2).
+     *
+     * @param \stdClass $a
+     * @return int
+     */
+    protected static function optionalcount(\stdClass $a): int {
+        return max(0, (int)($a->optionalmarkercount ?? 0));
+    }
+
+    /**
+     * Whether an allocation can be optional (Moodle 5.3+).
+     *
+     * @return bool
+     */
+    protected static function optional_markers(): bool {
+        global $DB;
+        static $exists = null;
+        if ($exists === null || testing::enabled()) {
+            $exists = self::allocation_table() && $DB->get_manager()->field_exists('assign_allocated_marker', 'optional');
+        }
+        return $exists;
+    }
+
+    /**
+     * Puts one student's allocations in their stages, as assign::get_marker_allocations() does: required
+     * markers first, in the order allocated, then the optional markers switched on for the student, from
+     * the stage after the last required one. An optional allocation that isn't switched on is ignored; one
+     * switched on with nobody allocated yet keeps its stage, with no marker (MV2).
+     *
+     * @param \stdClass[] $allocations Rows of the allocation table, oldest first: marker, optional, enabled.
+     * @param int $required Number of required markers.
+     * @return array Stage number (from 1) => marker id, or null for a stage that awaits its marker.
+     */
+    public static function positions(array $allocations, int $required): array {
+        $out = [];
+        $next = 1;
+        $nextoptional = $required + 1;
+        foreach ($allocations as $r) {
+            if (empty($r->optional) && !empty($r->marker)) {
+                $out[$next++] = (int)$r->marker;
+            }
+        }
+        foreach ($allocations as $r) {
+            if (!empty($r->optional) && !empty($r->enabled)) {
+                $out[max($next, $nextoptional)] = empty($r->marker) ? null : (int)$r->marker;
+                $next = $nextoptional = max($next, $nextoptional) + 1;
+            }
+        }
+        return $out;
     }
 
     /**
@@ -153,12 +219,12 @@ class assign extends base {
     }
 
     /**
-     * Allocated markers per student, in allocation order.
+     * Allocated markers per student, by stage number (positions()).
      *
      * @param \stdClass $a
      * @param int[] $userids
      * @param \stdClass[] $flags From flags(), used before Moodle 5.0.
-     * @return int[][] Keyed by user id.
+     * @return array[] Keyed by user id: stage number (from 1) => marker id, or null.
      */
     protected function allocations(\stdClass $a, array $userids, array $flags): array {
         global $DB;
@@ -166,12 +232,12 @@ class assign extends base {
             $out = [];
             foreach ($userids as $userid) {
                 if ($marker = (int)($flags[$userid]->allocatedmarker ?? 0)) {
-                    $out[$userid] = [$marker];
+                    $out[$userid] = [1 => $marker];
                 }
             }
             return $out;
         }
-        $out = [];
+        $rows = [];
         foreach (array_chunk($userids, self::CHUNK) as $chunk) {
             [$insql, $params] = $DB->get_in_or_equal($chunk, SQL_PARAMS_NAMED, 'u');
             $params['assignid'] = $a->id;
@@ -180,14 +246,15 @@ class assign extends base {
                 "assignment = :assignid AND student $insql",
                 $params,
                 'id',
-                'id, student, marker'
+                'id, student, marker' . (self::optional_markers() ? ', optional, enabled' : '')
             );
             foreach ($rs as $r) {
-                $out[(int)$r->student][] = (int)$r->marker;
+                $rows[(int)$r->student][] = $r;
             }
             $rs->close();
         }
-        return $out;
+        $required = self::markercount($a);
+        return array_map(fn($allocations) => self::positions($allocations, $required), $rows);
     }
 
     /**
@@ -248,7 +315,7 @@ class assign extends base {
         $allocations = $cmrow->hasallocation ? $this->allocations($a, array_keys($rows), $flags) : [];
 
         foreach ($rows as $userid => $row) {
-            $row->allocatedto = $allocations[$userid] ?? [];
+            $row->allocatedto = array_values(array_filter($allocations[$userid] ?? []));
             $override = $useroverrides[$userid] ?? null;
             if (!$override && !empty($groups[$userid])) {
                 foreach ($groupoverrides as $o) {
@@ -341,12 +408,12 @@ class assign extends base {
         $grades = $this->latest_grades($a->id, array_keys($submissions));
         $released = self::released_since($cm, $submissions);
         $allocations = $cmrow->hasallocation ? $this->allocations($a, array_keys($submissions), $flags) : [];
-        $markers = self::markercount($a);
+        $required = self::markercount($a);
+        $markers = $required + self::optionalcount($a);
         $marks = $markers > 1 ? $this->marks($a, array_keys($submissions)) : [];
 
         // One unit per submission and stage: the group for team submissions, else the student.
         $units = [];
-        $finalstage = end($cmrow->stages);
         foreach ($submissions as $userid => $s) {
             $isgroup = !empty($a->teamsubmission) && !empty($s->groupid);
             // Only a grade on this attempt counts: a reopened attempt starts unmarked.
@@ -368,15 +435,19 @@ class assign extends base {
             $stages = [];
             $submitted = (int)$s->timemodified ?: null;
             if ($markers === 1) {
-                $stages['marked'] = [$allocated[0] ?? null, true, $final,
+                $stages['marked'] = [$allocated[1] ?? null, true, $final,
                     $final && $grade ? ((int)$grade->grader ?: null) : null,
                     $final && $grade ? (int)$grade->timemodified : null, $submitted];
             } else {
                 // Each marker's own mark; unallocated stages take marks in the order given.
                 $mine = array_filter($marks[$userid] ?? [], fn($m) => (int)$m->attemptnumber === (int)$s->attemptnumber);
-                $loose = array_values(array_diff_key($mine, array_flip($allocated)));
+                $loose = array_values(array_diff_key($mine, array_flip(array_filter($allocated))));
                 for ($i = 1; $i <= $markers; $i++) {
-                    $marker = $allocated[$i - 1] ?? null;
+                    if ($i > $required && !array_key_exists($i, $allocated)) {
+                        // An optional marker who isn't switched on for this student: nothing to mark (MV2).
+                        continue;
+                    }
+                    $marker = $allocated[$i] ?? null;
                     $mark = $marker !== null ? ($mine[$marker] ?? null) : array_shift($loose);
                     $stages['marker' . $i] = [$marker, true, $mark !== null,
                         $mark ? (int)$mark->marker : null, $mark ? (int)$mark->timemodified : null, $submitted];
@@ -384,14 +455,18 @@ class assign extends base {
                 if (in_array('agreed', $cmrow->stages)) {
                     // Agreement goes to the first allocated marker, as coursework does (G8).
                     // With allocation, only the allocated markers' marks count, as assign::get_marks() (EC9).
-                    $counted = $cmrow->hasallocation ? array_intersect_key($mine, array_flip($allocated)) : $mine;
-                    $agreeable = count($counted) >= $markers;
-                    $stages['agreed'] = [$allocated[0] ?? null, $agreeable, $final,
+                    // It waits for every marker the student has: the required ones and the optional ones
+                    // switched on (MV2).
+                    $counted = $cmrow->hasallocation ? array_intersect_key($mine, array_flip(array_filter($allocated))) : $mine;
+                    $agreeable = count($counted) >= count($stages);
+                    $stages['agreed'] = [$allocated[1] ?? null, $agreeable, $final,
                         $final && $grade ? ((int)$grade->grader ?: null) : null,
                         $final && $grade ? (int)$grade->timemodified : null,
                         $agreeable ? max(array_map(fn($m) => (int)$m->timemodified, $counted)) : null];
                 }
             }
+            // The student's last stage carries the send time (HB2).
+            $finalstage = array_key_last($stages);
             foreach ($stages as $stage => [$allocatedto, $ready, $marked, $markedby, $timemarked, $timeready]) {
                 $key = ($isgroup ? 'g' . $s->groupid : 'u' . $userid) . '-' . $stage;
                 if (!isset($units[$key])) {

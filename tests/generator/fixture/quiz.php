@@ -48,6 +48,12 @@ final class quiz extends base {
         $methods = ['first attempt' => QUIZ_ATTEMPTFIRST, 'last attempt' => QUIZ_ATTEMPTLAST,
             'highest grade' => QUIZ_GRADEHIGHEST];
         $record += ['timeclose' => (int)$due, 'sumgrades' => 1];
+        // With "closing ..." or "never closing", the due date is the quiz's own, apart from its close.
+        if (preg_match('/(?<!never )closing "([^"]*)"/', $opts, $m) || str_contains($opts, 'never closing')) {
+            self::needs_duedate();
+            $record['duedate'] = (int)$due;
+            $record['timeclose'] = $m ? phrases::time($m[1]) : 0;
+        }
         if (preg_match('/grading method "([^"]*)"/', $opts, $m)) {
             $record['grademethod'] = $methods[strtolower($m[1])];
         }
@@ -84,10 +90,14 @@ final class quiz extends base {
 
     #[\Override]
     public function submit(\cm_info $cm, int $userid, ?int $time = null): void {
-        if ($time !== null) {
-            $this->unsupported('Dating the attempts at');
-        }
+        global $DB;
         $this->attempts($cm, $userid, 1);
+        if ($time !== null) {
+            // The attempt just finished is the student's last: date it.
+            $attempt = self::attempt($cm, $userid, 'last');
+            $DB->update_record('quiz_attempts', (object)['id' => $attempt->id, 'timestart' => $time - 60,
+                'timefinish' => $time, 'timemodified' => $time]);
+        }
     }
 
     #[\Override]
@@ -163,8 +173,29 @@ final class quiz extends base {
     }
 
     #[\Override]
+    public function override_due(\cm_info $cm, int $userid, int $due): void {
+        global $DB;
+        self::needs_duedate();
+        $DB->insert_record('quiz_overrides', ['quiz' => $cm->instance, 'userid' => $userid, 'duedate' => $due]);
+        self::queue($cm);
+    }
+
+    #[\Override]
     public function time_fields(): array {
-        return ['quiz' => ['timeclose']];
+        global $DB;
+        $due = $DB->get_manager()->field_exists('quiz', 'duedate') ? ['duedate'] : [];
+        return ['quiz' => array_merge(['timeclose'], $due), 'quiz_overrides' => array_merge(['timeclose'], $due),
+            'quiz_attempts' => ['timestart', 'timefinish', 'timemodified']];
+    }
+
+    /**
+     * A quiz has a due date of its own from Moodle 5.3.
+     */
+    private static function needs_duedate(): void {
+        global $DB;
+        if (!$DB->get_manager()->field_exists('quiz', 'duedate')) {
+            throw new unavailable('A quiz due date apart from its close needs Moodle 5.3');
+        }
     }
 
     /**

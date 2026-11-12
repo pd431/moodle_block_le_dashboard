@@ -247,6 +247,30 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Creates and tags an assessment that closes apart from its due date, or never closes (a quiz on Moodle 5.3+).
+     *
+     * @Given /^a (?P<tag>\w+) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)"(?P<opts>.*?) is due "(?P<due>[^"]*)" and (?P<close>closes "[^"]*"|never closes)$/
+     * @param string $tag
+     * @param string $modname
+     * @param string $name
+     * @param string $course
+     * @param string $opts
+     * @param string $due
+     * @param string $close
+     */
+    public function an_assessment_is_due_and_closes(
+        string $tag,
+        string $modname,
+        string $name,
+        string $course,
+        string $opts,
+        string $due,
+        string $close
+    ): void {
+        self::skipping(fn() => steps::instance()->an_assessment_is_due_and_closes($tag, $modname, $name, $course, $opts, $due, $close));
+    }
+
+    /**
      * Creates and tags an assessment with no due date.
      *
      * @Given /^an? (?P<tag>summative|formative) "(?P<mod>\w+)" "(?P<name>[^"]*)" in "(?P<course>[^"]*)" with no due date(?P<opts> and no grade)? exists$/
@@ -3011,7 +3035,7 @@ class behat_block_le_dashboard extends behat_base {
     /**
      * Skips the scenario unless the site runs that Moodle version.
      *
-     * @Given /^the site runs Moodle (?P<version>4\.5|5\.0 or later)$/
+     * @Given /^the site runs Moodle (?P<version>4\.5|5\.0 or later|5\.3 or later)$/
      * @param string $version
      */
     public function the_site_runs_moodle(string $version): void {
@@ -3365,6 +3389,64 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function has_a_quiz_override(string $username, string $name, string $when): void {
         steps::instance()->has_a_quiz_override($username, $name, $when);
+    }
+
+    /**
+     * A quiz override that moves one student's due date, leaving the close alone (Moodle 5.3+).
+     *
+     * @Given /^"(?P<user>[^"]*)" has a quiz override on "(?P<name>[^"]*)" due "(?P<when>[^"]*)"$/
+     * @param string $username
+     * @param string $name
+     * @param string $when
+     */
+    public function has_a_quiz_override_due(string $username, string $name, string $when): void {
+        self::skipping(fn() => steps::instance()->has_a_quiz_override_due($username, $name, $when));
+    }
+
+    /**
+     * Gives a submission an optional marker, switched on.
+     *
+     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" has "(?P<marker>[^"]*)" as its optional marker$/
+     * @param string $student
+     * @param string $name
+     * @param string $marker
+     */
+    public function the_submission_has_an_optional_marker(string $student, string $name, string $marker): void {
+        self::skipping(fn() => steps::instance()->the_submission_has_an_optional_marker($student, $name, $marker));
+    }
+
+    /**
+     * Switches a student's optional marker off.
+     *
+     * @Given /^the optional marker of "(?P<student>[^"]*)" on "(?P<name>[^"]*)" is switched off$/
+     * @param string $student
+     * @param string $name
+     */
+    public function the_optional_marker_is_switched_off(string $student, string $name): void {
+        self::skipping(fn() => steps::instance()->the_optional_marker_is_switched_off($student, $name));
+    }
+
+    /**
+     * Moves a submission from one marker to another through the activity itself: only its events tell the index.
+     *
+     * @When /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" is reallocated from "(?P<from>[^"]*)" to "(?P<to>[^"]*)" through the assignment$/
+     * @param string $student
+     * @param string $name
+     * @param string $from
+     * @param string $to
+     */
+    public function the_submission_is_reallocated(string $student, string $name, string $from, string $to): void {
+        self::skipping(fn() => steps::instance()->the_submission_is_reallocated($student, $name, $from, $to));
+    }
+
+    /**
+     * Deletes a course the way a site with asynchronous course deletion does.
+     *
+     * @When /^"(?P<course>[^"]*)" is queued for deletion$/
+     * @param string $shortname
+     */
+    public function the_course_is_queued_for_deletion(string $shortname): void {
+        self::skipping(fn() => steps::instance()->the_course_is_queued_for_deletion($shortname));
     }
 
     /**

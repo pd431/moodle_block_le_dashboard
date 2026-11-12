@@ -245,4 +245,32 @@ final class quiz_test extends \advanced_testcase {
         [$m] = $adapter->marking_rows($cm, $adapter->cm_row($cm), [$s1->id]);
         $this->assertSame((int)$teacher->id, $m->markedby);
     }
+
+    /**
+     * A quiz's due date and close, and the deadline and cut-off they give (MV1).
+     *
+     * @return array
+     */
+    public static function deadlines_provider(): array {
+        return [
+            'due date and close' => [100, 200, [100, 200]],
+            'due date, never closes' => [100, 0, [100, null]],
+            'no due date: due at its close' => [0, 200, [200, 200]],
+            'before quizzes had a due date' => [null, 200, [200, 200]],
+            'neither' => [0, 0, [null, null]],
+            'as the database returns them' => ['100', '200', [100, 200]],
+        ];
+    }
+
+    /**
+     * The due date is the deadline and the close the cut-off; without a due date the quiz is due at its close.
+     *
+     * @dataProvider deadlines_provider
+     * @param mixed $duedate
+     * @param mixed $timeclose
+     * @param array $expected
+     */
+    public function test_deadlines($duedate, $timeclose, array $expected): void {
+        $this->assertSame($expected, quiz::deadlines($duedate, $timeclose));
+    }
 }
