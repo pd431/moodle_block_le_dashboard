@@ -4143,8 +4143,11 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function delete_mitigation_should_be_destructive(string $name): void {
         $item = $this->mitigate_menu($name)->find('css', '[data-action="mitigate-delete"]');
-        $red = $item ? $this->evaluate_script('return getComputedStyle(document.evaluate(' . json_encode($item->getXpath()) .
-            ', document, null, 9, null).singleNodeValue).color') : '';
+        // The computed colour can be in any colour space (oklch for the block's tones), so the canvas turns it into rgb.
+        $red = $item ? $this->evaluate_script('return (() => { const x = document.createElement("canvas").getContext("2d"); ' .
+            'x.fillStyle = getComputedStyle(document.evaluate(' . json_encode($item->getXpath()) .
+            ', document, null, 9, null).singleNodeValue).color; x.fillRect(0, 0, 1, 1); ' .
+            'const d = x.getImageData(0, 0, 1, 1).data; return "rgb(" + d[0] + ", " + d[1] + ", " + d[2] + ")"; })()') : '';
         if (
             !$item || trim($item->getText()) !== 'Delete mitigation' || !$item->find('css', 'i.fa-trash-can')
                 || !preg_match('/^rgba?\((\d+), (\d+), (\d+)/', (string)$red, $m) || !($m[1] > 150 && $m[2] < 100 && $m[3] < 100)
@@ -4429,5 +4432,291 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function no_first_fill_should_be_queued(): void {
         steps::instance()->no_first_fill_should_be_queued();
+    }
+
+    // Colour modes (Moodle 5.3).
+
+    /**
+     * Turns on Boost's colour modes, which Moodle 5.3 added. Earlier versions have none, so the scenario is skipped.
+     *
+     * @Given /^the site has colour modes turned on$/
+     */
+    public function the_site_has_colour_modes_turned_on(): void {
+        self::skipping(fn() => steps::instance()->the_site_has_colour_modes_turned_on());
+    }
+
+    /**
+     * Turns on colour modes where the site has them, so one scenario outline covers 4.5, 5.2 and 5.3.
+     *
+     * @Given /^the site has colour modes turned on if it can$/
+     */
+    public function the_site_has_colour_modes_turned_on_if_it_can(): void {
+        steps::instance()->the_site_has_colour_modes_turned_on_if_it_can();
+    }
+
+    /**
+     * Opens every section's hidden rows, where a section has more than it shows.
+     *
+     * @When /^I press "Show more" in the "My assessments" block if there is one$/
+     */
+    public function i_press_show_more_if_there_is_one(): void {
+        foreach ($this->getSession()->getPage()->findAll('css', self::BLOCK . ' .ma-more[aria-expanded="false"]') as $more) {
+            if ($more->isVisible()) {
+                $more->click();
+            }
+        }
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * Sets a user's colour mode, the way the navbar menu stores it. Light is every version's only mode before 5.3.
+     *
+     * @Given /^"(?P<user>[^"]*)" uses the (?P<mode>light|dark) colour mode$/
+     * @param string $username
+     * @param string $mode
+     */
+    public function uses_the_colour_mode(string $username, string $mode): void {
+        self::skipping(fn() => steps::instance()->uses_the_colour_mode($username, $mode));
+    }
+
+    /**
+     * Picks a colour mode from the navbar menu, which switches the page without reloading it.
+     *
+     * @When /^I choose the (?P<mode>light|dark) colour mode from the navbar$/
+     * @param string $mode
+     */
+    public function i_choose_the_colour_mode(string $mode): void {
+        $this->find('css', '[data-region="colourmode-menu"] [data-bs-toggle="dropdown"]')->click();
+        $this->find('css', '[data-action="set-colourmode"][data-colourmode="' . $mode . '"]')->click();
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * The colour mode the page is drawn in: Boost's data-bs-theme attribute, missing before 5.3.
+     *
+     * @Then /^the page should be in (?P<mode>light|dark) colour mode$/
+     * @param string $mode
+     */
+    public function the_page_should_be_in_colour_mode(string $mode): void {
+        $actual = $this->evaluate_script('return document.documentElement.getAttribute("data-bs-theme") || "light"');
+        if ($actual !== $mode) {
+            throw new ExpectationException("The page is in $actual colour mode", $this->getSession());
+        }
+    }
+
+    /**
+     * Every visible text, icon, progress bar and control outline in the block meets the block's contrast targets.
+     *
+     * @Then /^the My assessments block should meet its contrast targets$/
+     */
+    public function the_block_should_meet_its_contrast_targets(): void {
+        $this->assert_contrast($this->contrast('all', self::BLOCK), 'At rest');
+    }
+
+    /**
+     * The same, with the pointer over each kind of control in turn: one of each tab, button, flag, link and select.
+     *
+     * @Then /^every kind of control in the My assessments block should meet its contrast targets when hovered$/
+     */
+    public function every_control_should_meet_its_contrast_targets_when_hovered(): void {
+        $failures = [];
+        $kinds = [];
+        // A list, not :is(): Moodle 4.5's Mink turns CSS into XPath with a parser that has no :is().
+        $controls = ['.nav-link', '.btn', '.ma-flag', '.ma-row-iconbtn', '.ma-untagged-summary', 'a', 'select', '.dropdown-item'];
+        $selector = implode(', ', array_map(fn($control) => self::BLOCK . ' ' . $control, $controls));
+        foreach ($this->getSession()->getPage()->findAll('css', $selector) as $control) {
+            $classes = preg_replace('/\b(active|show|ma-row-\S*--\S+)\b/', '', (string) $control->getAttribute('class'));
+            $kind = $control->getTagName() . ' ' . $classes;
+            if (isset($kinds[$kind]) || !$control->isVisible()) {
+                continue;
+            }
+            $kinds[$kind] = true;
+            $id = 'ma-contrast-' . count($kinds);
+            $this->evaluate_script('document.evaluate(' . json_encode($control->getXpath()) . ', document, null, ' .
+                'XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute("data-contrast", "' . $id . '")');
+            $control->mouseOver();
+            foreach ($this->contrast('all', '[data-contrast="' . $id . '"]') as $failure) {
+                $failures[] = "hovered $kind: $failure";
+            }
+        }
+        $this->evaluate_script('document.querySelectorAll("[data-contrast]").forEach(e => e.removeAttribute("data-contrast"))');
+        $this->getSession()->getPage()->find('css', 'body')->mouseOver();
+        $this->assert_contrast($failures, 'Hovered');
+    }
+
+    /**
+     * Tabbing through the block: every control's focus indicator reaches 3:1 and Lc 45 against what's behind it.
+     *
+     * @Then /^keyboard focus should be visible on every control in the My assessments block$/
+     */
+    public function keyboard_focus_should_be_visible_on_every_control(): void {
+        $inblock = 'return !!document.activeElement.closest(' . json_encode(self::BLOCK) . ')';
+        $this->evaluate_script('document.activeElement.blur(); document.body.focus()');
+        for ($i = 0; $i < 100 && !$this->evaluate_script($inblock); $i++) {
+            $this->press_tab();
+        }
+        $failures = [];
+        for ($stops = 0; $stops < 300 && $this->evaluate_script($inblock); $stops++) {
+            $failures = array_merge($failures, $this->contrast('focus', self::BLOCK));
+            $this->press_tab();
+        }
+        if ($stops < 5) {
+            throw new ExpectationException("Tab reached only $stops controls in the block", $this->getSession());
+        }
+        $this->assert_contrast($failures, 'Focused');
+    }
+
+    /**
+     * Text drawn in the block's body or secondary colour reaches the given APCA level and WCAG ratio.
+     *
+     * @Then /^the (?P<which>body|secondary) text in the My assessments block should reach APCA Lc (?P<lc>\d+) and (?P<ratio>[\d.]+):1$/
+     * @param string $which
+     * @param string $lc
+     * @param string $ratio
+     */
+    public function the_text_should_reach(string $which, string $lc, string $ratio): void {
+        $this->assert_contrast($this->contrast("text:$which:$lc:$ratio", self::BLOCK), ucfirst($which) . ' text');
+    }
+
+    /**
+     * Body text stands far enough above secondary text, on the block's surface, to read as a separate level.
+     *
+     * @Then /^the body text in the My assessments block should be at least (?P<lc>\d+) Lc brighter than its secondary text$/
+     * @param string $lc
+     */
+    public function the_body_text_should_be_brighter_than_secondary(string $lc): void {
+        $this->assert_contrast($this->contrast("gap:$lc", self::BLOCK), 'Text levels');
+    }
+
+    /**
+     * Dark mode's link underlines: 1px, dimmer than the link, and still Lc 45 and 3:1 against what's behind them.
+     *
+     * @Then /^every link underline in the My assessments block should be thin, dimmer than its link and meet its contrast target$/
+     */
+    public function every_link_underline_should_be_toned(): void {
+        $this->assert_contrast($this->contrast('underlines', self::BLOCK), 'Underlines');
+    }
+
+    /**
+     * Every link's underline is the link's own colour, as in light mode.
+     *
+     * @Then /^link underlines in the My assessments block should be the same colour as their links$/
+     */
+    public function link_underlines_should_be_full_colour(): void {
+        $this->assert_contrast($this->contrast('underlines-full', self::BLOCK), 'Underlines');
+    }
+
+    /**
+     * Points at a link in the block.
+     *
+     * @When /^I hover over the "(?P<name>[^"]*)" link in the My assessments block$/
+     * @param string $name A link's text, or "course of" and an assessment for that row's course link
+     */
+    public function i_hover_over_the_link(string $name): void {
+        $this->block_link($name)->mouseOver();
+    }
+
+    /**
+     * The link's underline is the link's own colour.
+     *
+     * @Then /^the underline of the "(?P<name>[^"]*)" link should be the same colour as the link$/
+     * @param string $name
+     */
+    public function the_underline_should_be_the_link_colour(string $name): void {
+        $link = $this->block_link($name);
+        $this->evaluate_script('document.evaluate(' . json_encode($link->getXpath()) . ', document, null, ' .
+            'XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute("data-contrast", "underline")');
+        $failures = $this->contrast('underlines-full', '[data-contrast="underline"]');
+        $this->evaluate_script('document.querySelector("[data-contrast]").removeAttribute("data-contrast")');
+        $this->assert_contrast($failures, 'Hovered');
+    }
+
+    /**
+     * The link has no underline.
+     *
+     * @Then /^the "(?P<name>[^"]*)" link in the My assessments block should have no underline$/
+     * @param string $name
+     */
+    public function the_link_should_have_no_underline(string $name): void {
+        $link = $this->block_link($name);
+        $this->evaluate_script('document.evaluate(' . json_encode($link->getXpath()) . ', document, null, ' .
+            'XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue.setAttribute("data-contrast", "underline")');
+        $failures = $this->contrast('no-underline', '[data-contrast="underline"]');
+        $this->evaluate_script('document.querySelector("[data-contrast]").removeAttribute("data-contrast")');
+        $this->assert_contrast($failures, 'Underline');
+    }
+
+    /**
+     * No section header has a rule under it: its fill sets it off from the rows.
+     *
+     * @Then /^the section headers in the My assessments block should have no line under them$/
+     */
+    public function the_section_headers_should_have_no_line(): void {
+        $this->assert_contrast($this->contrast('header-lines', self::BLOCK), 'Section headers');
+    }
+
+    /**
+     * The first visible link in the block with this text, or with "course of" and an assessment, that row's course link.
+     *
+     * @param string $name
+     * @return \Behat\Mink\Element\NodeElement
+     */
+    protected function block_link(string $name): \Behat\Mink\Element\NodeElement {
+        if (str_starts_with($name, 'course of ')) {
+            $link = $this->row(substr($name, strlen('course of ')))->find('css', '.ma-row-course');
+            if (!$link) {
+                throw new ExpectationException("No course link in the row for '$name'", $this->getSession());
+            }
+            return $link;
+        }
+        foreach ($this->getSession()->getPage()->findAll('css', self::BLOCK . ' a') as $link) {
+            if (trim($link->getText()) === $name && $link->isVisible()) {
+                return $link;
+            }
+        }
+        throw new ExpectationException("No \"$name\" link in the My assessments block", $this->getSession());
+    }
+
+    /**
+     * Presses Tab as a W3C key action, which goes to whatever has focus, and waits for the page as a step would.
+     * Behat's key step sends it to the focused element instead, and WebDriver refuses that when the element is not
+     * one it counts as interactable.
+     */
+    protected function press_tab(): void {
+        $tab = "\u{E004}";
+        $this->getSession()->getDriver()->getWebDriver()->executeCustomCommand('/session/:sessionId/actions', 'POST', [
+            'actions' => [['type' => 'key', 'id' => 'keyboard', 'actions' => [
+                ['type' => 'keyDown', 'value' => $tab],
+                ['type' => 'keyUp', 'value' => $tab],
+            ]]],
+        ]);
+        $this->wait_for_pending_js();
+    }
+
+    /**
+     * Runs tests/fixtures/contrast.js in the page.
+     *
+     * @param string $check "all", "focus" or one of the checks tests/fixtures/contrast.js lists
+     * @param string $selector What to check
+     * @return string[] One line per failure
+     */
+    protected function contrast(string $check, string $selector): array {
+        $js = file_get_contents(__DIR__ . '/../fixtures/contrast.js');
+        $js = trim(preg_replace('~^\s*//.*$~m', '', $js));
+        return $this->evaluate_script('return (' . $js . ')(' . json_encode($check) . ', ' . json_encode($selector) . ')');
+    }
+
+    /**
+     * Fails with every contrast failure, one per line.
+     *
+     * @param string[] $failures
+     * @param string $state
+     */
+    protected function assert_contrast(array $failures, string $state): void {
+        if ($failures) {
+            $failures = array_values(array_unique($failures));
+            throw new ExpectationException("$state, " . count($failures) . " parts of the block miss their contrast targets:\n" .
+                implode("\n", $failures), $this->getSession());
+        }
     }
 }

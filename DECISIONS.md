@@ -316,3 +316,12 @@ Rules Pierre gave in review, by date. Code comments state the rule; the date is 
   or every quiz attempt used with none finished, stays in Upcoming saying why there's no Submit.
 - **2026-10-22** The Mitigate menu has no greyed item: a line says why self-certification can't be used.
   A colleague's marking isn't my own.
+- **2026-10-19** Dark mode: every part of the block meets its contrast targets in Moodle 5.3's dark colour
+  mode as in light, text at APCA Lc 75 and 4.5:1, icons, bars, outlines and focus at Lc 45 and 3:1.
+  Attention orange goes dark with the other tones, not kept as a light island.
+- **2026-10-29** Dark mode's body text is lifted to Lc 90 and 7:1, so secondary text at Lc 75 reads as a
+  level below it.
+- **2026-10-30** Dark mode's link underlines are 1px at 70% of the link colour, full colour on hover;
+  assessment titles have no underline until hovered, as in light. Section headers have no line under
+  them in either mode: their fill sets them off from the rows.
+- **2026-11-12** Dark mode's links follow the brand colour, as light mode's do, not the theme's link colour.
