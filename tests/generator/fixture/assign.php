@@ -19,7 +19,7 @@ namespace block_le_dashboard\fixture;
 /**
  * Writes assignments the way their users do: submissions, drafts, marker allocation (assign_user_flags before
  * Moodle 5.0, assign_allocated_marker from 5.0), marks under marking workflow and with several markers,
- * release, reopening, locking and extensions.
+ * optional markers (Moodle 5.3), release, reopening, locking and extensions.
  *
  * @package    block_le_dashboard
  * @category   test
@@ -77,6 +77,10 @@ final class assign extends base {
             }
             $record += ['markercount' => (int)$m[1],
                 'multimarkmethod' => str_contains($opts, 'manual agreement') ? 'manual' : 'average'];
+        }
+        if (preg_match('/(\d+) optional markers?/', $opts, $m)) {
+            self::needs_optional_markers();
+            $record['optionalmarkercount'] = (int)$m[1];
         }
         return $record;
     }
@@ -160,7 +164,8 @@ final class assign extends base {
         }
         if ($DB->get_manager()->table_exists('assign_allocated_marker')) {
             $params = ['assignment' => $assign->get_instance()->id, 'student' => $userid];
-            $DB->delete_records('assign_allocated_marker', $params);
+            // A student's optional marker (Moodle 5.3) is allocated apart from the required ones: it stays.
+            $DB->delete_records('assign_allocated_marker', $params + (self::has_optional_markers() ? ['optional' => 0] : []));
             foreach ($markerids as $markerid) {
                 $DB->insert_record('assign_allocated_marker', $params + ['marker' => $markerid]);
             }
@@ -184,7 +189,8 @@ final class assign extends base {
     ): void {
         $assign = self::instance($cm);
         $record = $assign->get_user_grade($userid, true);
-        if ((int)($assign->get_instance()->markercount ?? 1) > 1) {
+        $instance = $assign->get_instance();
+        if ((int)($instance->markercount ?? 1) + (int)($instance->optionalmarkercount ?? 0) > 1) {
             // Moodle 5.0+ with several markers: a marker's own mark, not the final grade.
             $record->grader = $markerid;
             $assign->update_mark($record, $grade);
@@ -208,12 +214,31 @@ final class assign extends base {
         $markers = $DB->get_fieldset_select(
             'assign_allocated_marker',
             'marker',
-            'assignment = :a AND student = :s',
+            'assignment = :a AND student = :s AND marker > 0',
             ['a' => $cm->instance, 's' => $userid]
         );
         foreach ($markers as $markerid) {
             $this->mark($cm, $userid, (int)$markerid);
         }
+    }
+
+    #[\Override]
+    public function optional_marker(\cm_info $cm, int $userid, int $markerid): void {
+        global $DB;
+        self::needs_optional_markers();
+        $params = ['assignment' => $cm->instance, 'student' => $userid, 'optional' => 1];
+        $DB->delete_records('assign_allocated_marker', $params);
+        $DB->insert_record('assign_allocated_marker', $params + ['marker' => $markerid, 'enabled' => 1]);
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function optional_marker_off(\cm_info $cm, int $userid): void {
+        global $DB;
+        self::needs_optional_markers();
+        // Moodle keeps no row for an optional marker who is switched off.
+        $DB->delete_records('assign_allocated_marker', ['assignment' => $cm->instance, 'student' => $userid, 'optional' => 1]);
+        self::queue($cm);
     }
 
     #[\Override]
@@ -291,6 +316,25 @@ final class assign extends base {
             'assign_grades' => ['timecreated', 'timemodified'],
             'assign_mark' => ['timecreated', 'timemodified'],
         ];
+    }
+
+    /**
+     * Whether assignments have optional markers (Moodle 5.3).
+     *
+     * @return bool
+     */
+    private static function has_optional_markers(): bool {
+        global $DB;
+        return $DB->get_manager()->field_exists('assign_allocated_marker', 'optional');
+    }
+
+    /**
+     * Skips what needs optional markers on a site without them.
+     */
+    private static function needs_optional_markers(): void {
+        if (!self::has_optional_markers()) {
+            throw new unavailable('Optional assign markers need Moodle 5.3');
+        }
     }
 
     /**

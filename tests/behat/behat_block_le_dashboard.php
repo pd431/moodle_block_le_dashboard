@@ -3404,6 +3404,29 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * Gives a submission an optional marker, switched on.
+     *
+     * @Given /^the submission of "(?P<student>[^"]*)" for "(?P<name>[^"]*)" has "(?P<marker>[^"]*)" as its optional marker$/
+     * @param string $student
+     * @param string $name
+     * @param string $marker
+     */
+    public function the_submission_has_an_optional_marker(string $student, string $name, string $marker): void {
+        self::skipping(fn() => steps::instance()->the_submission_has_an_optional_marker($student, $name, $marker));
+    }
+
+    /**
+     * Switches a student's optional marker off.
+     *
+     * @Given /^the optional marker of "(?P<student>[^"]*)" on "(?P<name>[^"]*)" is switched off$/
+     * @param string $student
+     * @param string $name
+     */
+    public function the_optional_marker_is_switched_off(string $student, string $name): void {
+        self::skipping(fn() => steps::instance()->the_optional_marker_is_switched_off($student, $name));
+    }
+
+    /**
      * Turns off marks in every review option of a quiz.
      *
      * @Given /^the review options of "(?P<name>[^"]*)" never show marks$/

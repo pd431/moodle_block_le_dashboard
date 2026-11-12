@@ -1781,6 +1781,29 @@ final class steps {
     }
 
     /**
+     * Gives a submission an optional marker, switched on.
+     *
+     * @param string $student
+     * @param string $name
+     * @param string $marker
+     */
+    public function the_submission_has_an_optional_marker(string $student, string $name, string $marker): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->optional_marker($cm, self::userid($student), self::userid($marker));
+    }
+
+    /**
+     * Switches a student's optional marker off.
+     *
+     * @param string $student
+     * @param string $name
+     */
+    public function the_optional_marker_is_switched_off(string $student, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->optional_marker_off($cm, self::userid($student));
+    }
+
+    /**
      * Turns off marks in every review option of a quiz.
      *
      * @param string $name

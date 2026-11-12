@@ -231,6 +231,16 @@ abstract class base implements fixture {
     }
 
     #[\Override]
+    public function optional_marker(\cm_info $cm, int $userid, int $markerid): void {
+        $this->unsupported('Optional markers on');
+    }
+
+    #[\Override]
+    public function optional_marker_off(\cm_info $cm, int $userid): void {
+        $this->unsupported('Optional markers on');
+    }
+
+    #[\Override]
     public function attempts(\cm_info $cm, int $userid, int $count): void {
         $this->unsupported('Attempts at');
     }

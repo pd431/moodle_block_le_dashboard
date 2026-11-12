@@ -243,6 +243,23 @@ interface fixture {
     public function override_due(\cm_info $cm, int $userid, int $due): void;
 
     /**
+     * Gives a student's submission an optional marker, switched on (assign on Moodle 5.3+).
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $markerid
+     */
+    public function optional_marker(\cm_info $cm, int $userid, int $markerid): void;
+
+    /**
+     * Switches a student's optional markers off.
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     */
+    public function optional_marker_off(\cm_info $cm, int $userid): void;
+
+    /**
      * Finished attempts (a quiz), answering its question each time.
      *
      * @param \cm_info $cm
