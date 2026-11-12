@@ -27,6 +27,6 @@ defined('MOODLE_INTERNAL') || die();
 $plugin->component = 'block_le_dashboard';
 $plugin->version   = 2026110501;
 $plugin->requires  = 2024100700; // Moodle 4.5.
-$plugin->supported = [405, 502];
+$plugin->supported = [405, 503];
 $plugin->maturity  = MATURITY_BETA;
 $plugin->release   = '5.0.0-beta36 (plugin-agnostic remake)';

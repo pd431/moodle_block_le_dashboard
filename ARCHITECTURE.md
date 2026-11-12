@@ -51,6 +51,7 @@ Each line is a concern, the one file that owns it, and the test that fails when 
 | Formatting any date, count, bar, hint, action, row shell | `output/format.php` | golden master |
 | Who sees which view and over which courses | `scope.php`, `years.php` | `scope_test` |
 | Whether an assessment belongs to an academic year: for staff its deadline or the latest deadline any student has, for a student their own deadline (`student::DEADLINES`), or its course (EC3, EC3d) | `scope.php::in_year_sql()`, PHP twin `in_year()`; every index query of every view adds it once, through `view/base.php::in_year_sql()` | `scope_test::test_in_year_forms_agree`, `test_in_year_student_forms_agree` |
+| Which Moodle versions the block supports and is tested on; a rule that depends on what a version brought checks the schema in its owner, never the version number (MV) | `version.php` (`supported`), `.github/workflows/ci.yml` (lanes and their databases), `README.md` | the CI lanes |
 | Settings, read in one place | `config.php` | `config_test` |
 | Self-certification and the Mitigate menu (block_rhb link handling only; coursework facts come from the adapter) | `mitigation.php` | `mitigation_test` |
 | Every test seam: the one gate and the named fault points | `testing.php` | `testing_test` (no other class reads a testfail or behat key) |
