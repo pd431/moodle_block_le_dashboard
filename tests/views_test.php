@@ -128,6 +128,41 @@ final class views_test extends \advanced_testcase {
     }
 
     /**
+     * The self-certified extensions box: a student with no limit reads "2 used" and "Unlimited extensions"; a
+     * limited one still counts down. Reached through the view on every target, since the Behat feature needs
+     * mod_coursework (selfcert-box-unlimited.feature).
+     */
+    public function test_student_selfcert_box(): void {
+        $box = function (?array $count): ?array {
+            $view = new class ($this->u['s1']->id) extends student {
+                /**
+                 * Sets the self-certification count as mitigation::selfcert() would return it.
+                 *
+                 * @param array|null $count
+                 */
+                public function given(?array $count): void {
+                    $this->selfcertcount = $count;
+                    $this->selfcertloaded = true;
+                }
+            };
+            $view->given($count);
+            return array_column($view->export()['summary'], null, 'key')['selfcert'] ?? null;
+        };
+
+        $unlimited = $box(['used' => 2, 'max' => null]);
+        $this->assertSame('2 used', $unlimited['note']);
+        $this->assertSame('Unlimited extensions', $unlimited['subnote']);
+
+        $this->assertSame('0 used', $box(['used' => 0, 'max' => null])['note']);
+
+        $limited = $box(['used' => 1, 'max' => 3]);
+        $this->assertSame('2 of 3 left', $limited['note']);
+        $this->assertArrayNotHasKey('subnote', $limited);
+
+        $this->assertNull($box(null), 'no box without block_rhb and a count');
+    }
+
+    /**
      * A student sees the selected year's assessments by their own deadline or the course, and Refresh covers the
      * same ones (EC3d); All years shows everything.
      */

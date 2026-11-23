@@ -186,8 +186,14 @@ class student extends base {
         ];
         if ($selfcert = $this->selfcert()) {
             if ($selfcert['max'] === null) {
-                // No limit: the count is the value, with a note under it.
-                $box = $this->box('selfcert', ['both' => $selfcert['used']] + format::zero_counts());
+                // No limit: how many are used, in the value line as the limited box's countdown is.
+                $box = $this->box(
+                    'selfcert',
+                    format::zero_counts(),
+                    null,
+                    null,
+                    get_string('selfcertused', 'block_le_dashboard', $selfcert['used'])
+                );
                 $box['subnote'] = get_string('selfcertnolimit', 'block_le_dashboard');
             } else {
                 // Counting down, as the Mitigate menu does.
