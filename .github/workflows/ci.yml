@@ -46,6 +46,11 @@ jobs:
         with:
           path: plugin
 
+      # Grunt backs the plugin up and restores it afterwards; git's read-only pack files make the restore fail.
+      # Nothing later needs the plugin's git metadata.
+      - name: Remove the checkout's git metadata
+        run: rm -rf plugin/.git
+
       - name: Setup PHP ${{ matrix.php }}
         uses: shivammathur/setup-php@v2
         with:
