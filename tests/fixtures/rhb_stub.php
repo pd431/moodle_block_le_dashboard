@@ -23,7 +23,6 @@
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-
 if (!function_exists('block_rhb_get_srm_link')) {
     /**
      * The student request form link, or what block_rhb offers instead (behatrhbsrm).

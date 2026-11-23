@@ -39,7 +39,7 @@ Feature: The Mitigate menu explains self-certification
   #   same item: the first click turns it into "Click again to delete" and keeps the menu open; the second click
   #   deletes. Closing the menu puts it back. It is still found by "delete" in block_rhb's link text or address.
   # - The summary box counts down to match: "2 of 3 left", and "All 3 used" with "You can still request
-  #   mitigation." Unlimited students still see "No limit".
+  #   mitigation." Unlimited students see "2 used" and "Unlimited extensions" (selfcert-unlimited-box.feature).
 
   Background:
     Given the following "courses" exist:

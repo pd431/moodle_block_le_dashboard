@@ -17,6 +17,7 @@
 namespace block_le_dashboard\fixture;
 
 use block_le_dashboard\local\index\indexer;
+use block_le_dashboard\local\mitigation;
 use block_le_dashboard\local\years;
 use block_le_dashboard_generator;
 use cm_info;
@@ -2064,6 +2065,25 @@ final class steps {
      */
     public function block_rhb_allows(int $n): void {
         set_config('selfcertmax', $n, 'block_rhb');
+    }
+
+    /**
+     * A student with no self-certification limit: the exemption profile field holds the exemption value
+     * (mitigation::SELFCERT_SETTINGS, or the settings that replace them).
+     *
+     * @param string $username
+     */
+    public function has_no_self_certification_limit(string $username): void {
+        global $DB;
+        $shortname = mitigation::setting('selfcertexemptfield');
+        $fieldid = $DB->get_field('user_info_field', 'id', ['shortname' => $shortname]);
+        if (!$fieldid) {
+            $fieldid = \testing_util::get_data_generator()->create_custom_profile_field(
+                ['shortname' => $shortname, 'name' => $shortname, 'datatype' => 'text']
+            )->id;
+        }
+        $DB->insert_record('user_info_data', ['userid' => self::userid($username), 'fieldid' => $fieldid,
+            'data' => mitigation::setting('selfcertexemptvalue'), 'dataformat' => 0]);
     }
 
     /**

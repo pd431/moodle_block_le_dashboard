@@ -1861,6 +1861,27 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * The smaller line under a summary box's value.
+     *
+     * @Then /^the "(?P<label>[^"]*)" summary box note should say "(?P<text>[^"]*)"$/
+     * @param string $label
+     * @param string $text
+     */
+    public function the_summary_box_note_should_say(string $label, string $text): void {
+        foreach ($this->find_all('css', self::BLOCK . ' [data-region="ma-box"]') as $box) {
+            if (trim($box->find('css', '.ma-box-label')->getText()) === $label) {
+                $note = $box->find('css', '.ma-box-note');
+                $shown = $note ? trim($note->getText()) : '';
+                if ($shown !== $text) {
+                    throw new ExpectationException("The '$label' box note says '$shown'", $this->getSession());
+                }
+                return;
+            }
+        }
+        throw new ExpectationException("No '$label' summary box", $this->getSession());
+    }
+
+    /**
      * A hint's accessible name, which is the title its popover shows.
      *
      * @Then /^the "(?P<key>[a-z]+)" hint of "(?P<name>[^"]*)" should be titled "(?P<title>[^"]*)"$/
@@ -4031,6 +4052,16 @@ class behat_block_le_dashboard extends behat_base {
      */
     public function block_rhb_allows(int $n): void {
         steps::instance()->block_rhb_allows($n);
+    }
+
+    /**
+     * A student with no self-certification limit (the exemption profile field holds the exemption value).
+     *
+     * @Given /^"(?P<user>[^"]*)" has no self-certification limit$/
+     * @param string $username
+     */
+    public function has_no_self_certification_limit(string $username): void {
+        steps::instance()->has_no_self_certification_limit($username);
     }
 
     /**
