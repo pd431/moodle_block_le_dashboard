@@ -106,7 +106,8 @@ class student extends base {
         $records = $DB->get_records_sql("SELECT c.cmid, c.courseid, c.modname, c.name, c.assesstype, c.markingdue, c.opens,
                                                 c.hiddenfromstudents, c.nosubmission, c.norelease, c.timeindexed,
                                                 s.due, s.cutoff, s.individual, s.submitted, s.timesubmitted,
-                                                s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.lockreason, s.enrolstart
+                                                s.timereleased, s.gradedisplay, s.mitigation, s.reopened, s.lockreason,
+                                                s.enrolstart, s.feedbackdue
                                            FROM {block_le_dashboard_stu} s
                                            JOIN {block_le_dashboard_cm} c ON c.cmid = s.cmid
                                           WHERE s.userid = :userid AND s.canaccess = 1 AND c.hiddenfromstudents = 0

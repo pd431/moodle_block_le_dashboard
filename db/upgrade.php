@@ -155,5 +155,16 @@ function xmldb_block_le_dashboard_upgrade($oldversion) {
         upgrade_block_savepoint(true, 2026110500, 'le_dashboard', 'block');
     }
 
+    if ($oldversion < 2026112400) {
+        // Students see the feedback release date the activity itself promises (CS7): re-index.
+        $table = new xmldb_table('block_le_dashboard_stu');
+        $field = new xmldb_field('feedbackdue', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'gradedisplay');
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+        \block_le_dashboard\task\backfill::queue();
+        upgrade_block_savepoint(true, 2026112400, 'le_dashboard', 'block');
+    }
+
     return true;
 }

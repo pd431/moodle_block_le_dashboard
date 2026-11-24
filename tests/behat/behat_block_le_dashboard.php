@@ -628,6 +628,18 @@ class behat_block_le_dashboard extends behat_base {
     }
 
     /**
+     * A feedback release date of the student's own (coursework: a personal feedback date).
+     *
+     * @Given /^"(?P<user>[^"]*)" has a personal feedback date "(?P<when>[^"]*)" on "(?P<name>[^"]*)"$/
+     * @param string $username
+     * @param string $when
+     * @param string $name
+     */
+    public function has_a_personal_feedback_date(string $username, string $when, string $name): void {
+        steps::instance()->has_a_personal_feedback_date($username, $when, $name);
+    }
+
+    /**
      * A student's mitigation of a type is taken away.
      *
      * @When /^the "(?P<type>[^"]*)" mitigation of "(?P<user>[^"]*)" on "(?P<name>[^"]*)" is removed$/

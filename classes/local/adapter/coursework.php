@@ -375,16 +375,25 @@ class coursework extends base {
         $only = self::only($allocatables);
 
         $personal = self::by_allocatable('coursework_person_deadlines', $cw->id, 'personal_deadline', '', $only);
+        // CS7: personal feedback dates count only while the coursework has them switched on, as coursework does.
+        $feedbackdates = empty($cw->personalfeedbackdate) ? [] :
+            self::by_allocatable('coursework_person_feedbacks', $cw->id, 'feedback_deadline', '', $only);
+        $individualfeedback = self::date($cw->individualfeedback ?? null);
         $mitigations = self::mitigations($cw->id, $only);
         $submissions = self::submissions($cw->id, $only);
         $finalgrades = $this->final_grades($cw, $only === null ? null : array_map(fn($s) => (int)$s->id, $submissions));
         $pairs = $cmrow->hasallocation ? self::allocation_pairs((int)$cw->id, $only) : [];
 
         foreach ($rows as $userid => $row) {
+            // CS7: the date coursework promises feedback by: the student's (or group's) own, else the coursework's.
+            $row->feedbackdue = $individualfeedback;
             if (!isset($allocatables[$userid])) {
                 continue;
             }
             $key = implode(':', $allocatables[$userid]);
+            if (!empty($feedbackdates[$key]->feedback_deadline)) {
+                $row->feedbackdue = (int)$feedbackdates[$key]->feedback_deadline;
+            }
             $row->allocatedto = array_values(array_unique($pairs[$key] ?? []));
             // D2: a personal deadline replaces the default, earlier or later.
             if (!empty($personal[$key]->personal_deadline)) {

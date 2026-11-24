@@ -211,6 +211,11 @@ abstract class base implements fixture {
     }
 
     #[\Override]
+    public function personal_feedback_date(\cm_info $cm, int $userid, int $when): void {
+        $this->unsupported('Personal feedback dates on');
+    }
+
+    #[\Override]
     public function remove_mitigation(\cm_info $cm, int $userid, string $type = 'extension'): void {
         $this->unsupported('Removing mitigations on');
     }

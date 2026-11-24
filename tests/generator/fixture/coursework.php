@@ -52,7 +52,9 @@ final class coursework extends base {
             'numberofmarkers' => preg_match('/(\d+) markers/', $opts, $m) ? (int)$m[1] : 1,
             'allocationenabled' => str_contains($opts, 'marker allocation') ? 1 : 0,
             'moderationenabled' => str_contains($opts, 'moderation') ? 1 : 0,
-            'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue];
+            'markingdeadlineenabled' => $markingdue ? 1 : 0, 'initialmarkingdeadline' => $markingdue,
+            'individualfeedback' => preg_match('/individual feedback date "([^"]*)"/', $opts, $m) ? phrases::time($m[1]) : 0,
+            'personalfeedbackdate' => str_contains($opts, 'personal feedback dates') ? 1 : 0];
         return $record;
     }
 
@@ -189,6 +191,14 @@ final class coursework extends base {
         $record = self::submission_params($cm, $userid) + ['type' => $type, 'extended_deadline' => 0, 'selfcert' => 0,
             'timecreated' => time()];
         $DB->insert_record('coursework_mitigations', self::filled('coursework_mitigations', $record));
+        self::queue($cm);
+    }
+
+    #[\Override]
+    public function personal_feedback_date(\cm_info $cm, int $userid, int $when): void {
+        global $DB;
+        $record = self::submission_params($cm, $userid) + ['feedback_deadline' => $when, 'timecreated' => time()];
+        $DB->insert_record('coursework_person_feedbacks', self::filled('coursework_person_feedbacks', $record));
         self::queue($cm);
     }
 

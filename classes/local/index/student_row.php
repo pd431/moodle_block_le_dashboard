@@ -68,6 +68,9 @@ final class student_row {
      * @param string|null $lockreason Why the student's submission is final and can't be changed (a LOCK_
      *                     constant), or null. The row stays in Upcoming with a "Can't resubmit" control
      *                     saying why.
+     * @param int|null $feedbackdue When the activity itself promises the student their feedback (a release
+     *                     date it sets), or null when it sets none. Students see it in place of the marking
+     *                     deadline.
      */
     public function __construct(
         /** @var int The student. */
@@ -94,6 +97,8 @@ final class student_row {
         public array $allocatedto = [],
         /** @var string|null Why the submission can't be changed, or null. */
         public ?string $lockreason = null,
+        /** @var int|null Feedback release date the activity promises, or null. */
+        public ?int $feedbackdue = null,
     ) {
     }
 

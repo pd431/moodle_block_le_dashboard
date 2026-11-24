@@ -66,12 +66,16 @@ class config {
      * The Feedback expected date a student sees (Pierre: "Site admin can choose whether to expose
      * internal marking deadlines to students as is, with a specified delay, or not at all"): the marking deadline,
      * the assessment's own or the default marking period after the student's own deadline, as set, plus the delay,
-     * or none. A new site shows none; an upgrade keeps "as set".
+     * or none. A new site shows none; an upgrade keeps "as set". A release date the activity itself promises
+     * comes first, whatever the mode and without the delay (CS7): it is not an internal deadline.
      *
-     * @param \stdClass $r Student row (markingdue, due: the student's own deadline).
+     * @param \stdClass $r Student row (feedbackdue, markingdue, due: the student's own deadline).
      * @return int|null
      */
     public static function feedback_date(\stdClass $r): ?int {
+        if (!empty($r->feedbackdue)) {
+            return (int)$r->feedbackdue;
+        }
         $mode = get_config('block_le_dashboard', 'feedbackdatemode');
         $mode = in_array($mode, self::FEEDBACK_MODES, true) ? $mode : 'none';
         [$deadline] = $mode === 'none' ? [null] : self::markingdue($r);

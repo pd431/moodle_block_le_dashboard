@@ -78,6 +78,13 @@ Pierre's mod_coursework schema reference, checked against ele-test, and his ruli
   no allocation it is no one's, so it is the convenor's auto-marked work (Pierre, 2026-10-29: "turnitin grade
   should count as marked by the marker"). lasteditedbyuser is not a fallback: it is -1 too, and an editor isn't
   always the marker.
+- **CS7** A student's Feedback expected date is the date coursework itself promises their feedback by: their own
+  (or their group's) personal feedback date when the coursework has personal feedback dates switched on, else the
+  coursework's individual feedback date, else the marking-deadline rule as before (Pierre, 2026-11-24: "1, failing
+  that, 2. For students. Change nothing for markers."). A release date shows whatever "Show marking deadlines to
+  students" says, and without the delay: that setting is about internal deadlines, and coursework shows the
+  release date to the student itself. Staff views keep the marking deadline. Stored per student as
+  stu.feedbackdue. No event is known for a personal feedback date, so a change shows at the next re-index.
 
 ## D: logic overhaul design v2 (2026-10-02)
 
