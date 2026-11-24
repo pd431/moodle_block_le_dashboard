@@ -179,15 +179,16 @@ final class coursework extends base {
         }
         $record = ['courseworkid' => $cm->instance, 'allocatableid' => $userid, 'allocatabletype' => 'user',
             'extended_deadline' => $until, 'type' => 'extension', 'selfcert' => 1, 'timecreated' => time()];
-        $DB->insert_record('coursework_mitigations', $record);
+        $DB->insert_record('coursework_mitigations', self::filled('coursework_mitigations', $record));
         self::queue($cm);
     }
 
     #[\Override]
     public function mitigate(\cm_info $cm, int $userid, string $type): void {
         global $DB;
-        $DB->insert_record('coursework_mitigations', self::submission_params($cm, $userid) + ['type' => $type,
-            'extended_deadline' => 0, 'selfcert' => 0, 'timecreated' => time()]);
+        $record = self::submission_params($cm, $userid) + ['type' => $type, 'extended_deadline' => 0, 'selfcert' => 0,
+            'timecreated' => time()];
+        $DB->insert_record('coursework_mitigations', self::filled('coursework_mitigations', $record));
         self::queue($cm);
     }
 
@@ -234,9 +235,9 @@ final class coursework extends base {
     public function used_self_certs(int $userid, int $count): void {
         global $DB;
         for ($i = 0; $i < $count; $i++) {
-            $DB->insert_record('coursework_mitigations', ['courseworkid' => 0, 'allocatableid' => $userid,
-                'allocatabletype' => 'user', 'extended_deadline' => time(), 'type' => 'extension', 'selfcert' => 1,
-                'timecreated' => time()]);
+            $DB->insert_record('coursework_mitigations', self::filled('coursework_mitigations', ['courseworkid' => 0,
+                'allocatableid' => $userid, 'allocatabletype' => 'user', 'extended_deadline' => time(),
+                'type' => 'extension', 'selfcert' => 1, 'timecreated' => time()]));
         }
     }
 
