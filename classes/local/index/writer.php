@@ -189,6 +189,7 @@ class writer {
                 'timesubmitted' => $row->timesubmitted,
                 'timereleased' => $row->timereleased,
                 'gradedisplay' => $row->gradedisplay === null ? null : \core_text::substr($row->gradedisplay, 0, 255),
+                'feedbackdue' => $row->feedbackdue,
             ];
         }
         // Staff views place an assessment in a year by this too, so a long extension keeps it in view (EC3).

@@ -778,6 +778,18 @@ final class steps {
     }
 
     /**
+     * A feedback release date of the student's own (coursework: a personal feedback date).
+     *
+     * @param string $username
+     * @param string $when
+     * @param string $name
+     */
+    public function has_a_personal_feedback_date(string $username, string $when, string $name): void {
+        $cm = $this->cm($name);
+        self::fixture($cm)->personal_feedback_date($cm, self::userid($username), phrases::time($when));
+    }
+
+    /**
      * A student's mitigation of a type is taken away.
      *
      * @param string $type

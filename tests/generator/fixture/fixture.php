@@ -207,6 +207,15 @@ interface fixture {
     public function mitigate(\cm_info $cm, int $userid, string $type): void;
 
     /**
+     * Gives a student a feedback release date of their own (coursework: a personal feedback date).
+     *
+     * @param \cm_info $cm
+     * @param int $userid
+     * @param int $when
+     */
+    public function personal_feedback_date(\cm_info $cm, int $userid, int $when): void;
+
+    /**
      * Takes a student's mitigation of a type away again (an extension by default).
      *
      * @param \cm_info $cm

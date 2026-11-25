@@ -54,6 +54,7 @@ class provider implements
             'timesubmitted' => 'privacy:metadata:stu:timesubmitted',
             'timereleased' => 'privacy:metadata:stu:timereleased',
             'gradedisplay' => 'privacy:metadata:stu:gradedisplay',
+            'feedbackdue' => 'privacy:metadata:stu:feedbackdue',
             'mitigation' => 'privacy:metadata:stu:mitigation',
             'reopened' => 'privacy:metadata:stu:reopened',
             'lockreason' => 'privacy:metadata:stu:lockreason',
@@ -153,6 +154,7 @@ class provider implements
                     'timesubmitted' => $r->timesubmitted ? transform::datetime($r->timesubmitted) : null,
                     'timereleased' => $r->timereleased ? transform::datetime($r->timereleased) : null,
                     'grade' => $r->gradedisplay,
+                    'feedbackdue' => $r->feedbackdue ? transform::datetime($r->feedbackdue) : null,
                     'lockreason' => $r->lockreason,
                     'canaccess' => transform::yesno($r->canaccess),
                 ];
